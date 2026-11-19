@@ -151,7 +151,13 @@ for (const { p } of CITIES) {
   const mwl = computeDay(instant, p, { ...base, method: 'MWL' });
   const diffMin = Math.abs(umm.fajr.getTime() - mwl.fajr.getTime()) / 60000;
   ok('Makkah: Umm al-Qura and MWL produce different Fajr', diffMin >= 3, `${diffMin.toFixed(0)} min apart`);
-  ok('Makkah: Umm al-Qura Fajr is later than MWL', umm.fajr.getTime() > mwl.fajr.getTime());
+  // Umm al-Qura uses an 18.5° Fajr angle, MWL uses 18°. A deeper depression
+  // angle is reached earlier in the night, so Umm al-Qura Fajr is EARLIER.
+  ok(
+    'Makkah: Umm al-Qura Fajr is earlier than MWL (18.5° vs 18°)',
+    umm.fajr.getTime() < mwl.fajr.getTime(),
+    `${hm(umm.fajr, p.timezone)} vs ${hm(mwl.fajr, p.timezone)}`
+  );
 }
 
 /* ------------------------------- 5. DST ---------------------------------- */
@@ -174,12 +180,24 @@ for (const { p } of CITIES) {
 
   const maghribBefore = localMinutes(before.maghrib, london.timezone);
   const maghribAfter = localMinutes(after.maghrib, london.timezone);
+  const localShift = maghribAfter - maghribBefore;
+  const utcShiftMin =
+    (after.maghrib.getTime() - before.maghrib.getTime() - 24 * 3600 * 1000) / 60000;
+
+  // The wall clock jumps ~1 hour, but sunset itself only drifts a couple of
+  // minutes per day, so the *instant* must stay ~24h later. Asserting both
+  // separates correct DST handling from an arbitrary offset.
   ok(
-    'London: Maghrib local time moves forward one hour across the DST switch',
-    maghribAfter - maghribBefore === 60,
+    'London: Maghrib wall clock moves forward ~1 hour across the DST switch',
+    localShift >= 58 && localShift <= 63,
     `${Math.floor(maghribBefore / 60)}:${String(maghribBefore % 60).padStart(2, '0')} → ${Math.floor(
       maghribAfter / 60
-    )}:${String(maghribAfter % 60).padStart(2, '0')}`
+    )}:${String(maghribAfter % 60).padStart(2, '0')} (${localShift} min)`
+  );
+  ok(
+    'London: Maghrib instant stays ~24h later (no fake offset applied)',
+    Math.abs(utcShiftMin) <= 5,
+    `${utcShiftMin.toFixed(1)} min of astronomical drift`
   );
 }
 
@@ -265,7 +283,15 @@ for (const { p } of CITIES) {
 {
   const tokyo = CITIES[6].p;
   const at = new Date('2026-06-15T04:00:00Z');
-  ok('Clock shows Tokyo wall time', formatClock(at, tokyo.timezone, 'en').startsWith('13:00'), formatClock(at, tokyo.timezone, 'en'));
+  // English UI uses 12-hour time app-wide, so 13:00 JST renders as 1:00 pm.
+  const clock = formatClock(at, tokyo.timezone, 'en');
+  ok(
+    'Clock shows Tokyo wall time as 1:00 pm',
+    /(^|\D)0?1:00/.test(clock) && /pm/i.test(clock),
+    clock
+  );
+  const clock24 = formatClock(at, tokyo.timezone, 'so');
+  ok('Somali locale clock is non-empty', clock24.length >= 4, clock24);
   ok('Long date is non-empty', formatZonedDate(at, tokyo.timezone, 'en').length > 6, formatZonedDate(at, tokyo.timezone, 'en'));
   ok('Hijri/gregorian hours agree', zonedHour(at, tokyo.timezone) === 13);
   ok('Five daily prayers tracked', FIVE.length === 5);

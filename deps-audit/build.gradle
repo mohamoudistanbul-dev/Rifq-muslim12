@@ -1,0 +1,50 @@
+import org.gradle.api.attributes.AttributeCompatibilityRule
+import org.gradle.api.attributes.CompatibilityCheckDetails
+import org.gradle.api.attributes.LibraryElements
+
+class AarRule implements AttributeCompatibilityRule<LibraryElements> {
+    void execute(CompatibilityCheckDetails<LibraryElements> details) {
+        if (details.consumerValue != null && details.consumerValue.name == 'aar') {
+            details.compatible()
+        }
+    }
+}
+
+plugins { id 'java-library' }
+
+dependencies {
+    attributesSchema {
+        attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE) {
+            compatibilityRules.add(AarRule)
+        }
+    }
+}
+
+configurations {
+    audit {
+        canBeConsumed = false
+        canBeResolved = true
+        attributes {
+            attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage, Usage.JAVA_RUNTIME))
+            attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category, Category.LIBRARY))
+            attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, objects.named(LibraryElements, 'aar'))
+        }
+    }
+}
+
+dependencies {
+    audit 'androidx.core:core-ktx:1.13.1'
+    audit 'androidx.appcompat:appcompat:1.7.0'
+    audit 'androidx.core:core-splashscreen:1.0.1'
+    audit 'androidx.webkit:webkit:1.11.0'
+    audit 'com.google.android.material:material:1.12.0'
+}
+
+dependencyLocking { lockAllConfigurations() }
+
+tasks.register('resolveAudit') {
+    doLast {
+        def comps = configurations.audit.incoming.resolutionResult.allComponents
+        println "RESOLVED_COMPONENTS=" + comps.size()
+    }
+}

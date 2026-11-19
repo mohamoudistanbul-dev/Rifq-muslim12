@@ -27,8 +27,8 @@ export default function Contact() {
       .catch(() => undefined);
   }, [user]);
 
-  const email = config?.contactEmail || 'mohamoudistanbul@gmail.com';
-  const phone = config?.contactPhone || '+252-612215593';
+  const email = config?.contactEmail || 'rifqmuslim@gmail.com';
+  const phone = config?.contactPhone || '+252612215593';
   const whatsapp = (config?.whatsapp || phone).replace(/[^\d]/g, '');
 
   const submit = async () => {

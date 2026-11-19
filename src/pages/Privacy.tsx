@@ -29,7 +29,7 @@ const SECTIONS: { title: string; body: string }[] = [
   },
   {
     title: 'Contact',
-    body: 'Questions about your data: mohamoudistanbul@gmail.com — +252-612215593.',
+    body: 'Questions about your data: rifqmuslim@gmail.com - +252612215593.',
   },
 ];
 

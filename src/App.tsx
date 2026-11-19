@@ -28,6 +28,8 @@ import About from './pages/About';
 import Privacy from './pages/Privacy';
 import Profile from './pages/Profile';
 import Admin from './pages/Admin';
+import Articles, { ArticleDetail } from './pages/Articles';
+import SiteFooter from './components/SiteFooter';
 import { Login, Register, Forgot, Reset, Verify } from './pages/Auth';
 
 export default function App() {
@@ -64,6 +66,8 @@ export default function App() {
               <Route path="/privacy" element={<Privacy />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/admin" element={<Admin />} />
+              <Route path="/articles" element={<Articles />} />
+              <Route path="/articles/:slug" element={<ArticleDetail />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/forgot" element={<Forgot />} />
@@ -71,6 +75,7 @@ export default function App() {
               <Route path="/verify" element={<Verify />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            <SiteFooter />
           </main>
           <BottomNav />
         </div>

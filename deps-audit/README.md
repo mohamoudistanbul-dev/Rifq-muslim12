@@ -1,15 +1,15 @@
 # Android dependency audit project
 
-This directory exists **only** so the Android libraries used by `android/app` can be
+This directory exists **only** so the Android dependencies used by `android/` can be
 resolved into a real lockfile for vulnerability scanning. It is not part of the
 Android application build and the APK is unaffected by it.
 
 ## Why it is needed
 
-`android/app/build.gradle.kts` declares AndroidX and Material dependencies, but
-AndroidX publishes its artifacts as **AAR** with AGP-specific Gradle variants
-(`releaseVariantReleaseApiPublication` / `...RuntimePublication`). A plain
-`java-library` project therefore fails with:
+`android/build.gradle.kts` and `android/app/build.gradle.kts` declare Gradle plugins
+and AndroidX libraries, but AndroidX publishes its artifacts as **AAR** with
+AGP-specific Gradle variants (`releaseVariantReleaseApiPublication` /
+`...RuntimePublication`). A plain `java-library` project therefore fails with:
 
 ```
 No matching variant of androidx.core:core-ktx:1.13.1 was found
@@ -25,29 +25,37 @@ without AGP and without the SDK.
 
 ## What it covers
 
-The five libraries declared in `android/app/build.gradle.kts`, plus their full
-transitive closure — **64 components**:
+Everything declared in the two Android build files, plus full transitive closure —
+**200 components**:
 
-| Coordinate | Version |
-| --- | --- |
-| `androidx.core:core-ktx` | 1.13.1 |
-| `androidx.appcompat:appcompat` | 1.7.0 |
-| `androidx.core:core-splashscreen` | 1.0.1 |
-| `androidx.webkit:webkit` | 1.11.0 |
-| `com.google.android.material:material` | 1.12.0 |
+| Coordinate | Version | Declared in |
+| --- | --- | --- |
+| `com.android.tools.build:gradle` (AGP) | 8.7.3 | `android/build.gradle.kts` |
+| `org.jetbrains.kotlin:kotlin-gradle-plugin` | 2.0.21 | `android/build.gradle.kts` |
+| `androidx.core:core-ktx` | 1.13.1 | `android/app/build.gradle.kts` |
+| `androidx.appcompat:appcompat` | 1.7.0 | `android/app/build.gradle.kts` |
+| `androidx.core:core-splashscreen` | 1.0.1 | `android/app/build.gradle.kts` |
+| `androidx.webkit:webkit` | 1.11.0 | `android/app/build.gradle.kts` |
+| `com.google.android.material:material` | 1.12.0 | `android/app/build.gradle.kts` |
 
 Versions come from real resolution against `google()` and `mavenCentral()` —
 nothing is hand-written or guessed.
 
 ## What it does NOT cover
 
-* The **build plugin classpath**: AGP 8.7.3, Kotlin 2.0.21 and their transitive
-  build dependencies. These are `buildscript`/`plugins` dependencies, not
-  `implementation` dependencies, and resolving them requires the Android SDK.
-* Resources, manifest merging and anything else that only the Android build does.
+* **Plugin execution.** The AGP and Kotlin plugin *artifacts* are resolved and
+  locked, but this project never applies them. Whether AGP can configure a real
+  Android build against SDK 35 is still only proven by the GitHub Actions APK
+  workflow.
+* **The Gradle distribution itself** (`gradle-8.9-bin.zip`, referenced by
+  `android/gradle/wrapper/gradle-wrapper.properties`). The wrapper distribution is
+  not a Maven coordinate, so no lockfile can express it.
+* **Android SDK components** (platform 35, build-tools) — these come from
+  `sdkmanager`, not from a dependency graph.
+* Resources, manifest merging and anything else only the Android build performs.
 
-So a clean scan of this lockfile means *the runtime libraries are advisory-free*,
-not that the whole Android toolchain is.
+So a clean scan of this lockfile means *the Android dependency artifacts are
+advisory-free*, not that the whole Android toolchain is verified.
 
 ## Regenerating
 
@@ -57,7 +65,7 @@ From the repository root, using the Android project's wrapper:
 android/gradlew -p deps-audit --write-locks resolveAudit
 ```
 
-Expect `RESOLVED_COMPONENTS=64`. To audit a different dependency set, edit the
+Expect `RESOLVED_COMPONENTS=200`. To audit a different dependency set, edit the
 `audit` configuration in `build.gradle` and re-run.
 
 If you later have the Android SDK available, prefer generating the lockfile from

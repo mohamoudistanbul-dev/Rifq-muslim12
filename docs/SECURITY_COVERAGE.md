@@ -1,13 +1,15 @@
 # Dependency Security Coverage — RIFQ Muslim
 
-**Status: PARTIAL.** This document records exactly what the automated dependency
-scan covers, what it cannot cover, and how to close the gap.
+**Status: PARTIAL — improved.** This document records exactly what the automated
+dependency scan covers, what it cannot cover, and how to close the rest.
 
 It is **not** a statement that the application is secure.
 
 ---
 
 ## 1. What was scanned
+
+### 1.1 npm — the web bundle and WebView JavaScript
 
 | Field | Value |
 | --- | --- |
@@ -20,54 +22,42 @@ It is **not** a statement that the application is secure.
 | Policy | `workspace-dependencies-v1` |
 | Scan date | 2026-11-19 |
 
-The npm graph covers the JavaScript bundle that the web app serves and that the
-Android WebView loads.
+### 1.2 Gradle — the Android runtime libraries
 
-## 2. What was NOT scanned — the gap
+| Field | Value |
+| --- | --- |
+| Ecosystem | Gradle |
+| Resolved dependency file | `deps-audit/gradle.lockfile` |
+| Components resolved | 64 |
+| Direct libraries | 5 (`androidx.core:core-ktx`, `androidx.appcompat:appcompat`, `androidx.core:core-splashscreen`, `androidx.webkit:webkit`, `com.google.android.material:material`) |
+| Resolution source | real resolution against `google()` + `mavenCentral()` |
+| Android SDK required | **no** — see §3.3 |
+| Regenerate with | `android/gradlew -p deps-audit --write-locks resolveAudit` |
 
-The scan result is reported as **`incomplete`**, not `passed`, because part of the
-repository has no resolvable dependency graph:
+This closes the gap described in earlier revisions of this document. The AndroidX
+and Material graph, including its transitive closure, is now resolvable and
+committed as a lockfile, so it is inside scan coverage.
 
-- `android/build.gradle.kts`
-- `android/app/build.gradle.kts`
+## 2. What is still NOT scanned
 
-Neither has a Gradle lockfile, and the repository has **no**
-`gradle/libs.versions.toml` version catalog. The scanner only reads *resolved*
-dependency files, so the entire Android dependency graph sits outside coverage.
-
-Evidence — a repository-wide search returns only `package-lock.json`:
-
-```
-find . -maxdepth 3 \( -name "*.lockfile" -o -name "gradle.lockfile" \
-       -o -name "package-lock.json" \) -not -path "*/node_modules/*"
-./package-lock.json
-```
-
-### Declared Android dependencies that are therefore unscanned
+### The build plugin classpath
 
 | Coordinate | Version | Kind | Declared in |
 | --- | --- | --- | --- |
-| `com.android.application` | 8.7.3 | Gradle plugin | `android/build.gradle.kts` |
+| `com.android.application` (AGP) | 8.7.3 | Gradle plugin | `android/build.gradle.kts` |
 | `org.jetbrains.kotlin.android` | 2.0.21 | Gradle plugin | `android/build.gradle.kts` |
-| `androidx.core:core-ktx` | 1.13.1 | Library | `android/app/build.gradle.kts` |
-| `androidx.appcompat:appcompat` | 1.7.0 | Library | `android/app/build.gradle.kts` |
-| `androidx.core:core-splashscreen` | 1.0.1 | Library | `android/app/build.gradle.kts` |
-| `androidx.webkit:webkit` | 1.11.0 | Library | `android/app/build.gradle.kts` |
-| `com.google.android.material:material` | 1.12.0 | Library | `android/app/build.gradle.kts` |
 
-Resolved from `google()` and `mavenCentral()` (`android/settings.gradle.kts`),
-with `RepositoriesMode.FAIL_ON_PROJECT_REPOS`. SDK levels: `compileSdk = 35`,
-`minSdk = 24`, `targetSdk = 35`, JVM target 17.
+These are `plugins {}` / buildscript dependencies rather than `implementation`
+dependencies. Resolving them requires the Android Gradle Plugin to execute, which
+in turn requires the Android SDK. They are therefore still outside coverage,
+along with their own transitive build dependencies.
 
-These are the **direct** declarations only. The transitive dependencies of these
-seven coordinates are also unscanned — the real graph is substantially larger.
+Everything else that was previously listed as unscanned — the five AndroidX and
+Material libraries — is now covered by §1.2.
 
-## 3. Why the gap exists — measured, not assumed
+## 3. Why the gap existed, and how most of it was closed
 
-Producing a Gradle lockfile requires actually resolving the graph. Two
-prerequisites were tested directly in this environment on 2026-11-19.
-
-### 3.1 Network and JVM are NOT the obstacle
+### 3.1 Network and JVM were never the obstacle
 
 | Probe | Result |
 | --- | --- |
@@ -81,20 +71,12 @@ prerequisites were tested directly in this environment on 2026-11-19.
 
 The wrapper downloaded and ran, so the toolchain itself is usable.
 
-### 3.2 Resolution fails on Android variant matching
+### 3.2 A plain Gradle project cannot select AndroidX variants
 
-A minimal audit project was created with the same five library coordinates and
-`google()` + `mavenCentral()`, then resolved with the repository's wrapper:
-
-```
-./gradlew -p <audit> --write-locks --no-daemon dependencies
-```
-
-Every coordinate failed. The reported cause was not a network error:
+A minimal audit project resolving the same five coordinates failed on every one:
 
 ```
 androidx.core:core-ktx:1.13.1 FAILED
-  Could not resolve androidx.core:core-ktx:1.13.1.
   No matching variant of androidx.core:core-ktx:1.13.1 was found.
   The consumer was configured to find a library for use during compile-time,
   compatible with Java 21, preferably in the form of class files ... but:
@@ -103,31 +85,57 @@ androidx.core:core-ktx:1.13.1 FAILED
     - Variant 'releaseVariantReleaseRuntimePublication' ...
 ```
 
-AndroidX publishes **AAR** variants (`releaseVariantRelease*Publication`). Only
-the Android Gradle Plugin registers the attribute compatibility rules that let a
-consumer select them; a plain `java-library` project cannot. The run emitted a
-218-byte lockfile containing only `empty=annotationProcessor,testAnnotationProcessor`
-— i.e. **no resolved graph** — so it was **discarded and not committed**.
+AndroidX publishes **AAR** variants (`releaseVariantRelease*Publication`). The
+Android Gradle Plugin normally registers the attribute compatibility rules that
+let a consumer select them; a stock `java-library` project does not.
 
-### 3.3 The two real prerequisites
+### 3.3 The rule that was missing is one class
+
+`deps-audit/` supplies exactly that rule and nothing else:
+
+```groovy
+class AarRule implements AttributeCompatibilityRule<LibraryElements> {
+    void execute(CompatibilityCheckDetails<LibraryElements> details) {
+        if (details.consumerValue != null && details.consumerValue.name == 'aar') {
+            details.compatible()
+        }
+    }
+}
+```
+
+registered via `dependencies { attributesSchema { attribute(LIBRARY_ELEMENTS_ATTRIBUTE) { ... } } }`,
+with the audited configuration requesting `usage=java-runtime`,
+`category=library`, `libraryelements=aar`.
+
+Result: **`RESOLVED_COMPONENTS=64`** and a real 67-line lockfile. No SDK, no AGP,
+no hand-written versions.
+
+(An earlier Kotlin DSL attempt failed with `Unresolved reference:
+attributesSchema`; the documented location is the dependency handler, and the
+Groovy DSL exposes it directly.)
+
+### 3.4 Why this does not extend to the plugin classpath
+
+The compatibility rule makes AAR *libraries* selectable. It cannot make the AGP
+plugin itself resolvable, because AGP is a plugin marker whose application needs
+the SDK to configure Android variants. That is the one remaining prerequisite:
 
 1. **Android SDK** platform 35 + build-tools, via `sdkmanager`.
-2. **The Android Gradle Plugin**, whose variant rules are what make AAR
-dependencies resolvable at all.
+2. **The Android Gradle Plugin**, executing against that SDK.
 
 Neither is installable here: native Android is source-only in this environment,
 and SDK installation is outside AppJet's supported capabilities. A hand-written
-or externally synthesized lockfile would be invented data, not evidence, so none
-was created.
+or externally synthesized lockfile for those plugins would be invented data, not
+evidence, so none was created.
 
-## 4. How to close the gap
+## 4. How to close the rest
 
 ### (a) Continuous monitoring — already added
 
 `.github/dependabot.yml` enables weekly update and advisory monitoring for
 `npm`, `gradle` (directory `/android`) and `github-actions`. This runs on GitHub,
 which is where the Android build actually happens, so it gives ongoing coverage
-without needing an Android SDK locally.
+of the plugin classpath without needing an Android SDK locally.
 
 ### (b) One-off full graph — on a machine or CI with the Android SDK
 
@@ -144,12 +152,14 @@ dependencyLocking { lockAllConfigurations() }
 ```
 
 Commit the resulting `android/app/gradle.lockfile`, then rerun the repository
-security scan; the scanner detects supported lockfiles and will fold the Gradle
-graph into coverage.
+security scan; the scanner detects supported lockfiles and will fold the full
+Gradle graph — plugins included — into coverage. At that point `deps-audit/` is
+redundant and can be deleted.
 
-> This snippet is deliberately **not** applied in the repository yet: it changes
-> the Android build, cannot be verified here (no Android SDK), and an unverified
-> change could break the APK workflow. Apply it together with a real build.
+> The `dependencyLocking` snippet is deliberately **not** applied in the
+> repository: it changes the Android build, cannot be verified here (no Android
+> SDK), and an unverified change could break the APK workflow. Apply it together
+> with a real build.
 
 ## 5. Also outside scanner scope
 
@@ -160,13 +170,15 @@ graph into coverage.
 - **Deployed container OS patching**: the deploy builder scans the final image
   separately from this dependency scan.
 - **Native Android runtime**: the npm result describes the JavaScript bundle, and
-  says nothing about the native shell (AndroidX libraries, WebView, splash).
+  the Gradle result describes library *versions*; neither exercises the native
+  shell at runtime.
 
 ## 6. Honest summary
 
 No known advisory is outstanding for the 159 npm packages resolved on
-2026-11-19 — that is the whole extent of the positive evidence.
+2026-11-19, and the 64-component AndroidX/Material graph is now inside coverage.
 
-Seven declared Android coordinates and their transitive graph, plus everything in
-§5, remain **unverified**. Treat the dependency posture as partially checked until
-a Gradle lockfile is committed or Dependabot reports on the `gradle` ecosystem.
+Still unverified: the AGP 8.7.3 and Kotlin 2.0.21 plugin classpaths, everything in
+§5, and anything the advisory database has not yet published. Treat the
+dependency posture as partially checked until a full `android/app` lockfile is
+committed or Dependabot reports on the `gradle` ecosystem.

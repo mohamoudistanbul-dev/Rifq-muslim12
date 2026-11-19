@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { StoreProvider } from './lib/store';
 import { BottomNav, Toasts } from './components/Shell';
 import Home from './pages/Home';
-import { QuranList, QuranReader } from './pages/Quran';
+import QuranList, { QuranReader } from './pages/Quran';
 import Prayer from './pages/Prayer';
 import Tasbih from './pages/Tasbih';
 import More from './pages/More';

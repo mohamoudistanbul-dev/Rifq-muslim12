@@ -71,7 +71,7 @@ export default function Profile() {
         </div>
         <h3 className="section-title" style={{ marginBottom: 2 }}>{user.name}</h3>
         <p className="tiny muted" style={{ margin: 0 }}>
-          {user.verified ? t('Email verified') : t('Email not verified yet')}
+          {user.emailVerified ? t('Email verified') : t('Email not verified yet')}
           {user.role === 'admin' ? ` · ${t('Administrator')}` : ''}
         </p>
       </div>
@@ -86,7 +86,7 @@ export default function Profile() {
           <label>{t('Language')}</label>
           <select className="select" value={lang} onChange={(e) => setLang(e.target.value as Lang)}>
             {LANGS.map((l) => (
-              <option key={l.id} value={l.id}>{l.native}</option>
+              <option key={l.code} value={l.code}>{l.native}</option>
             ))}
           </select>
         </div>

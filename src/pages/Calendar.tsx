@@ -150,9 +150,11 @@ export default function Calendar() {
         <h3 className="section-title">{t('Islamic occasions')}</h3>
         <div className="stack" style={{ gap: 8 }}>
           {occasions.map((o) => (
-            <div key={o.name} className="row" style={{ justifyContent: 'space-between' }}>
-              <span className="small">{t(o.name)}</span>
-              <span className="tiny muted">{o.date}</span>
+            <div key={`${o.month}-${o.day}`} className="row" style={{ justifyContent: 'space-between' }}>
+              <span className="small">{t(o.title)}</span>
+              <span className="tiny muted">
+                {o.day}/{o.month}{o.note ? ` · ${t(o.note)}` : ''}
+              </span>
             </div>
           ))}
           {occasions.length === 0 && <p className="tiny muted">{t('No occasion in the coming days.')}</p>}
@@ -169,7 +171,7 @@ export default function Calendar() {
           {t('This month has')} {hijriMonthLength(today)} {t('days in the calculated calendar')}.
         </p>
         <p className="tiny muted" style={{ marginBottom: 0 }}>
-          {t('Occasions tracked')}: {OCCASIONS.map((o) => t(o.name)).join(' · ')}
+          {t('Occasions tracked')}: {OCCASIONS.map((o) => t(o.title)).join(' · ')}
         </p>
       </div>
     </Page>

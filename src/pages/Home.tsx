@@ -39,7 +39,7 @@ export default function Home() {
   const [hadith, setHadith] = useState<{ arabic: string; english: string; name: string; number: number } | null>(null);
   const [tracker, setTracker] = useState<Record<string, boolean>>({});
 
-  const idx = dayIndex(now);
+  const idx = dayIndex(now, 100000);
   const reminder = REMINDERS[idx % REMINDERS.length];
 
   useEffect(() => {

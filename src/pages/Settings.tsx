@@ -26,7 +26,7 @@ export default function Settings() {
         <h3 className="section-title">{t('Language')}</h3>
         <div className="chips">
           {LANGS.map((l) => (
-            <button key={l.id} className={`chip ${lang === l.id ? 'active' : ''}`} onClick={() => setLang(l.id as Lang)}>
+            <button key={l.code} className={`chip ${lang === l.code ? 'active' : ''}`} onClick={() => setLang(l.code as Lang)}>
               {l.native}
             </button>
           ))}
@@ -89,7 +89,7 @@ export default function Settings() {
           {place?.manual ? ` · ${t('manually selected')}` : place ? ` · ${t('from GPS')}` : ''}
         </p>
         <div className="grid grid-2">
-          <button className="btn btn-primary" onClick={() => void detectLocation(true)}>
+          <button className="btn btn-primary" onClick={() => void detectLocation()}>
             <AppIcon name="location" size={16} /> {t('Use GPS')}
           </button>
           <button className="btn btn-soft" onClick={() => navigate('/prayer?pick=1')}>{t('Choose manually')}</button>

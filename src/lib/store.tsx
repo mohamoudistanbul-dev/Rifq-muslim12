@@ -148,9 +148,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const refreshUser = useCallback(async () => {
     try {
       const res = await get<{ user: User | null }>('/auth/me');
-      setUser(res.user);
-      if (res.user) {
-        setPrefsState((p) => ({ ...p, ...(res.user.prefs || {}) }));
+      const me = res.user;
+      setUser(me);
+      if (me) {
+        setPrefsState((p) => ({ ...p, ...(me.prefs || {}) }));
       }
     } catch {
       setUser(null);

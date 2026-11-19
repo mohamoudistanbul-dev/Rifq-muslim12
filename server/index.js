@@ -20,6 +20,7 @@ import {
 import { sendEmail, mailConfigured } from './mail.js';
 import { answerQuestion } from './assistant.js';
 import { contentRouter, warmContent } from './content.js';
+import { geoRouter } from './geo.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -511,6 +512,7 @@ app.post('/api/assistant', rateLimit({ windowMs: 60_000, max: 12 }), async (req,
 
 /* ------------------------- Quran / hadith / places -------------------------- */
 
+app.use('/api', geoRouter);
 app.use('/api', contentRouter);
 
 /* ---------------------------------- admin ---------------------------------- */

@@ -44,19 +44,6 @@ async function fetchJson(url, { ttl = 3600, timeout = 20000, headers = {} } = {}
   return data;
 }
 
-const flagOf = (code) =>
-  code && code.length === 2
-    ? String.fromCodePoint(...[...code.toUpperCase()].map((c) => 127397 + c.charCodeAt(0)))
-    : '';
-
-const safeTz = (lat, lon) => {
-  try {
-    return tzlookup(lat, lon);
-  } catch {
-    return 'UTC';
-  }
-};
-
 /* ---------------------------------- Quran --------------------------------- */
 
 contentRouter.get('/quran/surahs', async (_req, res) => {

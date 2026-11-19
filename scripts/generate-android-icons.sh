@@ -30,17 +30,11 @@ convert "$WORK/base.png" "$WORK/square-mask.png" \
 convert "$WORK/icon.png" -fill none -stroke "$GOLD" -strokewidth 11 \
     -draw "circle 256,256 256,84" "$WORK/icon.png"
 
-# Crescent = gold disc minus an offset disc (built as a separate layer so the
-# gradient background shows through the bite).
-convert -size 512x512 xc:black -fill white \
-    -draw "circle 250,256 250,124" "$WORK/outer.png"
-convert -size 512x512 xc:black -fill white \
-    -draw "circle 296,220 296,118" "$WORK/inner.png"
-convert "$WORK/outer.png" "$WORK/inner.png" \
-    -compose MinusDst -composite "$WORK/crescent-mask.png"
-convert -size 512x512 xc:"$GOLD" "$WORK/crescent-mask.png" \
-    -alpha off -compose CopyOpacity -composite "$WORK/crescent.png"
-convert "$WORK/icon.png" "$WORK/crescent.png" -compose Over -composite "$WORK/icon.png"
+# Crescent drawn as one closed two-arc path: a wide outer arc and a slightly
+# smaller inner arc leave a gold crescent that opens to the right.
+convert "$WORK/icon.png" -fill "$GOLD" -stroke none \
+    -draw "path 'M 250,120 A 138,138 0 1,0 250,392 A 143,143 0 0,1 250,120 Z'" \
+    "$WORK/icon.png"
 
 # Five-pointed star in the crescent opening
 convert "$WORK/icon.png" -fill "$GOLD_LIGHT" -stroke none \
@@ -72,5 +66,5 @@ find "$RES" -name 'ic_launcher*.png' | sort | while read -r f; do
     printf '  %-58s %s\n' "$f" "$(identify -format '%wx%h %[colorspace]' "$f")"
 done
 
-echo "Crescent sample (gold in crescent body, transparent outside):"
-convert "$WORK/icon.png" -format '  body=%[pixel:p{200,256}]  outside=%[pixel:p{430,430}]\n' info:
+echo "Crescent sample (gold in crescent body, emerald in the opening):"
+convert "$WORK/icon.png" -format '  body=%[pixel:p{130,256}]  opening=%[pixel:p{330,256}]\n' info:

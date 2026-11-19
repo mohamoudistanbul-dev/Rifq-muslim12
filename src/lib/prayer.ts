@@ -49,6 +49,50 @@ export const HIGH_LAT: { id: HighLat; label: string }[] = [
   { id: 'TwilightAngle', label: 'Angle based (recommended)' },
 ];
 
+/**
+ * Regional default calculation method. Applied automatically for a newly
+ * detected/selected country so that, for example, a Makkah user is not given
+ * MWL timings. An explicit user choice always wins (see CalcOptions.methodAuto).
+ */
+const REGION_METHOD: Record<string, MethodId> = {
+  SO: 'MWL',
+  ET: 'MWL',
+  KE: 'MWL',
+  DJ: 'MWL',
+  SD: 'MWL',
+  SS: 'MWL',
+  NG: 'MWL',
+  GH: 'MWL',
+  SN: 'MWL',
+  ML: 'MWL',
+  MR: 'MWL',
+  TZ: 'MWL',
+  UG: 'MWL',
+  ZA: 'MWL',
+  SA: 'UmmAlQura',
+  AE: 'Dubai',
+  EG: 'Egyptian',
+  PK: 'Karachi',
+  IN: 'Karachi',
+  BD: 'Karachi',
+  AF: 'Karachi',
+  TR: 'Diyanet',
+  KW: 'Kuwait',
+  QA: 'Qatar',
+  SG: 'Singapore',
+  MY: 'Singapore',
+  ID: 'Singapore',
+  BN: 'Singapore',
+  US: 'ISNA',
+  CA: 'ISNA',
+  GB: 'MoonsightingCommittee',
+};
+
+export function regionalMethod(countryCode?: string): MethodId {
+  if (!countryCode) return 'MWL';
+  return REGION_METHOD[countryCode.toUpperCase()] || 'MWL';
+}
+
 export interface Place {
   lat: number;
   lon: number;
@@ -65,6 +109,8 @@ export interface CalcOptions {
   method: MethodId;
   madhab: 'shafi' | 'hanafi';
   highLatitude: HighLat;
+  /** True while the method follows the regional default rather than a user choice. */
+  methodAuto?: boolean;
   /** Per-prayer minute tuning used to match a local mosque. */
   adjustments?: Partial<Record<PrayerKey, number>>;
 }
@@ -99,6 +145,12 @@ function baseParams(method: MethodId): CalculationParameters {
   }
 }
 
+const clampAdjust = (n: unknown): number => {
+  const value = Number(n);
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(-30, Math.min(30, Math.round(value)));
+};
+
 export function buildParams(opts: CalcOptions): CalculationParameters {
   const params = baseParams(opts.method);
   params.madhab = opts.madhab === 'hanafi' ? Madhab.Hanafi : Madhab.Shafi;
@@ -111,21 +163,101 @@ export function buildParams(opts: CalcOptions): CalculationParameters {
   if (opts.adjustments) {
     const a = opts.adjustments;
     params.adjustments = {
-      fajr: a.fajr || 0,
-      sunrise: a.sunrise || 0,
-      dhuhr: a.dhuhr || 0,
-      asr: a.asr || 0,
-      maghrib: a.maghrib || 0,
-      isha: a.isha || 0,
+      fajr: clampAdjust(a.fajr),
+      sunrise: clampAdjust(a.sunrise),
+      dhuhr: clampAdjust(a.dhuhr),
+      asr: clampAdjust(a.asr),
+      maghrib: clampAdjust(a.maghrib),
+      isha: clampAdjust(a.isha),
     };
   }
   return params;
 }
 
-export function computeDay(date: Date, place: Place, opts: CalcOptions): Record<PrayerKey, Date> {
+/* --------------------------- timezone-aware dates --------------------------- */
+
+export interface DateParts {
+  year: number;
+  month: number;
+  day: number;
+}
+
+export function isValidTimeZone(timezone?: string): boolean {
+  if (!timezone) return false;
+  try {
+    new Intl.DateTimeFormat('en-GB', { timeZone: timezone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Calendar date of an instant *in a given timezone* (not the device's). */
+export function zonedParts(date: Date, timezone: string): DateParts {
+  if (isValidTimeZone(timezone)) {
+    try {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        timeZone: timezone,
+      }).formatToParts(date);
+      const pick = (type: string) => Number(parts.find((p) => p.type === type)?.value || 0);
+      const year = pick('year');
+      const month = pick('month');
+      const day = pick('day');
+      if (year && month && day) return { year, month, day };
+    } catch {
+      /* fall through to device date */
+    }
+  }
+  return { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate() };
+}
+
+export function partsKey(parts: DateParts): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}`;
+}
+
+export function addDays(parts: DateParts, days: number): DateParts {
+  const shifted = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + days, 12));
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    day: shifted.getUTCDate(),
+  };
+}
+
+/**
+ * Adhan reads `date.getFullYear()/getMonth()/getDate()` — the runtime's local
+ * calendar date. Passing a floating local noon that carries the *target city's*
+ * date makes the calculation independent of the device timezone, and noon keeps
+ * it clear of midnight DST transitions.
+ */
+function floatingDate(parts: DateParts): Date {
+  return new Date(parts.year, parts.month - 1, parts.day, 12, 0, 0, 0);
+}
+
+function assertPlace(place: Place): void {
+  if (!Number.isFinite(place.lat) || Math.abs(place.lat) > 90) {
+    throw new Error('Invalid latitude');
+  }
+  if (!Number.isFinite(place.lon) || Math.abs(place.lon) > 180) {
+    throw new Error('Invalid longitude');
+  }
+}
+
+/* ------------------------------ prayer times ------------------------------- */
+
+export function computeDayForParts(
+  parts: DateParts,
+  place: Place,
+  opts: CalcOptions
+): Record<PrayerKey, Date> {
+  assertPlace(place);
   const times = new PrayerTimes(
     new Coordinates(place.lat, place.lon),
-    date,
+    floatingDate(parts),
     buildParams(opts)
   );
   return {
@@ -138,24 +270,65 @@ export function computeDay(date: Date, place: Place, opts: CalcOptions): Record<
   };
 }
 
+/** Prayer times for the calendar date that `date` falls on in the place's timezone. */
+export function computeDay(
+  date: Date,
+  place: Place,
+  opts: CalcOptions
+): Record<PrayerKey, Date> {
+  return computeDayForParts(zonedParts(date, place.timezone), place, opts);
+}
+
+/** Yesterday / today / tomorrow around an instant, each in the city's own calendar. */
+export function computeWindow(
+  date: Date,
+  place: Place,
+  opts: CalcOptions
+): {
+  yesterday: Record<PrayerKey, Date>;
+  today: Record<PrayerKey, Date>;
+  tomorrow: Record<PrayerKey, Date>;
+} {
+  const parts = zonedParts(date, place.timezone);
+  return {
+    yesterday: computeDayForParts(addDays(parts, -1), place, opts),
+    today: computeDayForParts(parts, place, opts),
+    tomorrow: computeDayForParts(addDays(parts, 1), place, opts),
+  };
+}
+
 export function nextPrayer(
   times: Record<PrayerKey, Date>,
-  now = new Date()
+  now = new Date(),
+  tomorrowTimes?: Record<PrayerKey, Date>
 ): { key: PrayerKey; at: Date; msLeft: number; tomorrow: boolean } {
   for (const key of PRAYER_KEYS) {
     if (times[key].getTime() > now.getTime()) {
       return { key, at: times[key], msLeft: times[key].getTime() - now.getTime(), tomorrow: false };
     }
   }
-  const fajr = times.fajr;
-  const next = new Date(fajr.getTime() + 24 * 3600 * 1000);
-  return { key: 'fajr', at: next, msLeft: next.getTime() - now.getTime(), tomorrow: true };
+  // After Isha: use tomorrow's real Fajr, not a naive +24h (DST would be wrong).
+  const at = tomorrowTimes
+    ? tomorrowTimes.fajr
+    : new Date(times.fajr.getTime() + 24 * 3600 * 1000);
+  return { key: 'fajr', at, msLeft: Math.max(0, at.getTime() - now.getTime()), tomorrow: true };
 }
 
-export function currentPrayer(times: Record<PrayerKey, Date>, now = new Date()): PrayerKey | null {
+/**
+ * The prayer whose time window we are currently in. Between midnight and Fajr
+ * the window still belongs to yesterday's Isha, so the previous day is used.
+ */
+export function currentPrayer(
+  times: Record<PrayerKey, Date>,
+  now = new Date(),
+  previousTimes?: Record<PrayerKey, Date>
+): PrayerKey | null {
   let current: PrayerKey | null = null;
   for (const key of FIVE) {
     if (times[key].getTime() <= now.getTime()) current = key;
+  }
+  if (!current && previousTimes && previousTimes.isha.getTime() <= now.getTime()) {
+    return 'isha';
   }
   return current;
 }
@@ -164,18 +337,70 @@ export function qiblaBearing(lat: number, lon: number): number {
   return Qibla(new Coordinates(lat, lon));
 }
 
-/** Format an instant in the place's own timezone. */
+/* -------------------------------- formatting ------------------------------- */
+
+function localeFor(lang: string): string {
+  return lang === 'ar' ? 'ar-SA' : lang === 'so' ? 'so-SO' : 'en-GB';
+}
+
+/** Format an instant in the place's own timezone (falls back to device time, never UTC). */
 export function formatTime(date: Date, timezone: string, lang = 'en', hour12 = true): string {
-  const locale = lang === 'ar' ? 'ar-SA' : lang === 'so' ? 'so-SO' : 'en-GB';
+  const zone = isValidTimeZone(timezone) ? timezone : undefined;
   try {
-    return new Intl.DateTimeFormat(locale, {
+    return new Intl.DateTimeFormat(localeFor(lang), {
       hour: '2-digit',
       minute: '2-digit',
       hour12,
-      timeZone: timezone,
+      timeZone: zone,
     }).format(date);
   } catch {
-    return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }).format(date);
+    return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12 }).format(date);
+  }
+}
+
+/** Live clock (with seconds) in the selected city's timezone. */
+export function formatClock(date: Date, timezone: string, lang = 'en', hour12 = true): string {
+  const zone = isValidTimeZone(timezone) ? timezone : undefined;
+  try {
+    return new Intl.DateTimeFormat(localeFor(lang), {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12,
+      timeZone: zone,
+    }).format(date);
+  } catch {
+    return date.toLocaleTimeString();
+  }
+}
+
+/** Long date (weekday, day month year) in the selected city's timezone. */
+export function formatZonedDate(date: Date, timezone: string, lang = 'en'): string {
+  const zone = isValidTimeZone(timezone) ? timezone : undefined;
+  try {
+    return new Intl.DateTimeFormat(localeFor(lang), {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: zone,
+    }).format(date);
+  } catch {
+    return date.toDateString();
+  }
+}
+
+/** UTC offset label for a timezone at a given instant, e.g. "GMT+3". */
+export function offsetLabel(timezone: string, date = new Date(), lang = 'en'): string {
+  if (!isValidTimeZone(timezone)) return '';
+  try {
+    const parts = new Intl.DateTimeFormat(localeFor(lang), {
+      timeZone: timezone,
+      timeZoneName: 'shortOffset',
+    }).formatToParts(date);
+    return parts.find((p) => p.type === 'timeZoneName')?.value || '';
+  } catch {
+    return '';
   }
 }
 
@@ -190,14 +415,5 @@ export function formatCountdown(ms: number): string {
 
 /** Local calendar date (YYYY-MM-DD) for a place, used for scheduling. */
 export function dayKey(date: Date, timezone: string): string {
-  try {
-    return new Intl.DateTimeFormat('en-CA', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      timeZone: timezone,
-    }).format(date);
-  } catch {
-    return date.toISOString().slice(0, 10);
-  }
+  return partsKey(zonedParts(date, timezone));
 }

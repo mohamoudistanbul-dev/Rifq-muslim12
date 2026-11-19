@@ -11,7 +11,9 @@
     "dev": "vite",
     "build": "vite build",
     "start": "node server/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify:world": "node scripts/verify-world-geo.mjs && tsx scripts/verify-world-prayer.ts && tsx scripts/verify-prayer-times.ts",
+    "geo:build": "node scripts/build-geo-data.mjs"
   },
   "dependencies": {
     "adhan": "^4.4.3",

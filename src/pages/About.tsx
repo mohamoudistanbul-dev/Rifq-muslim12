@@ -41,7 +41,7 @@ export default function About() {
       <div className="card">
         <h3 className="section-title">{t('Sources and honesty')}</h3>
         <p className="small">
-          {t('Prayer times are computed astronomically with the Adhan library from your coordinates and timezone — never hardcoded. Quran text and translations come from the AlQuran Cloud / Tanzil datasets; hadith come from the open hadith API. Place data comes from OpenStreetMap contributors.')}
+          {t('Prayer times are computed astronomically with the Adhan library from your coordinates and timezone — never hardcoded. Quran text and translations come from the AlQuran Cloud / Tanzil datasets; hadith come from the open hadith API. Worldwide place data — every country, territory and city with 5,000+ inhabitants — comes from GeoNames and is licensed CC BY 4.0; nearby mosques and halal places come from OpenStreetMap contributors.')}
         </p>
         <p className="small muted">
           {t('Where a source is unavailable or unverified, the app says so instead of inventing content.')}

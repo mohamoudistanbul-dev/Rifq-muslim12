@@ -197,6 +197,19 @@ checked directly against the OSV API instead: AGP plugin + `com.android.tools.bu
 dependency locking would let automated scanners cover these transitively in
 future.
 
+**Transitive coverage on the runner.** Because this environment has no Android
+SDK or Gradle distribution, the full resolved graph cannot be produced locally.
+The workflow therefore emits it during CI: the `gradle-dependency-graph`
+artifact contains `./gradlew :app:dependencies` output for
+`releaseRuntimeClasspath`, which lists every resolved transitive Android
+dependency and its version. Download that artifact and check the versions it
+lists against https://osv.dev to audit the graph.
+
+**Repeatable workflow check.** `node scripts/validate-android-workflow.mjs`
+verifies the workflow's structure (triggers, JDK/SDK setup, build commands,
+artifact name, build-cache guards, signing-secret handling) and exits non-zero
+on any regression.
+
 ---
 
 ## 6. Honest status

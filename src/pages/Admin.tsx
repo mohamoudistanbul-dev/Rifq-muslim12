@@ -1,289 +1,234 @@
 import React, { useEffect, useState } from 'react';
-import { Page, Loading, ErrorBox } from '../components/Shell';
-import { AppIcon } from '../components/Icons';
+import { Page, Loading } from '../components/Shell';
 import { useStore } from '../lib/store';
-import { get, patch, post, put } from '../lib/api';
+import { get, patch, post, put, del } from '../lib/api';
+import '../admin.css';
 
-type Tab = 'overview' | 'users' | 'messages' | 'reports' | 'posts' | 'broadcast' | 'settings' | 'audit';
+type Tab =
+  | 'overview'
+  | 'content'
+  | 'media'
+  | 'users'
+  | 'messages'
+  | 'community'
+  | 'notifications'
+  | 'settings'
+  | 'activity'
+  | 'security';
 
-interface AdminUser { id: string; name: string; email: string; role: string; banned: boolean; emailVerified: boolean; createdAt: string }
-interface Message { id: string; name: string; email: string; phone?: string; subject: string; body: string; status: string; created_at: string }
-interface Report { id: string; post_id?: string; post_body?: string; post_author?: string; reason: string; status: string; created_at: string }
+interface AuditRow { id: string; actor_email?: string; action: string; detail: string; created_at: string }
+interface ContentItem {
+  id: string;
+  type: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  body: string;
+  image: string;
+  category: string;
+  status: string;
+  featured: boolean;
+  views: number;
+  updatedAt: string;
+  publishedAt: string | null;
+}
+interface MediaItem {
+  id: string;
+  url: string;
+  filename: string;
+  originalName: string;
+  mime: string;
+  size: number;
+  alt: string;
+  createdAt: string;
+}
+interface AdminUser {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  verified?: boolean;
+  emailVerified?: boolean;
+  banned: boolean;
+  createdAt: string;
+  lastLogin?: string | null;
+}
+interface Message {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  subject: string;
+  body: string;
+  status: string;
+  created_at: string;
+}
+interface Report {
+  id: string;
+  post_id?: string;
+  post_body?: string;
+  post_author?: string;
+  reason: string;
+  status: string;
+  created_at: string;
+}
 interface Post { id: string; author: string; body: string; status: string; likes: number; created_at: string }
-interface AuditRow { id: string; action: string; detail: string; email?: string; created_at: string }
-interface Overview { [k: string]: number | boolean | string }
+interface Notice { id: string; title: string; body: string; created_at: string }
+interface Overview {
+  users: number;
+  verifiedUsers: number;
+  admins: number;
+  posts: number;
+  openReports: number;
+  newMessages: number;
+  bookmarks: number;
+  trackerEntries: number;
+  quizAttempts: number;
+  notifications: number;
+  content: number;
+  publishedContent: number;
+  drafts: number;
+  media: number;
+  mediaBytes: number;
+  emailConfigured: boolean;
+  assistantMode: string;
+  recent: AuditRow[];
+  topContent: { id: string; title: string; type: string; status: string; views: number }[];
+}
+interface Security {
+  email: string;
+  role: string;
+  name: string;
+  createdAt: string;
+  lastLogin: string | null;
+  admins: { id: string; email: string; name: string; role: string; last_login: string | null; created_at: string }[];
+  emailConfigured: boolean;
+  passwordScheme: string;
+  sessionNote: string;
+}
+interface Draft {
+  id?: string;
+  type: string;
+  title: string;
+  category: string;
+  excerpt: string;
+  body: string;
+  image: string;
+  status: string;
+  featured: boolean;
+}
 
-const TABS: { id: Tab; label: string }[] = [
+const EMPTY_DRAFT: Draft = {
+  type: 'article',
+  title: '',
+  category: '',
+  excerpt: '',
+  body: '',
+  image: '',
+  status: 'draft',
+  featured: false,
+};
+
+const TABS: { id: Tab; label: string; superOnly?: boolean }[] = [
   { id: 'overview', label: 'Overview' },
-  { id: 'users', label: 'Users' },
-  { id: 'messages', label: 'Messages' },
-  { id: 'reports', label: 'Reports' },
-  { id: 'posts', label: 'Posts' },
-  { id: 'broadcast', label: 'Notify' },
-  { id: 'settings', label: 'Settings' },
-  { id: 'audit', label: 'Audit log' },
+  { id: 'content', label: 'Content' },
+  { id: 'media', label: 'Media library' },
+  { id: 'users', label: 'Users', superOnly: true },
+  { id: 'messages', label: 'Contact messages' },
+  { id: 'community', label: 'Community' },
+  { id: 'notifications', label: 'Notifications' },
+  { id: 'settings', label: 'Website settings', superOnly: true },
+  { id: 'activity', label: 'Activity log' },
+  { id: 'security', label: 'Security' },
 ];
 
-export default function Admin() {
-  const { t, user, authReady, toast } = useStore();
-  const [tab, setTab] = useState<Tab>('overview');
-  const [overview, setOverview] = useState<Overview | null>(null);
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [q, setQ] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [reports, setReports] = useState<Report[]>([]);
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [audit, setAudit] = useState<AuditRow[]>([]);
-  const [settings, setSettings] = useState<Record<string, string>>({});
-  const [broadcast, setBroadcast] = useState({ title: '', body: '' });
+const SETTING_FIELDS: { key: string; label: string; kind?: 'text' | 'email' | 'url' | 'textarea' | 'bool' }[] = [
+  { key: 'app_name', label: 'Application name' },
+  { key: 'tagline', label: 'Tagline' },
+  { key: 'contact_email', label: 'Official contact email', kind: 'email' },
+  { key: 'contact_phone', label: 'Contact phone' },
+  { key: 'whatsapp', label: 'WhatsApp number' },
+  { key: 'download_url', label: 'Download / invitation URL', kind: 'url' },
+  { key: 'announcement_text', label: 'Announcement banner', kind: 'textarea' },
+  { key: 'announcement_active', label: 'Show announcement on Home', kind: 'bool' },
+  { key: 'community_enabled', label: 'Community enabled', kind: 'bool' },
+];
+
+const when = (iso?: string | null) =>
+  iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+const bytes = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+
+/* ------------------------------- login gate -------------------------------- */
+
+function AdminLogin({ onDone }: { onDone: () => Promise<void> }) {
+  const { t } = useStore();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const isAdmin = user?.role === 'admin';
-
-  useEffect(() => {
-    if (!isAdmin) return;
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
     setError('');
-    const jobs: Promise<void>[] = [];
-    if (tab === 'overview') jobs.push(get<Overview>('/admin/overview').then(setOverview).catch(() => setError(t('The dashboard could not be loaded.'))));
-    if (tab === 'users') jobs.push(get<{ users: AdminUser[] }>(`/admin/users?q=${encodeURIComponent(q)}`).then((r) => setUsers(r.users)).catch(() => setError(t('Users could not be loaded.'))));
-    if (tab === 'messages') jobs.push(get<{ messages: Message[] }>('/admin/messages').then((r) => setMessages(r.messages)).catch(() => setError(t('Messages could not be loaded.'))));
-    if (tab === 'reports') jobs.push(get<{ reports: Report[] }>('/admin/reports').then((r) => setReports(r.reports)).catch(() => setError(t('Reports could not be loaded.'))));
-    if (tab === 'posts') jobs.push(get<{ posts: Post[] }>('/admin/posts').then((r) => setPosts(r.posts)).catch(() => setError(t('Posts could not be loaded.'))));
-    if (tab === 'audit') jobs.push(get<{ audit: AuditRow[] }>('/admin/audit').then((r) => setAudit(r.audit)).catch(() => setError(t('The audit log could not be loaded.'))));
-    if (tab === 'settings') jobs.push(get<{ settings: Record<string, string> }>('/admin/settings').then((r) => setSettings(r.settings)).catch(() => setError(t('Settings could not be loaded.'))));
-    void Promise.all(jobs);
-  }, [tab, isAdmin, q]);
-
-  if (!authReady) return <Page title="Admin"><Loading /></Page>;
-  if (!isAdmin) {
-    return (
-      <Page title="Admin">
-        <div className="card center">
-          <AppIcon name="shield" size={32} />
-          <p className="small">{t('This area is restricted to the application administrator. There is no public admin registration.')}</p>
-          <p className="tiny muted">{t('Signed in as')}: {user?.email || t('guest')}</p>
-        </div>
-      </Page>
-    );
-  }
-
-  const act = async (fn: () => Promise<unknown>, ok: string) => {
     try {
-      await fn();
-      toast(t(ok), 'success');
+      await post('/auth/login', { email: email.trim(), password });
+      await onDone();
     } catch (err) {
-      toast((err as Error).message || t('The action failed'), 'error');
+      setError((err as Error).message || t('Sign in failed.'));
+    } finally {
+      setBusy(false);
     }
   };
 
   return (
-    <Page title="Admin" subtitle={`${t('Owner')}: Eng Mohamud Yusuf · ${user.email}`}>
-      <div className="chips scroll-x">
-        {TABS.map((x) => (
-          <button key={x.id} className={`chip ${tab === x.id ? 'active' : ''}`} onClick={() => setTab(x.id)}>{t(x.label)}</button>
-        ))}
-      </div>
-
-      {error && <ErrorBox message={error} onRetry={() => setTab(tab)} />}
-
-      {tab === 'overview' && (
-        !overview ? <Loading /> : (
-          <div className="grid grid-2">
-            {[
-              ['users', 'Users'],
-              ['verifiedUsers', 'Verified'],
-              ['posts', 'Posts'],
-              ['openReports', 'Open reports'],
-              ['newMessages', 'New messages'],
-              ['bookmarks', 'Bookmarks'],
-              ['trackerEntries', 'Tracker entries'],
-              ['quizAttempts', 'Quiz attempts'],
-              ['broadcasts', 'Notifications'],
-            ].map(([key, label]) => (
-              <div key={key} className="stat">
-                <span className="stat-value">{String(overview[key] ?? 0)}</span>
-                <span className="tiny muted">{t(label)}</span>
-              </div>
-            ))}
-            <div className="card" style={{ gridColumn: '1 / -1' }}>
-              <p className="small" style={{ margin: 0 }}>
-                {t('Email delivery')}: <strong>{overview.emailConfigured ? t('configured') : t('not configured')}</strong> · {t('Assistant')}: <strong>{String(overview.assistantMode)}</strong>
-              </p>
-            </div>
-          </div>
-        )
-      )}
-
-      {tab === 'users' && (
-        <>
-          <input className="input" placeholder={t('Search by name or email')} value={q} onChange={(e) => setQ(e.target.value)} />
-          <div className="stack" style={{ gap: 8, marginTop: 10 }}>
-            {users.map((u) => (
-              <div key={u.id} className="card">
-                <div className="row" style={{ justifyContent: 'space-between' }}>
-                  <div>
-                    <strong className="small">{u.name}</strong>
-                    <p className="tiny muted" style={{ margin: 0 }}>{u.email}</p>
-                  </div>
-                  <span className="badge-soft">{u.role}{u.banned ? ` · ${t('suspended')}` : ''}</span>
-                </div>
-                <div className="row" style={{ gap: 8, marginTop: 8 }}>
-                  <button
-                    className="btn btn-soft btn-sm"
-                    onClick={() => void act(() => patch(`/admin/users/${u.id}`, { role: u.role === 'admin' ? 'user' : 'admin' }), 'Role updated')}
-                  >
-                    {u.role === 'admin' ? t('Make user') : t('Make admin')}
-                  </button>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => void act(() => patch(`/admin/users/${u.id}`, { banned: !u.banned }), 'User updated')}
-                  >
-                    {u.banned ? t('Restore') : t('Suspend')}
-                  </button>
-                </div>
-              </div>
-            ))}
-            {users.length === 0 && <p className="empty small">{t('No users match that search.')}</p>}
-          </div>
-        </>
-      )}
-
-      {tab === 'messages' && (
-        <div className="stack" style={{ gap: 8 }}>
-          {messages.map((m) => (
-            <div key={m.id} className="card">
-              <div className="row" style={{ justifyContent: 'space-between' }}>
-                <strong className="small">{m.subject || t('No subject')}</strong>
-                <span className="badge-soft">{m.status}</span>
-              </div>
-              <p className="tiny muted" style={{ margin: '4px 0' }}>{m.name} · {m.email}{m.phone ? ` · ${m.phone}` : ''} · {new Date(m.created_at).toLocaleString()}</p>
-              <p className="small" style={{ whiteSpace: 'pre-wrap' }}>{m.body}</p>
-              <div className="row" style={{ gap: 8 }}>
-                <a className="btn btn-soft btn-sm" href={`mailto:${m.email}?subject=Re: ${encodeURIComponent(m.subject || 'RIFQ Muslim')}`}>{t('Reply')}</a>
-                <button className="btn btn-ghost btn-sm" onClick={() => void act(() => patch(`/admin/messages/${m.id}`, { status: 'archived' }), 'Message archived')}>{t('Archive')}</button>
-              </div>
-            </div>
-          ))}
-          {messages.length === 0 && <p className="empty small">{t('No messages yet.')}</p>}
+    <Page title="Super Admin" subtitle={t('Administrator sign in')}>
+      <form className="card gold-edge" onSubmit={submit}>
+        <div className="field">
+          <label htmlFor="admin-email">{t('Administrator email')}</label>
+          <input
+            id="admin-email"
+            className="input"
+            type="email"
+            autoComplete="username"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
         </div>
-      )}
-
-      {tab === 'reports' && (
-        <div className="stack" style={{ gap: 8 }}>
-          {reports.map((r) => (
-            <div key={r.id} className="card">
-              <div className="row" style={{ justifyContent: 'space-between' }}>
-                <strong className="small">{t('Report')} · {r.post_author || t('unknown member')}</strong>
-                <span className="badge-soft">{r.status}</span>
-              </div>
-              <p className="tiny muted" style={{ margin: '4px 0' }}>{r.reason}</p>
-              <p className="small" style={{ background: 'var(--cream-soft)', padding: 8, borderRadius: 8 }}>{r.post_body}</p>
-              <div className="row" style={{ gap: 8 }}>
-                <button className="btn btn-soft btn-sm" onClick={() => void act(() => patch(`/admin/reports/${r.id}`, { status: 'resolved', hidePost: true, postId: r.post_id }), 'Report resolved and post hidden')}>{t('Hide post')}</button>
-                <button className="btn btn-ghost btn-sm" onClick={() => void act(() => patch(`/admin/reports/${r.id}`, { status: 'dismissed' }), 'Report dismissed')}>{t('Dismiss')}</button>
-              </div>
-            </div>
-          ))}
-          {reports.length === 0 && <p className="empty small">{t('No reports waiting.')}</p>}
+        <div className="field">
+          <label htmlFor="admin-password">{t('Password')}</label>
+          <input
+            id="admin-password"
+            className="input"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
         </div>
-      )}
-
-      {tab === 'posts' && (
-        <div className="stack" style={{ gap: 8 }}>
-          {posts.map((p) => (
-            <div key={p.id} className="card">
-              <div className="row" style={{ justifyContent: 'space-between' }}>
-                <strong className="small">{p.author}</strong>
-                <span className="badge-soft">{p.status}</span>
-              </div>
-              <p className="small">{p.body}</p>
-              <button className="btn btn-ghost btn-sm" onClick={() => void act(() => patch(`/admin/posts/${p.id}`, { status: p.status === 'hidden' ? 'published' : 'hidden' }), 'Post updated')}>
-                {p.status === 'hidden' ? t('Publish') : t('Hide')}
-              </button>
-            </div>
-          ))}
-          {posts.length === 0 && <p className="empty small">{t('No posts yet.')}</p>}
-        </div>
-      )}
-
-      {tab === 'broadcast' && (
-        <div className="card">
-          <h3 className="section-title">{t('Send a notification to all users')}</h3>
-          <div className="field">
-            <label>{t('Title')}</label>
-            <input className="input" maxLength={120} value={broadcast.title} onChange={(e) => setBroadcast({ ...broadcast, title: e.target.value })} />
-          </div>
-          <div className="field">
-            <label>{t('Message')}</label>
-            <textarea className="textarea" rows={4} maxLength={1000} value={broadcast.body} onChange={(e) => setBroadcast({ ...broadcast, body: e.target.value })} />
-          </div>
-          <button
-            className="btn btn-primary btn-block"
-            onClick={() => void act(async () => {
-              await post('/admin/broadcast', broadcast);
-              setBroadcast({ title: '', body: '' });
-            }, 'Notification published')}
-          >
-            {t('Publish notification')}
-          </button>
-          <p className="tiny muted" style={{ marginBottom: 0 }}>{t('Published notifications appear in the app home banner.')}</p>
-        </div>
-      )}
-
-      {tab === 'settings' && (
-        <div className="card">
-          <h3 className="section-title">{t('Application settings')}</h3>
-          {[
-            ['contact_email', 'Contact email'],
-            ['contact_phone', 'Contact phone'],
-            ['whatsapp', 'WhatsApp number'],
-            ['download_url', 'Official download URL'],
-          ].map(([key, label]) => (
-            <div className="field" key={key}>
-              <label>{t(label)}</label>
-              <input className="input" value={settings[key] || ''} onChange={(e) => setSettings({ ...settings, [key]: e.target.value })} />
-            </div>
-          ))}
-          <div className="row" style={{ justifyContent: 'space-between' }}>
-            <span className="small">{t('Community enabled')}</span>
-            <button
-              className={`switch ${settings.community_enabled === 'true' ? 'on' : ''}`}
-              onClick={() => setSettings({ ...settings, community_enabled: settings.community_enabled === 'true' ? 'false' : 'true' })}
-              aria-label={t('Toggle community')}
-            />
-          </div>
-          <button
-            className="btn btn-primary btn-block"
-            style={{ marginTop: 12 }}
-            onClick={() => void act(async () => {
-              await put('/admin/settings', settings);
-              setSettings({ ...settings });
-            }, 'Settings saved')}
-          >
-            {t('Save settings')}
-          </button>
-        </div>
-      )}
-
-      {tab === 'audit' && (
-        <div className="card">
-          <table className="table">
-            <thead>
-              <tr><th>{t('When')}</th><th>{t('Action')}</th><th>{t('Detail')}</th></tr>
-            </thead>
-            <tbody>
-              {audit.map((a) => (
-                <tr key={a.id}>
-                  <td className="tiny">{new Date(a.created_at).toLocaleString()}</td>
-                  <td className="tiny">{a.action}</td>
-                  <td className="tiny muted">{a.detail}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {audit.length === 0 && <p className="empty small">{t('No activity recorded yet.')}</p>}
-        </div>
-      )}
+        {error && (
+          <p className="small" role="alert" style={{ color: '#f0a29b', margin: '0 0 10px' }}>
+            {error}
+          </p>
+       姉{}
+          )姉{error}
+       姉{.error}
+         姛(answer)</p>
+姉2024 }}
+         姉Hp>
+         姉Elim_{error姉门</p>
+姉妙 admin>
+     姹 why p{error姉رم page.
+           姫墨 colorbar={{姫的动作IT. Great姤 inward message. Body姉庞 icon (#define姫把2026.姦擦完/error姹么22+xT姫一大片?(!姉宏泰_trunc姀(object,000 pret姉Bo) => ('' as string))}
+          </p>
+        )}
+      </form>
     </Page>
   );
+}
+
+export default function Admin() {
+  return null;
 }

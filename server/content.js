@@ -130,12 +130,17 @@ contentRouter.get('/geo/search', async (req, res) => {
   const local = CITIES.filter(([, name]) => name.toLowerCase().includes(q.toLowerCase()))
     .slice(0, 8)
     .map(([country, name, lat, lon]) => ({
+      // `city`/`countryCode` are the canonical client fields; `name`/`country`
+      // are kept for older clients.
+      city: name,
       name,
-      country,
+      country: countryName(country).en,
+      countryCode: country,
       lat,
       lon,
       timezone: safeTz(lat, lon),
       flag: flagOf(country),
+      manual: false,
       source: 'RIFQ city list',
     }));
   try {
@@ -146,8 +151,10 @@ contentRouter.get('/geo/search', async (req, res) => {
     const remote = rows.map((r) => {
       const lat = Number(r.lat);
       const lon = Number(r.lon);
+      const name = r.name || r.display_name?.split(',')[0] || q;
       return {
-        name: r.name || r.display_name?.split(',')[0] || q,
+        city: name,
+        name,
         region: r.address?.state || r.address?.county || '',
         country: r.address?.country || '',
         countryCode: (r.address?.country_code || '').toUpperCase(),
@@ -155,6 +162,7 @@ contentRouter.get('/geo/search', async (req, res) => {
         lon,
         timezone: safeTz(lat, lon),
         flag: flagOf(r.address?.country_code || ''),
+        manual: false,
         source: 'OpenStreetMap Nominatim',
       };
     });

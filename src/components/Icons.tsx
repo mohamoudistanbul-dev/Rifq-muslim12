@@ -148,6 +148,18 @@ export const Icon = {
   chart: (p: P) => (
     <svg {...S(p)}><path d="M4 20V9M10 20V4M16 20v-7M22 20H2" /></svg>
   ),
+  design: (p: P) => (
+    <svg {...S(p)}><path d="M4 20s.5-3.3 3-4.6c2-1.1 4 .6 3.2 2.5C9.4 19.6 6.6 20 4 20z" /><path d="M10.2 15.4 19.6 6a2.2 2.2 0 0 0-3.1-3.1L7 12.4" /><path d="m14.4 5.6 2.6 2.6" /></svg>
+  ),
+  dashboard: (p: P) => (
+    <svg {...S(p)}><rect x="3.5" y="4" width="17" height="16" rx="2.6" /><path d="M3.5 9.5h17M9.5 20V9.5" /></svg>
+  ),
+  support: (p: P) => (
+    <svg {...S(p)}><path d="M4 13.5V12a8 8 0 0 1 16 0v1.5" /><rect x="2.4" y="12.6" width="4.4" height="6.4" rx="2.2" /><rect x="17.2" y="12.6" width="4.4" height="6.4" rx="2.2" /><path d="M20 19.4v.4a2.6 2.6 0 0 1-2.6 2.6H13" /></svg>
+  ),
+  whatsapp: (p: P) => (
+    <svg {...S(p)}><path d="M20.6 11.7a8.4 8.4 0 0 1-12.4 7.5L3.4 20.6l1.4-4.6a8.4 8.4 0 1 1 15.8-4.3z" /><path d="M9.1 8.5c.2 1.8 1.6 3.7 3.2 4.7.9.6 1.8.9 2.5.9.4 0 .7-.4.7-1l-1.3-.8-1 .7c-.9-.5-1.9-1.6-2.4-2.6l.8-.9-.6-1.4c-.7-.1-1.9.1-1.9.4z" /></svg>
+  ),
 };
 
 export type IconName = keyof typeof Icon;

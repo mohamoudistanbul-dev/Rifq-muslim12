@@ -21,14 +21,20 @@ import { sendEmail, mailConfigured } from './mail.js';
 import { answerQuestion } from './assistant.js';
 import { contentRouter, warmContent } from './content.js';
 import { geoRouter } from './geo.js';
+import { adminRouter, UPLOAD_DIR } from './admin.js';
+import { seedSuperAdmin, SUPER_ADMIN_EMAIL } from './seed.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
-const OWNER_EMAIL = (process.env.ADMIN_EMAIL || 'mohamoudistanbul@gmail.com').toLowerCase();
+const OWNER_EMAIL = SUPER_ADMIN_EMAIL;
 
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
+
+// Media uploads arrive as base64 JSON, so they need a larger body limit than the
+// rest of the API. Mounted before the global parser so it wins for this path.
+app.use('/api/admin/media', express.json({ limit: '9mb' }));
 app.use(express.json({ limit: '256kb' }));
 
 // Cookie parsing without an extra dependency.
@@ -56,8 +62,8 @@ const originOf = (req) => {
   return process.env.PUBLIC_URL || `${proto}://${req.get('host')}`;
 };
 
-// Promote the configured owner account on boot.
-db.prepare("UPDATE users SET role = 'admin' WHERE lower(email) = ?").run(OWNER_EMAIL);
+// Create (or repair) the Super Admin account and official contact defaults.
+seedSuperAdmin();
 
 /* ---------------------------------- config --------------------------------- */
 
@@ -65,14 +71,18 @@ app.get('/api/health', (_req, res) => res.json({ ok: true, app: 'RIFQ Muslim', t
 
 app.get('/api/config', (req, res) => {
   res.json({
-    appName: 'RIFQ Muslim',
-    tagline: 'Your Faith, Your Daily Companion',
+    appName: getSetting('app_name', 'RIFQ Muslim'),
+    tagline: getSetting('tagline', 'Your Faith, Your Daily Companion'),
     developer: 'Made by Eng Mohamud Yusuf',
-    contactEmail: getSetting('contact_email', 'mohamoudistanbul@gmail.com'),
-    contactPhone: getSetting('contact_phone', '+252-612215593'),
+    contactEmail: getSetting('contact_email', 'rifqmuslim@gmail.com'),
+    contactPhone: getSetting('contact_phone', '+252612215593'),
     whatsapp: getSetting('whatsapp', '+252612215593'),
     downloadUrl: getSetting('download_url', '') || originOf(req),
     communityEnabled: getSetting('community_enabled', 'true') === 'true',
+    announcement:
+      getSetting('announcement_active', 'false') === 'true'
+        ? String(getSetting('announcement_text', '') || '')
+        : '',
     emailConfigured: mailConfigured(),
     assistantMode: process.env.OPENAI_API_KEY ? 'model' : 'knowledge-base',
     ownerEmail: OWNER_EMAIL,
@@ -82,6 +92,42 @@ app.get('/api/config', (req, res) => {
 app.get('/api/notices', (req, res) => {
   const rows = db.prepare('SELECT id, title, body, created_at FROM broadcasts ORDER BY created_at DESC LIMIT 5').all();
   res.json({ notices: rows });
+});
+
+/* --------------------------- published content (CMS) ----------------------- */
+
+// Only content the Super Admin published is visible to visitors.
+const shapePublic = (r) => ({
+  id: r.id,
+  type: r.type,
+  title: r.title,
+  slug: r.slug,
+  excerpt: r.excerpt,
+  body: r.body,
+  image: r.image,
+  category: r.category,
+  featured: !!r.featured,
+  views: Number(r.views || 0),
+  publishedAt: r.published_at || r.created_at,
+  author: 'Eng Mohamud Yusuf',
+});
+
+app.get('/api/content', (req, res) => {
+  const type = ['article', 'page', 'banner', 'announcement'].includes(String(req.query.type))
+    ? String(req.query.type)
+    : null;
+  const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+  const sql = `SELECT * FROM content WHERE status = 'published' ${type ? 'AND type = ?' : ''}
+    ORDER BY featured DESC, COALESCE(published_at, created_at) DESC LIMIT ?`;
+  const params = type ? [type, limit] : [limit];
+  res.json({ content: db.prepare(sql).all(...params).map(shapePublic) });
+});
+
+app.get('/api/content/:slug', (req, res) => {
+  const row = db.prepare("SELECT * FROM content WHERE slug = ? AND status = 'published'").get(String(req.params.slug));
+  if (!row) return res.status(404).json({ error: 'That page is not available.' });
+  db.prepare('UPDATE content SET views = views + 1 WHERE id = ?').run(row.id);
+  res.json({ item: shapePublic({ ...row, views: Number(row.views || 0) + 1 }) });
 });
 
 /* ----------------------------------- auth ---------------------------------- */
@@ -522,6 +568,8 @@ app.use('/api/admin', adminRouter);
 /* --------------------------------- static --------------------------------- */
 
 const dist = path.join(__dirname, '..', 'dist');
+// Uploaded media is served from disk with a long cache; filenames are random.
+app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '30d', immutable: true, fallthrough: false }));
 if (fs.existsSync(dist)) {
   app.use(express.static(dist, { index: false, maxAge: '1h' }));
 }

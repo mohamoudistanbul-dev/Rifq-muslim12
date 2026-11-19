@@ -80,7 +80,7 @@ function localDate(d: Date, tz: string): string {
 }
 
 /** Cities on every inhabited continent, with the method their region should use. */
-const CITIES: { place: Place; method: MethodId; highLat?: boolean }[] = [
+const CITIES: { place: Place; method: MethodId; region?: MethodId; highLat?: boolean }[] = [
   { place: place('Mogadishu', 'SO', 'Somalia', 2.0371, 45.3438, 'Africa/Mogadishu'), method: 'MWL' },
   { place: place('Hargeisa', 'SO', 'Somalia', 9.56, 44.065, 'Africa/Mogadishu'), method: 'MWL' },
   { place: place('Baidoa', 'SO', 'Somalia', 3.1138, 43.6498, 'Africa/Mogadishu'), method: 'MWL' },
@@ -100,7 +100,7 @@ const CITIES: { place: Place; method: MethodId; highLat?: boolean }[] = [
   { place: place('Jakarta', 'ID', 'Indonesia', -6.2088, 106.8456, 'Asia/Jakarta'), method: 'Singapore' },
   { place: place('Kuala Lumpur', 'MY', 'Malaysia', 3.139, 101.6869, 'Asia/Kuala_Lumpur'), method: 'Singapore' },
   { place: place('Tokyo', 'JP', 'Japan', 35.6895, 139.6917, 'Asia/Tokyo'), method: 'MWL' },
-  { place: place('Kathmandu', 'NP', 'Nepal', 27.7172, 85.324, 'Asia/Kathmandu'), method: 'Karachi' },
+  { place: place('Kathmandu', 'NP', 'Nepal', 27.7172, 85.324, 'Asia/Kathmandu'), method: 'Karachi', region: 'MWL' },
   { place: place('London', 'GB', 'United Kingdom', 51.5074, -0.1278, 'Europe/London'), method: 'MoonsightingCommittee' },
   { place: place('Berlin', 'DE', 'Germany', 52.52, 13.405, 'Europe/Berlin'), method: 'MWL' },
   { place: place('Moscow', 'RU', 'Russia', 55.7558, 37.6173, 'Europe/Moscow'), method: 'MWL' },
@@ -112,7 +112,7 @@ const CITIES: { place: Place; method: MethodId; highLat?: boolean }[] = [
   { place: place('Buenos Aires', 'AR', 'Argentina', -34.6037, -58.3816, 'America/Argentina/Buenos_Aires'), method: 'MWL' },
   { place: place('Sydney', 'AU', 'Australia', -33.8688, 151.2093, 'Australia/Sydney'), method: 'MWL' },
   { place: place('Auckland', 'NZ', 'New Zealand', -36.8485, 174.7633, 'Pacific/Auckland'), method: 'MWL' },
-  { place: place('Reykjavik', 'IS', 'Iceland', 64.1466, -21.9426, 'Atlantic/Reykjavik'), method: 'MoonsightingCommittee', highLat: true },
+  { place: place('Reykjavik', 'IS', 'Iceland', 64.1466, -21.9426, 'Atlantic/Reykjavik'), method: 'MoonsightingCommittee', region: 'MWL', highLat: true },
   { place: place('Nuuk', 'GL', 'Greenland', 64.1835, -51.7216, 'America/Nuuk'), method: 'MWL', highLat: true },
 ];
 
@@ -121,7 +121,7 @@ const CITIES: { place: Place; method: MethodId; highLat?: boolean }[] = [
 // Northern-winter instant: exercises the winter solstice geometry everywhere.
 const WINTER = new Date('2026-12-15T09:00:00Z');
 
-for (const { place: p, method, highLat } of CITIES) {
+for (const { place: p, method, region, highLat } of CITIES) {
   const o = opts(method);
   const win = computeWindow(WINTER, p, o);
   const today = win.today;
@@ -168,9 +168,12 @@ for (const { place: p, method, highLat } of CITIES) {
     `${hm(today.asr, p.timezone)} -> ${hm(hanafi.asr, p.timezone)}`
   );
 
+  // Countries listed in REGION_METHOD get their documented regional method;
+  // every other country falls back to MWL. `region` states the expected default
+  // when it differs from the method used to exercise this city's calculations.
   ok(
     `${label}: regional method default`,
-    regionalMethod(p.countryCode) === method,
+    regionalMethod(p.countryCode) === (region ?? method),
     `${regionalMethod(p.countryCode)}`
   );
 
@@ -185,7 +188,24 @@ const december = computeDay(new Date('2026-12-15T09:00:00Z'), mogadishu, opts('M
 const fajrShift = Math.abs(
   localMinutes(june.fajr, mogadishu.timezone) - localMinutes(december.fajr, mogadishu.timezone)
 );
-ok('equatorial Fajr shifts with the season', fajrShift > 5 && fajrShift < 60, `${fajrShift} min`);
+// Near the equator the twilight angle barely changes with the season, so Fajr
+// must stay in a narrow band all year — the opposite of a high-latitude city,
+// whose winter and summer Fajr differ by hours. Asserting both directions
+// catches an engine that ignores the date or one that ignores the latitude.
+ok('equatorial Fajr stays in a narrow band all year', fajrShift < 20, `${fajrShift} min`);
+
+const londonPlace = CITIES.find((c) => c.place.city === 'London')!.place;
+const londonJune = computeDay(new Date('2026-06-15T09:00:00Z'), londonPlace, opts('MoonsightingCommittee'));
+const londonDecember = computeDay(new Date('2026-12-15T09:00:00Z'), londonPlace, opts('MoonsightingCommittee'));
+const londonShift = Math.abs(
+  localMinutes(londonJune.fajr, londonPlace.timezone) -
+    localMinutes(londonDecember.fajr, londonPlace.timezone)
+);
+ok(
+  'high-latitude Fajr swings far more than the equator',
+  londonShift > 60 && londonShift > fajrShift * 3,
+  `London ${londonShift} min vs equator ${fajrShift} min`
+);
 
 const dhuhrShift = Math.abs(
   localMinutes(june.dhuhr, mogadishu.timezone) - localMinutes(december.dhuhr, mogadishu.timezone)

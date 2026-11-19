@@ -78,25 +78,34 @@ The versions are chosen by AGP 8.7.3 itself. Forcing newer Netty/BouncyCastle in
 `deps-audit/` would make the lockfile describe a graph the Android build does not
 use — fabricated evidence, not a fix. The only genuine remedy is a newer AGP.
 
-That was tested. Resolving **AGP 9.5.1** with the same audit project produced 166
-components and these versions:
+That was tested against both upgrade paths. Resolving the same audit project with
+**AGP 8.13.2** (latest 8.x, the *compatible* path) and with **AGP 9.5.1** (latest
+overall, the *major* path) gave:
 
-| Artifact | AGP 8.7.3 | AGP 9.5.1 | Status under 9.5.1 |
-| --- | --- | --- | --- |
-| Netty (all modules) | 4.1.93.Final | *absent* | **cleared** |
-| `protobuf-java` | 3.22.3 | 3.25.5 | **cleared** (fixed in 3.25.5) |
-| `commons-io` | 2.13.0 | 2.16.1 | **cleared** (fixed in 2.14.0) |
-| `guava` | 32.0.1-jre | 33.4.0-jre | still below 33.7.2 |
-| `bcprov-jdk18on` | 1.77 | 1.80.2 | still below 1.85 |
-| `jdom2` | 2.0.6 | 2.0.6 | unchanged |
-| `jose4j` | 0.9.5 | 0.9.5 | unchanged |
+| Artifact | AGP 8.7.3 (current) | AGP 8.13.2 | AGP 9.5.1 | Fixed in |
+| --- | --- | --- | --- | --- |
+| `io.netty:*` (all modules) | 4.1.93.Final | 4.1.110.Final | *absent* | 4.1.136 / 4.1.137 |
+| `protobuf-java` | 3.22.3 | 3.25.5 — **cleared** | 3.25.5 — **cleared** | 3.25.5 |
+| `commons-io` | 2.13.0 | 2.16.1 — **cleared** | 2.16.1 — **cleared** | 2.14.0 |
+| `guava` | 32.0.1-jre | 33.3.1-jre | 33.4.0-jre | 33.7.2 |
+| `bcprov-jdk18on` | 1.77 | 1.79 | 1.80.2 | 1.85 |
+| `jdom2` | 2.0.6 | 2.0.6 | 2.0.6 | 2.0.6.1 |
+| `jose4j` | 0.9.5 | 0.9.5 | 0.9.5 | 0.9.6 |
+| Components resolved | 200 | 200 | 166 | |
 
-So an AGP upgrade clears the three largest groups (Netty, protobuf, commons-io) but
-not everything, and AGP 9.x is a **major** release that needs a newer Gradle
-distribution and DSL migration. Applying it here would be an unverifiable change to
-the Android build — this environment has no SDK to compile against — and could break
-the GitHub Actions APK workflow, which is the project's only path to an APK. It is
-therefore documented rather than applied, to be done in CI where it can be verified.
+**No AGP release available today clears all 27 findings.** The compatible path
+(8.13.2) fixes only protobuf and commons-io and still needs a Gradle wrapper bump to
+8.13. The major path (9.5.1) also drops Netty, but Guava, BouncyCastle, jdom2 and
+jose4j remain affected because AGP 9.x itself still pins them below their fix
+versions. The residue is therefore an upstream packaging problem, not something this
+repository can resolve by choosing a different version.
+
+Neither upgrade was applied. Both are unverifiable here — this environment has no
+Android SDK to compile against — and both change the Android build that produces the
+user's only APK. Applying an unverified major migration to silence a scanner would
+trade a build-time supply-chain risk for a real chance of breaking the release
+pipeline. They are documented instead, to be done in CI where the result can be
+compiled and tested.
 
 ## 2. What is still NOT covered
 

@@ -57,9 +57,24 @@ app.use((req, _res, next) => {
 });
 app.use(attachUser);
 
+/**
+ * Absolute origin for share/invite links.
+ *
+ * The container itself only ever sees plain HTTP from the platform proxy, so
+ * trusting `req.protocol` produced "http://" links for a site that is served
+ * over HTTPS. Anything that is not a loopback host is therefore published as
+ * https; a deployment that really runs without TLS can set PUBLIC_URL.
+ */
 const originOf = (req) => {
-  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-  return process.env.PUBLIC_URL || `${proto}://${req.get('host')}`;
+  if (process.env.PUBLIC_URL) return String(process.env.PUBLIC_URL).replace(/\/+$/, '');
+  const host = req.get('host') || 'localhost:3000';
+  const forwarded = String(req.headers['x-forwarded-proto'] || '')
+    .split(',')[0]
+    .trim()
+    .toLowerCase();
+  const isLoopback = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(host);
+  const proto = isLoopback ? forwarded || req.protocol || 'http' : 'https';
+  return `${proto}://${host}`;
 };
 
 // Create (or repair) the Super Admin account and official contact defaults.

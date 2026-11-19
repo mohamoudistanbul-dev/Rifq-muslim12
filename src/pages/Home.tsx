@@ -8,6 +8,7 @@ import { formatTime, FIVE, PRAYER_KEYS, zonedHour } from '../lib/prayer';
 import LocationPanel from '../components/LocationPanel';
 import { gregorianDate } from '../lib/hijri';
 import { REMINDERS, dayIndex } from '../lib/data';
+import { LiveContent } from '../components/LiveContent';
 
 const VERSE_OF_DAY: { surah: number; ayah: number }[] = [
   { surah: 2, ayah: 286 },
@@ -256,6 +257,8 @@ export default function Home() {
           </Link>
           {!user && <p className="tiny muted" style={{ marginBottom: 0 }}>{t('Sign in to save your progress across devices.')}</p>}
         </section>
+
+        <LiveContent />
 
         <h3 className="section-title">{t('Quick access')}</h3>
         <div className="grid grid-3">

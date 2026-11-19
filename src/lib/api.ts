@@ -1,5 +1,12 @@
 /** Tiny typed fetch helper for the RIFQ Muslim API. */
 
+/**
+ * In the browser the API is same-origin (`/api`). A packaged Android/iOS build
+ * serves the UI from a local bundle, so it must point at the deployed backend
+ * through VITE_API_BASE (for example https://your-app.example.com/api).
+ */
+const API_BASE = (import.meta.env.VITE_API_BASE || '/api').replace(/\/$/, '');
+
 export class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {

@@ -160,7 +160,7 @@ async function main() {
       status: 'draft',
       featured: true,
     });
-    const contentId = created.json?.content?.id || created.json?.id;
+    const contentId = created.json?.item?.id || created.json?.content?.id || created.json?.id;
     check('admin can create content', (created.status === 200 || created.status === 201) && !!contentId, `status ${created.status}`);
 
     const draftHidden = await anon.get('/content?limit=50');
@@ -224,12 +224,12 @@ async function main() {
       name: 'verify.png',
       data: `data:image/png;base64,${png}`,
     });
-    const mediaUrl = upload.json?.media?.url;
+    const mediaUrl = upload.json?.item?.url || upload.json?.media?.url;
     check('admin can upload media', (upload.status === 200 || upload.status === 201) && !!mediaUrl, `status ${upload.status}`);
     if (mediaUrl) {
       const fetched = await fetch(`${BASE}${mediaUrl}`);
       check('uploaded media is served', fetched.status === 200, `status ${fetched.status}`);
-      const mediaId = upload.json?.media?.id;
+      const mediaId = upload.json?.item?.id || upload.json?.media?.id;
       if (mediaId) {
         const removed = await admin.del(`/admin/media/${mediaId}`);
         check('admin can delete media', removed.status === 200, `status ${removed.status}`);
@@ -297,6 +297,11 @@ async function main() {
     check('new password works', newPass.status === 200, `status ${newPass.status}`);
     const restored = await relogin.post('/admin/password', { current: 'NewPass1234!', next: ADMIN_PASSWORD });
     check('password can be restored', restored.status === 200, `status ${restored.status}`);
+
+    // Changing the password intentionally signs out every older session, so the
+    // original admin session has to authenticate again before it can continue.
+    const reauth = await admin.post('/auth/login', { email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
+    check('admin can sign in again after the password change', reauth.status === 200, `status ${reauth.status}`);
 
     console.log('\n8. Cleanup');
     const deleted = await admin.del(`/admin/content/${contentId}`);

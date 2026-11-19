@@ -62,15 +62,63 @@ with `RepositoriesMode.FAIL_ON_PROJECT_REPOS`. SDK levels: `compileSdk = 35`,
 These are the **direct** declarations only. The transitive dependencies of these
 seven coordinates are also unscanned — the real graph is substantially larger.
 
-## 3. Why the gap exists in this environment
+## 3. Why the gap exists — measured, not assumed
 
-Producing a Gradle lockfile requires actually resolving the graph: the Android
-Gradle Plugin, an installed Android SDK platform 35, and network access to
-`google()` / `mavenCentral()`. This build environment has **no Android SDK** and
-does not compile Android (native Android is source-only here).
+Producing a Gradle lockfile requires actually resolving the graph. Two
+prerequisites were tested directly in this environment on 2026-11-19.
 
-A hand-written lockfile would be invented data, not evidence, so none was
-created.
+### 3.1 Network and JVM are NOT the obstacle
+
+| Probe | Result |
+| --- | --- |
+| `java -version` | OpenJDK 21.0.11 present |
+| Gradle wrapper | `gradle-8.9-bin.zip`, wrapper JAR present |
+| `https://dl.google.com/dl/android/maven2/.../core-ktx-1.13.1.pom` | HTTP **200** |
+| `https://services.gradle.org/distributions/gradle-8.9-bin.zip` | HTTP **307** (reachable) |
+| `ANDROID_HOME` / `ANDROID_SDK_ROOT` | both **empty** |
+| SDK directories (`/opt/android*`, `/usr/lib/android-sdk`, `~/Android`) | **none** |
+| `sdkmanager`, `adb`, `gradle` | **absent** |
+
+The wrapper downloaded and ran, so the toolchain itself is usable.
+
+### 3.2 Resolution fails on Android variant matching
+
+A minimal audit project was created with the same five library coordinates and
+`google()` + `mavenCentral()`, then resolved with the repository's wrapper:
+
+```
+./gradlew -p <audit> --write-locks --no-daemon dependencies
+```
+
+Every coordinate failed. The reported cause was not a network error:
+
+```
+androidx.core:core-ktx:1.13.1 FAILED
+  Could not resolve androidx.core:core-ktx:1.13.1.
+  No matching variant of androidx.core:core-ktx:1.13.1 was found.
+  The consumer was configured to find a library for use during compile-time,
+  compatible with Java 21, preferably in the form of class files ... but:
+    - Variant 'releaseVariantReleaseApiPublication' declares a library for use
+      during compile-time, and its dependencies declared externally
+    - Variant 'releaseVariantReleaseRuntimePublication' ...
+```
+
+AndroidX publishes **AAR** variants (`releaseVariantRelease*Publication`). Only
+the Android Gradle Plugin registers the attribute compatibility rules that let a
+consumer select them; a plain `java-library` project cannot. The run emitted a
+218-byte lockfile containing only `empty=annotationProcessor,testAnnotationProcessor`
+— i.e. **no resolved graph** — so it was **discarded and not committed**.
+
+### 3.3 The two real prerequisites
+
+1. **Android SDK** platform 35 + build-tools, via `sdkmanager`.
+2. **The Android Gradle Plugin**, whose variant rules are what make AAR
+dependencies resolvable at all.
+
+Neither is installable here: native Android is source-only in this environment,
+and SDK installation is outside AppJet's supported capabilities. A hand-written
+or externally synthesized lockfile would be invented data, not evidence, so none
+was created.
 
 ## 4. How to close the gap
 

@@ -128,12 +128,12 @@ class MainActivity : AppCompatActivity() {
                 request: WebResourceRequest
             ): Boolean {
                 val url = request.url
-                val scheme = url.scheme.orEmpty()
-                // Keep the RIFQ app itself inside the shell (HTTPS only).
+                val scheme = url.scheme.orEmpty().toLowerCase()
+                // Keep the RIFQ app itself inside the native shell (HTTPS only).
                 if (scheme == "https" && url.host == appHost) return false
-                // Non-web schemes (tel:, mailto:, whatsapp:) are not navigations.
-                if (scheme != "http" && scheme != "https") return false
-                // Everything else (share targets, external links) opens in its own app.
+                // tel:, mailto:, whatsapp:, market: and every other non-web scheme
+                // belong to another app. Hand them over instead of letting the
+                // WebView swallow the tap and leaving a dead button.
                 openExternally(url)
                 return true
             }

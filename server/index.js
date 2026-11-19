@@ -19,7 +19,7 @@ import {
 } from './auth.js';
 import { sendEmail, mailConfigured } from './mail.js';
 import { answerQuestion } from './assistant.js';
-import { contentRouter } from './content.js';
+import { contentRouter, warmContent } from './content.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -684,4 +684,7 @@ app.use((err, _req, res, _next) => {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`RIFQ Muslim API listening on 0.0.0.0:${PORT}`);
+  void warmContent().catch(() => {
+    /* warm-up is best effort; requests fall back to on-demand fetching */
+  });
 });

@@ -399,3 +399,14 @@ contentRouter.get('/metals', async (_req, res) => {
     res.status(502).json({ error: `Live metal prices are unavailable: ${err.message}` });
   }
 });
+
+/**
+ * Warm the heaviest upstream caches in the background right after boot so the
+ * first visitor is not the one paying for a cold download.
+ */
+export async function warmContent() {
+  await Promise.allSettled([
+    fetchJson('https://api.alquran.cloud/v1/surah', { ttl: 604800 }),
+    loadCollection('bukhari'),
+  ]);
+}

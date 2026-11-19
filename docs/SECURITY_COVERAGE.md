@@ -1,0 +1,124 @@
+# Dependency Security Coverage — RIFQ Muslim
+
+**Status: PARTIAL.** This document records exactly what the automated dependency
+scan covers, what it cannot cover, and how to close the gap.
+
+It is **not** a statement that the application is secure.
+
+---
+
+## 1. What was scanned
+
+| Field | Value |
+| --- | --- |
+| Ecosystem | npm |
+| Resolved dependency file | `package-lock.json` |
+| Packages checked | 159 |
+| Known advisories found | 0 |
+| Blocking (high/critical) findings | 0 |
+| Scanner | OSV-Scanner 2.7.0 |
+| Policy | `workspace-dependencies-v1` |
+| Scan date | 2026-11-19 |
+
+The npm graph covers the JavaScript bundle that the web app serves and that the
+Android WebView loads.
+
+## 2. What was NOT scanned — the gap
+
+The scan result is reported as **`incomplete`**, not `passed`, because part of the
+repository has no resolvable dependency graph:
+
+- `android/build.gradle.kts`
+- `android/app/build.gradle.kts`
+
+Neither has a Gradle lockfile, and the repository has **no**
+`gradle/libs.versions.toml` version catalog. The scanner only reads *resolved*
+dependency files, so the entire Android dependency graph sits outside coverage.
+
+Evidence — a repository-wide search returns only `package-lock.json`:
+
+```
+find . -maxdepth 3 \( -name "*.lockfile" -o -name "gradle.lockfile" \
+       -o -name "package-lock.json" \) -not -path "*/node_modules/*"
+./package-lock.json
+```
+
+### Declared Android dependencies that are therefore unscanned
+
+| Coordinate | Version | Kind | Declared in |
+| --- | --- | --- | --- |
+| `com.android.application` | 8.7.3 | Gradle plugin | `android/build.gradle.kts` |
+| `org.jetbrains.kotlin.android` | 2.0.21 | Gradle plugin | `android/build.gradle.kts` |
+| `androidx.core:core-ktx` | 1.13.1 | Library | `android/app/build.gradle.kts` |
+| `androidx.appcompat:appcompat` | 1.7.0 | Library | `android/app/build.gradle.kts` |
+| `androidx.core:core-splashscreen` | 1.0.1 | Library | `android/app/build.gradle.kts` |
+| `androidx.webkit:webkit` | 1.11.0 | Library | `android/app/build.gradle.kts` |
+| `com.google.android.material:material` | 1.12.0 | Library | `android/app/build.gradle.kts` |
+
+Resolved from `google()` and `mavenCentral()` (`android/settings.gradle.kts`),
+with `RepositoriesMode.FAIL_ON_PROJECT_REPOS`. SDK levels: `compileSdk = 35`,
+`minSdk = 24`, `targetSdk = 35`, JVM target 17.
+
+These are the **direct** declarations only. The transitive dependencies of these
+seven coordinates are also unscanned — the real graph is substantially larger.
+
+## 3. Why the gap exists in this environment
+
+Producing a Gradle lockfile requires actually resolving the graph: the Android
+Gradle Plugin, an installed Android SDK platform 35, and network access to
+`google()` / `mavenCentral()`. This build environment has **no Android SDK** and
+does not compile Android (native Android is source-only here).
+
+A hand-written lockfile would be invented data, not evidence, so none was
+created.
+
+## 4. How to close the gap
+
+### (a) Continuous monitoring — already added
+
+`.github/dependabot.yml` enables weekly update and advisory monitoring for
+`npm`, `gradle` (directory `/android`) and `github-actions`. This runs on GitHub,
+which is where the Android build actually happens, so it gives ongoing coverage
+without needing an Android SDK locally.
+
+### (b) One-off full graph — on a machine or CI with the Android SDK
+
+```bash
+cd android
+./gradlew :app:dependencies --write-locks
+```
+
+For Gradle to emit a lockfile, dependency locking must be enabled first in
+`android/app/build.gradle.kts`:
+
+```kotlin
+dependencyLocking { lockAllConfigurations() }
+```
+
+Commit the resulting `android/app/gradle.lockfile`, then rerun the repository
+security scan; the scanner detects supported lockfiles and will fold the Gradle
+graph into coverage.
+
+> This snippet is deliberately **not** applied in the repository yet: it changes
+> the Android build, cannot be verified here (no Android SDK), and an unverified
+> change could break the APK workflow. Apply it together with a real build.
+
+## 5. Also outside scanner scope
+
+- **Remotely loaded assets** (fonts, recitation audio URLs): availability and
+  licensing questions, not advisory coverage.
+- **Source-code security** (authorization, input handling, secret exposure): a
+  separate review; an advisory scan does not address it.
+- **Deployed container OS patching**: the deploy builder scans the final image
+  separately from this dependency scan.
+- **Native Android runtime**: the npm result describes the JavaScript bundle, and
+  says nothing about the native shell (AndroidX libraries, WebView, splash).
+
+## 6. Honest summary
+
+No known advisory is outstanding for the 159 npm packages resolved on
+2026-11-19 — that is the whole extent of the positive evidence.
+
+Seven declared Android coordinates and their transitive graph, plus everything in
+§5, remain **unverified**. Treat the dependency posture as partially checked until
+a Gradle lockfile is committed or Dependabot reports on the `gradle` ecosystem.

@@ -1,0 +1,30 @@
+# Continuous dependency monitoring for RIFQ Muslim.
+#
+# The repository-wide security scan can only read *resolved* dependency files.
+# The Android Gradle graph has no lockfile (see docs/SECURITY_COVERAGE.md), so
+# Dependabot is the mechanism that keeps the native dependencies monitored.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(npm)"
+
+  - package-ecosystem: gradle
+    directory: "/android"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(gradle)"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps(actions)"

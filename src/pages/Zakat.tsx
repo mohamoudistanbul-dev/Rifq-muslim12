@@ -21,11 +21,16 @@ export default function Zakat() {
   const [metalsError, setMetalsError] = useState('');
   const [values, setValues] = useState({ cash: '', savings: '', gold: '', silver: '', business: '', debts: '' });
   const [basis, setBasis] = useState<'gold' | 'silver'>('gold');
+  const [manualNisab, setManualNisab] = useState('');
 
   useEffect(() => {
     get<Metals>('/metals')
       .then(setMetals)
-      .catch(() => setMetalsError(t('Live gold and silver prices are unavailable. Enter your own nisab value below.')));
+      .catch(() =>
+        setMetalsError(
+          t('Live gold and silver prices are unavailable. Enter your own nisab threshold below.')
+        )
+      );
   }, []);
 
   const pricePerGram = useMemo(() => {
@@ -51,10 +56,10 @@ export default function Zakat() {
       ? basis === 'gold'
         ? GOLD_NISAB_GRAMS * pricePerGram.gold
         : SILVER_NISAB_GRAMS * pricePerGram.silver
-      : 0;
+      : num(manualNisab);
     const due = nisab > 0 && net >= nisab ? net * 0.025 : 0;
-    return { goldValue, silverValue, assets, net, nisab, due };
-  }, [values, pricePerGram, basis]);
+    return { goldValue, silverValue, assets, net, nisab, due, nisabManual: !pricePerGram };
+  }, [values, pricePerGram, basis, manualNisab]);
 
   const money = (n: number) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
@@ -110,6 +115,21 @@ export default function Zakat() {
             />
           </div>
         ))}
+        {totals.nisabManual && (
+          <div className="field">
+            <label>{t('Nisab threshold (USD)')}</label>
+            <input
+              className="input"
+              inputMode="decimal"
+              placeholder="0"
+              value={manualNisab}
+              onChange={(e) => setManualNisab(e.target.value)}
+            />
+            <span className="tiny muted">
+              {t('Nisab is the minimum wealth at which Zakat becomes due: 85 g of gold or 595 g of silver at the current price. Enter the nisab value you calculated so the 2.5% rate can be applied.')}
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="card">
@@ -125,6 +145,11 @@ export default function Zakat() {
             <tr><td><strong>{t('Zakat due (2.5%)')}</strong></td><td><strong style={{ color: 'var(--gold-deep)' }}>{money(totals.due)}</strong></td></tr>
           </tbody>
         </table>
+        {totals.nisab === 0 && (
+          <p className="tiny muted" style={{ marginBottom: 0 }}>
+            {t('Enter a nisab threshold above to see whether Zakat is due on your wealth.')}
+          </p>
+        )}
         {totals.nisab > 0 && totals.net < totals.nisab && (
           <p className="tiny muted" style={{ marginBottom: 0 }}>
             {t('Your wealth is below the nisab threshold, so no Zakat is due on these figures.')}

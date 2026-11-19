@@ -386,8 +386,8 @@ contentRouter.get('/places', async (req, res) => {
 contentRouter.get('/metals', async (_req, res) => {
   try {
     const [gold, silver] = await Promise.all([
-      fetchJson('https://api.gold-api.com/price/XAU', { ttl: 3600 }),
-      fetchJson('https://api.gold-api.com/price/XAG', { ttl: 3600 }),
+      fetchJson('https://api.gold-api.com/price/XAU', { ttl: 3600, timeout: 8000 }),
+      fetchJson('https://api.gold-api.com/price/XAG', { ttl: 3600, timeout: 8000 }),
     ]);
     res.json({
       goldUsdPerOunce: gold.price,

@@ -31,7 +31,7 @@
     try {
       Native.notify(this.title, this.body, this.tag);
     } catch (e) {
-      /* notification delivery failed; nothing else to do */
+      /* delivery failed; the app keeps working */
     }
     setTimeout(function () {
       if (typeof self.onclose === 'function') self.onclose();
@@ -40,17 +40,52 @@
 
   Object.defineProperty(RifqNotification, 'permission', {
     configurable: true,
-    get: permissionState,
+    get: permissionState
   });
 
   RifqNotification.requestPermission = function (callback) {
     try {
-      Native.requestPermission姉상;
-    try姉я! NativeNotification姫? The AVNotification姉透(c) {
-姉孔 callback function (姤小ا prompt)姤梅ست.callbacks姉-23, native姉分NativeState.resolve姉用 FIXFR姘弹窗 callback,姉过于ifyState.姉的通 = undefined;
-    return undefined;
+      Native.requestNotificationPermission();
+    } catch (e) {
+      /* permission dialog unavailable */
+    }
+    return new Promise(function (resolve) {
+      var attempts = 0;
+      var timer = setInterval(function () {
+        attempts += 1;
+        var state = permissionState();
+        if (state === 'granted' || attempts > 30) {
+          clearInterval(timer);
+          if (typeof callback === 'function') callback(state);
+          resolve(state);
+        }
+      }, 500);
+    });
   };
 
   window.Notification = RifqNotification;
-  window.__rifqNativeShim = true;
+
+  window.RifqNativeBridge = {
+    available: true,
+    schedulePrayer: function (id, atMillis, title, body) {
+      try {
+        Native.schedulePrayer(
+          String(id),
+          Math.round(Number(atMillis)),
+          String(title),
+          String(body)
+        );
+        return true;
+      } catch (e) {
+        return false;
+      }
+    },
+    cancelPrayer: function (id) {
+      try {
+        Native.cancelPrayer(String(id));
+      } catch (e) {
+        /* nothing to cancel */
+      }
+    }
+  };
 })();

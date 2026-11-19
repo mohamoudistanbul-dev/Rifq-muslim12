@@ -154,23 +154,65 @@ const ALIAS_ARABIC = /^[\u0600-\u06FF][\u0600-\u06FF\s\u064B-\u0652]{1,38}$/;
 
 /**
  * Familiar spellings that differ from GeoNames' primary name: "Hargeisa" for
- * Hargeysa, "Garowe" for Garoowe, "Mogadishu" for Muqdisho. Kept small on
- * purpose — four Latin and two Arabic variants — so the dataset stays lean
- * while searches in either script succeed.
+ * Hargeysa, "Garowe" for Garoowe, "Mogadishu" for Muqdisho. Alternate names are
+ * ranked by similarity to the primary name rather than by file order, because
+ * GeoNames lists abbreviations and exotic transliterations first — the first
+ * four entries for Garoowe are GGR, Garoe, Garoueh and Garove.
  */
+const levenshtein = (a, b) => {
+  if (a === b) return 0;
+  const m = a.length;
+  const n = b.length;
+  if (!m) return n;
+  if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1; i <= m; i += 1) {
+    const cur = [i];
+    for (let j = 1; j <= n; j += 1) {
+      cur[j] = Math.min(
+        prev[j] + 1,
+        cur[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+      );
+    }
+    prev = cur;
+  }
+  return prev[n];
+};
+
 function aliasesOf(name, alternates) {
+  const base = name.toLowerCase();
+  const seen = new Set([base]);
   const latin = [];
   const arabic = [];
   for (const raw of String(alternates || '').split(',')) {
     const v = raw.trim();
-    if (!v || v.toLowerCase() === name.toLowerCase()) continue;
+    if (v.length < 3) continue;
+    const low = v.toLowerCase();
+    if (seen.has(low)) continue;
+    if (/^[A-Z]{3}$/.test(v)) continue; // IATA airport codes, not city spellings
     if (ALIAS_ARABIC.test(v)) {
-      if (arabic.length < 2 && !arabic.includes(v)) arabic.push(v);
+      if (arabic.length < 2) {
+        seen.add(low);
+        arabic.push(v);
+      }
     } else if (ALIAS_LATIN.test(v)) {
-      if (latin.length < 4 && !latin.includes(v)) latin.push(v);
+      const similarity = 1 - levenshtein(base, low) / Math.max(base.length, low.length);
+      if (similarity >= 0.45) {
+        seen.add(low);
+        latin.push([similarity, v]);
+      }
     }
   }
-  return [...latin, ...arabic].join('|');
+  latin.sort((a, b) => b[0] - a[0]);
+  const picked = [];
+  let length = 0;
+  for (const [, v] of latin) {
+    if (picked.length >= 8 || length + v.length > 64) break;
+    picked.push(v);
+    length += v.length + 1;
+  }
+  return [...picked, ...arabic].join('|');
 }
 
 const intern = (map, list, value) => {

@@ -1,8 +1,6 @@
 import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
-import tzlookup from 'tz-lookup';
-import { COUNTRIES, CITIES } from './cities.js';
 
 /**
  * Read-only proxy to verified Islamic content sources.
@@ -58,126 +56,6 @@ const safeTz = (lat, lon) => {
     return 'UTC';
   }
 };
-
-/* --------------------------------- cities --------------------------------- */
-
-contentRouter.get('/cities', (_req, res) => {
-  res.json({
-    countries: COUNTRIES.map(([code, en, ar]) => ({ code, en, ar })),
-    cities: CITIES.map(([country, name, lat, lon]) => ({
-      country,
-      name,
-      lat,
-      lon,
-      timezone: safeTz(lat, lon),
-    })),
-  });
-});
-
-/* ------------------------------- geolocation ------------------------------- */
-
-contentRouter.get('/geo/reverse', async (req, res) => {
-  const lat = Number(req.query.lat);
-  const lon = Number(req.query.lon);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
-    return res.status(400).json({ error: 'Valid latitude and longitude are required.' });
-  }
-  const timezone = safeTz(lat, lon);
-  try {
-    const data = await fetchJson(
-      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`,
-      { ttl: 86400 }
-    );
-    const city =
-      data.city || data.locality || data.principalSubdivision || data.countryName || 'Unknown location';
-    res.json({
-      city,
-      locality: data.locality || '',
-      region: data.principalSubdivision || '',
-      regionCode: data.principalSubdivisionCode || '',
-      country: data.countryName || '',
-      countryCode: data.countryCode || '',
-      flag: flagOf(data.countryCode || ''),
-      lat,
-      lon,
-      timezone,
-      source: 'BigDataCloud reverse geocoding + tz-lookup',
-      manual: false,
-    });
-  } catch (err) {
-    // Coordinates are still real even when the geocoder is unreachable.
-    res.json({
-      city: 'Location unavailable',
-      locality: '',
-      region: '',
-      country: '',
-      countryCode: '',
-      flag: '',
-      lat,
-      lon,
-      timezone,
-      source: 'tz-lookup (reverse geocoder unreachable)',
-      degraded: true,
-      note: `City name lookup failed: ${err.message}`,
-      manual: false,
-    });
-  }
-});
-
-contentRouter.get('/geo/search', async (req, res) => {
-  const q = String(req.query.q || '').trim();
-  if (q.length < 2) return res.json({ results: [], source: 'none' });
-  const local = CITIES.filter(([, name]) => name.toLowerCase().includes(q.toLowerCase()))
-    .slice(0, 8)
-    .map(([country, name, lat, lon]) => ({
-      // `city`/`countryCode` are the canonical client fields; `name`/`country`
-      // are kept for older clients.
-      city: name,
-      name,
-      country: countryName(country).en,
-      countryCode: country,
-      lat,
-      lon,
-      timezone: safeTz(lat, lon),
-      flag: flagOf(country),
-      manual: false,
-      source: 'RIFQ city list',
-    }));
-  try {
-    const rows = await fetchJson(
-      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=8&addressdetails=1&q=${encodeURIComponent(q)}`,
-      { ttl: 86400 }
-    );
-    const remote = rows.map((r) => {
-      const lat = Number(r.lat);
-      const lon = Number(r.lon);
-      const name = r.name || r.display_name?.split(',')[0] || q;
-      return {
-        city: name,
-        name,
-        region: r.address?.state || r.address?.county || '',
-        country: r.address?.country || '',
-        countryCode: (r.address?.country_code || '').toUpperCase(),
-        lat,
-        lon,
-        timezone: safeTz(lat, lon),
-        flag: flagOf(r.address?.country_code || ''),
-        manual: false,
-        source: 'OpenStreetMap Nominatim',
-      };
-    });
-    const seen = new Set();
-    const merged = [...local, ...remote].filter((r) => {
-      const k = `${r.name}|${r.country}`.toLowerCase();
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
-    res.json({ results: merged.slice(0, 12), source: 'OpenStreetMap Nominatim + RIFQ city list' });
-  } catch (err) {
-    res.json({ results: local, source: 'RIFQ city list', degraded: true, note: err.message });
-  }
-});
 
 /* ---------------------------------- Quran --------------------------------- */
 

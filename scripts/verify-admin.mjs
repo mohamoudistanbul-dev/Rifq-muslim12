@@ -178,7 +178,8 @@ async function main() {
       const detail = await anon.get(`/content/${liveItem.slug}`);
       check(
         'public detail page returns the admin text',
-        detail.status === 200 && String(detail.json?.content?.body || '').includes('end to end'),
+        detail.status === 200 &&
+          String(detail.json?.item?.body || detail.json?.content?.body || '').includes('end to end'),
         `status ${detail.status}`
       );
     } else {

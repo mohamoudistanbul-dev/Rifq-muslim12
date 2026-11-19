@@ -90,6 +90,26 @@ jobs:
           ls -lh "${APK}"
           sha256sum "${APK}"
 
+      - name: Resolved dependency graph (audit aid)
+        # The Gradle modules have no lockfile, so automated dependency scanners
+        # cannot resolve this graph outside a real build. Emitting it here makes
+        # the transitive Android dependency set auditable. Non-blocking.
+        working-directory: android
+        continue-on-error: true
+        run: |
+          ./gradlew --no-daemon --no-build-cache :app:dependencies \
+            --configuration releaseRuntimeClasspath > gradle-dependencies.txt 2>&1 || true
+          wc -l gradle-dependencies.txt
+
+      - name: Upload dependency graph
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gradle-dependency-graph
+          path: android/gradle-dependencies.txt
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
         with:

@@ -271,6 +271,43 @@ CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON bookmarks(user_id);
 CREATE INDEX IF NOT EXISTS idx_tracker_user ON tracker(user_id);
 CREATE INDEX IF NOT EXISTS idx_posts_created ON posts(created_at);
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit(created_at);
+
+/* Admin CMS: everything the Super Admin publishes lives here. */
+CREATE TABLE IF NOT EXISTS content (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL DEFAULT 'article',
+  title TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  excerpt TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  image TEXT NOT NULL DEFAULT '',
+  category TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'draft',
+  featured INTEGER NOT NULL DEFAULT 0,
+  sort INTEGER NOT NULL DEFAULT 0,
+  author_id TEXT,
+  author_email TEXT,
+  views INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  published_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS media (
+  id TEXT PRIMARY KEY,
+  filename TEXT NOT NULL,
+  original_name TEXT NOT NULL DEFAULT '',
+  mime TEXT NOT NULL DEFAULT '',
+  size INTEGER NOT NULL DEFAULT 0,
+  url TEXT NOT NULL,
+  alt TEXT NOT NULL DEFAULT '',
+  uploaded_by TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_content_slug ON content(slug);
+CREATE INDEX IF NOT EXISTS idx_content_type ON content(type, status);
+CREATE INDEX IF NOT EXISTS idx_media_created ON media(created_at);
 `);
 
 export const newId = () => crypto.randomUUID();

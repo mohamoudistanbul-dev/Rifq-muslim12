@@ -85,9 +85,19 @@ export function requireAuth(req, res, next) {
   next();
 }
 
+export const ADMIN_ROLES = ['admin', 'superadmin'];
+export const isAdminRole = (role) => ADMIN_ROLES.includes(String(role || ''));
+
 export function requireAdmin(req, res, next) {
   if (!req.user) return res.status(401).json({ error: 'Please sign in to continue.' });
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Administrator access required.' });
+  if (!isAdminRole(req.user.role)) return res.status(403).json({ error: 'Administrator access required.' });
+  next();
+}
+
+/** Destructive or ownership-level operations stay with the single Super Admin. */
+export function requireSuperAdmin(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: 'Please sign in to continue.' });
+  if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'Super Admin access required.' });
   next();
 }
 

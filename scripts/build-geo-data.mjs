@@ -149,6 +149,30 @@ const zones = [];
 const codes = [];
 const rows = [];
 
+const ALIAS_LATIN = /^[A-Za-z\u00C0-\u024F][A-Za-z\u00C0-\u024F .'-]{1,38}$/;
+const ALIAS_ARABIC = /^[\u0600-\u06FF][\u0600-\u06FF\s\u064B-\u0652]{1,38}$/;
+
+/**
+ * Familiar spellings that differ from GeoNames' primary name: "Hargeisa" for
+ * Hargeysa, "Garowe" for Garoowe, "Mogadishu" for Muqdisho. Kept small on
+ * purpose — four Latin and two Arabic variants — so the dataset stays lean
+ * while searches in either script succeed.
+ */
+function aliasesOf(name, alternates) {
+  const latin = [];
+  const arabic = [];
+  for (const raw of String(alternates || '').split(',')) {
+    const v = raw.trim();
+    if (!v || v.toLowerCase() === name.toLowerCase()) continue;
+    if (ALIAS_ARABIC.test(v)) {
+      if (arabic.length < 2 && !arabic.includes(v)) arabic.push(v);
+    } else if (ALIAS_LATIN.test(v)) {
+      if (latin.length < 4 && !latin.includes(v)) latin.push(v);
+    }
+  }
+  return [...latin, ...arabic].join('|');
+}
+
 const intern = (map, list, value) => {
   if (!map.has(value)) {
     map.set(value, list.length);
@@ -181,11 +205,77 @@ for (const line of raw.split('\n')) {
     intern(tzIdx, zones, tz),                        // 5 timezone index
     Number(f[14]) || 0,                              // 6 population
     featureCode === 'PPLC' ? 1 : 0,                  // 7 national capital
+    aliasesOf(f[1].trim(), f[3]),                    // 8 searchable alternate names
   ]);
 }
 
 // Largest places first so plain searches surface the city people mean.
 rows.sort((a, b) => b[6] - a[6]);
+
+/* --------------------------- timezone correction --------------------------- */
+
+// A town sitting right on a border can carry the neighbouring country's zone in
+// GeoNames' timezone column (two Somali towns near Ethiopia come back as
+// Africa/Addis_Ababa). Reassign such a place to its own country's dominant zone
+// only when both zones share the same UTC offset in winter AND summer, so real
+// multi-zone countries (US, RU, AU, ID, BR) and DST differences are preserved.
+const offsetAt = (tz, iso) => {
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: tz,
+      timeZoneName: 'shortOffset',
+    }).formatToParts(new Date(iso));
+    return parts.find((p) => p.type === 'timeZoneName')?.value || null;
+  } catch {
+    return null;
+  }
+};
+const offsetCache = new Map();
+const offsetsOf = (tz) => {
+  if (!offsetCache.has(tz)) {
+    offsetCache.set(tz, [offsetAt(tz, '2026-01-15T12:00:00Z'), offsetAt(tz, '2026-07-15T12:00:00Z')]);
+  }
+  return offsetCache.get(tz);
+};
+const sameCivilTime = (a, b) => {
+  const [aw, as] = offsetsOf(a);
+  const [bw, bs] = offsetsOf(b);
+  return Boolean(aw && bw) && aw === bw && as === bs;
+};
+
+const zoneCountByCountry = new Map();
+const countryCountByZone = new Map();
+for (const r of rows) {
+  const cc = codes[r[1]];
+  const tz = zones[r[5]];
+  if (!zoneCountByCountry.has(cc)) zoneCountByCountry.set(cc, new Map());
+  const perZone = zoneCountByCountry.get(cc);
+  perZone.set(tz, (perZone.get(tz) || 0) + 1);
+  countryCountByZone.set(tz, (countryCountByZone.get(tz) || new Map()).set(
+    cc,
+    ((countryCountByZone.get(tz)?.get(cc)) || 0) + 1
+  ));
+}
+const dominantZone = new Map();
+for (const [cc, perZone] of zoneCountByCountry) {
+  dominantZone.set(cc, [...perZone.entries()].sort((a, b) => b[1] - a[1])[0][0]);
+}
+const zoneOwner = new Map();
+for (const [tz, perCountry] of countryCountByZone) {
+  zoneOwner.set(tz, [...perCountry.entries()].sort((a, b) => b[1] - a[1])[0][0]);
+}
+
+let repaired = 0;
+for (const r of rows) {
+  const cc = codes[r[1]];
+  const tz = zones[r[5]];
+  const home = dominantZone.get(cc);
+  if (!home || tz === home) continue;
+  if (zoneOwner.get(tz) === cc) continue;      // a genuine second zone of this country
+  if (!sameCivilTime(tz, home)) continue;      // different civil time: keep the specific zone
+  r[5] = tzIdx.get(home);
+  repaired += 1;
+}
 
 const perCountry = new Map();
 for (const r of rows) {
@@ -214,6 +304,7 @@ const missing = countries.filter((c) => !(perCountry.get(c.code) > 0)).map((c) =
 console.log(`countries: ${countries.length}`);
 console.log(`places:    ${rows.length}`);
 console.log(`regions:   ${regions.length}   timezones: ${zones.length}`);
+console.log(`timezone fixes for border artefacts: ${repaired}`);
 console.log('by continent:', [...byContinent].map(([k, v]) => `${k}=${v}`).join(' '));
 console.log('countries without a 5k+ place:', missing.join(',') || 'none');
 console.log(`written: ${path.relative(path.join(HERE, '..'), out)} (${(fs.statSync(out).size / 1048576).toFixed(2)} MB)`);

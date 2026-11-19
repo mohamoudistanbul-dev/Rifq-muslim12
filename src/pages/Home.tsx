@@ -8,7 +8,7 @@ import { formatTime, FIVE, PRAYER_KEYS, zonedHour } from '../lib/prayer';
 import LocationPanel from '../components/LocationPanel';
 import { gregorianDate } from '../lib/hijri';
 import { REMINDERS, dayIndex } from '../lib/data';
-import { LiveContent } from '../components/LiveContent';
+import LiveContent from '../components/LiveContent';
 
 const VERSE_OF_DAY: { surah: number; ayah: number }[] = [
   { surah: 2, ayah: 286 },

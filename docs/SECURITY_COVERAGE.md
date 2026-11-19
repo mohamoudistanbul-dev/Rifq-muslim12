@@ -1,8 +1,8 @@
 # Dependency Security Coverage — RIFQ Muslim
 
-**Status: PARTIAL — substantially improved.** This document records exactly what
-the automated dependency scan covers, what it cannot cover, and how to close the
-rest.
+**Status: PARTIAL — coverage improved, 27 blocking findings open.** This document
+records exactly what the automated dependency scan covers, what it found, what it
+cannot cover, and how to close the rest.
 
 It is **not** a statement that the application is secure.
 
@@ -40,11 +40,70 @@ AndroidX/Material library graph **and** the AGP/Kotlin plugin artifacts, includi
 their transitive closure, are now resolvable and committed as a lockfile, so they
 are inside scan coverage.
 
+### 1.3 What the expanded scan found — 27 blocking findings
+
+The scan now covers **358 packages** (159 npm + 199 Maven) and reports **61
+advisories, 27 of them high or critical**. None are hidden or suppressed; they are
+listed here with scope.
+
+| Artifact | Version | Worst severity | Fixed in | Blocking |
+| --- | --- | --- | --- | --- |
+| `org.bouncycastle:bcprov-jdk18on` | 1.77 | CRITICAL 9.3 | 1.80.2 / 1.85 | 4 |
+| `io.netty:netty-handler` | 4.1.93.Final | CRITICAL 9.1 | 4.1.137.Final | 5 |
+| `io.netty:netty-codec-http` | 4.1.93.Final | HIGH 8.7 | 4.1.136.Final | 12 |
+| `io.netty:netty-codec-http2` | 4.1.93.Final | HIGH 8.7 | 4.1.136.Final | 4 |
+| `io.netty:netty-codec` | 4.1.93.Final | HIGH 8.7 | 4.1.136.Final | 2 |
+| `com.google.guava:guava` | 32.0.1-jre | HIGH 8.2 | 33.7.2 | 1 |
+| `com.google.protobuf:protobuf-java` | 3.22.3 | HIGH 8.7 | 3.25.5 | 1 |
+| `commons-io:commons-io` | 2.13.0 | HIGH 8.7 | 2.14.0 | 1 |
+| `org.jdom:jdom2` | 2.0.6 | HIGH | 2.0.6.1 | 1 |
+| `org.bitbucket.b_c:jose4j` | 0.9.5 | HIGH | 0.9.6 | 1 |
+| `org.bouncycastle:bcpkix-jdk18on` | 1.77 | MODERATE | 1.84 | 0 |
+| `org.apache.commons:commons-compress` | 1.21 | MODERATE | 1.26.0 | 0 |
+
+#### Scope — these are build-toolchain artifacts, not APK contents
+
+Every affected coordinate is a transitive dependency of **AGP 8.7.3** or the
+**Kotlin Gradle plugin**, pulled onto the *build machine's* classpath. The APK
+ships AndroidX, Material and kotlin-stdlib; it does not bundle Netty, BouncyCastle,
+Guava, protobuf or commons-io, and a user's phone never executes them.
+
+That lowers the end-user impact but does not make them unreal: they are supply-chain
+risk for the machine or CI runner that produces the release, and a compromised build
+is a compromised release. They are reported, not dismissed.
+
+#### Why they are not patched in this repository
+
+The versions are chosen by AGP 8.7.3 itself. Forcing newer Netty/BouncyCastle in
+`deps-audit/` would make the lockfile describe a graph the Android build does not
+use — fabricated evidence, not a fix. The only genuine remedy is a newer AGP.
+
+That was tested. Resolving **AGP 9.5.1** with the same audit project produced 166
+components and these versions:
+
+| Artifact | AGP 8.7.3 | AGP 9.5.1 | Status under 9.5.1 |
+| --- | --- | --- | --- |
+| Netty (all modules) | 4.1.93.Final | *absent* | **cleared** |
+| `protobuf-java` | 3.22.3 | 3.25.5 | **cleared** (fixed in 3.25.5) |
+| `commons-io` | 2.13.0 | 2.16.1 | **cleared** (fixed in 2.14.0) |
+| `guava` | 32.0.1-jre | 33.4.0-jre | still below 33.7.2 |
+| `bcprov-jdk18on` | 1.77 | 1.80.2 | still below 1.85 |
+| `jdom2` | 2.0.6 | 2.0.6 | unchanged |
+| `jose4j` | 0.9.5 | 0.9.5 | unchanged |
+
+So an AGP upgrade clears the three largest groups (Netty, protobuf, commons-io) but
+not everything, and AGP 9.x is a **major** release that needs a newer Gradle
+distribution and DSL migration. Applying it here would be an unverifiable change to
+the Android build — this environment has no SDK to compile against — and could break
+the GitHub Actions APK workflow, which is the project's only path to an APK. It is
+therefore documented rather than applied, to be done in CI where it can be verified.
+
 ## 2. What is still NOT covered
 
 ### 2.1 The scanner's per-project warnings
 
-The scan still reports `incomplete`, with one warning per Android build file:
+The scan reports `incomplete` (and now also `failed`, because of the blocking
+findings in §1.3), with one warning per Android build file:
 
 ```
 No resolved dependency file for android/app/build.gradle.kts.
@@ -189,13 +248,16 @@ security scan; the per-project warnings in §2.1 disappear. At that point
 
 ## 6. Honest summary
 
-No known advisory is outstanding for the npm packages, and the full 200-component
-Android dependency set — AGP, Kotlin plugin, AndroidX, Material and their
-transitives — is now inside coverage with 0 high/critical findings.
+Coverage is now 358 packages across npm and Maven, including the full Android
+dependency set (AGP, Kotlin plugin, AndroidX, Material and their transitives).
+
+**The result is not clean.** 27 high/critical advisories are open. All of them sit
+in the build toolchain's transitive closure (Netty, BouncyCastle, Guava, protobuf,
+commons-io, jdom2, jose4j), none in the libraries the APK ships, and none are
+patched here because the fix is an AGP major upgrade that cannot be verified in
+this environment (§1.3).
 
 Still unverified: Gradle-native locking of `android/build.gradle.kts` and
 `android/app/build.gradle.kts` (hence the `incomplete` status), the Gradle
 distribution and SDK components themselves, everything in §5, and anything the
-advisory database has not yet published. Treat the dependency posture as partially
-checked until a native `android/app` lockfile is committed or Dependabot reports on
-the `gradle` ecosystem.
+advisory database has not yet published.

@@ -337,6 +337,29 @@ export function qiblaBearing(lat: number, lon: number): number {
   return Qibla(new Coordinates(lat, lon));
 }
 
+/** Hour of day (0-23) at a given timezone. */
+export function zonedHour(date: Date, timezone: string): number {
+  if (!isValidTimeZone(timezone)) return date.getHours();
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      hour: '2-digit',
+      hour12: false,
+      timeZone: timezone,
+    }).formatToParts(date);
+    const hour = Number(parts.find((p) => p.type === 'hour')?.value);
+    return Number.isFinite(hour) ? hour % 24 : date.getHours();
+  } catch {
+    return date.getHours();
+  }
+}
+
+/** Emoji flag from an ISO 3166-1 alpha-2 country code. */
+export function flagFromCode(code?: string): string {
+  const cc = (code || '').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(cc)) return '';
+  return String.fromCodePoint(...[...cc].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
+}
+
 /* -------------------------------- formatting ------------------------------- */
 
 function localeFor(lang: string): string {

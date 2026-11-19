@@ -10,9 +10,17 @@ import React, {
 import { get, patch, post, local } from './api';
 import { dirOf, translate, type Lang } from './i18n';
 import {
-  computeDay,
+  computeWindow,
   nextPrayer as computeNext,
+  currentPrayer as computeCurrent,
+  dayKey,
+  flagFromCode,
+  formatClock,
   formatCountdown,
+  formatZonedDate,
+  offsetLabel,
+  regionalMethod,
+  zonedParts,
   FIVE,
   type CalcOptions,
   type Place,
@@ -81,8 +89,16 @@ interface Store {
   setCalc: (c: Partial<CalcOptions>) => void;
   times: Record<PrayerKey, Date> | null;
   next: { key: PrayerKey; at: Date; msLeft: number; tomorrow: boolean } | null;
+  /** Prayer whose time window we are in (yesterday's Isha before Fajr). */
+  current: PrayerKey | null;
   countdown: string;
   now: Date;
+  /** Live clock HH:MM:SS in the selected place's timezone. */
+  localTime: string;
+  /** Long date in the selected place's timezone. */
+  localDate: string;
+  /** UTC offset of the selected place's timezone, e.g. "GMT+3". */
+  tzLabel: string;
   hijri: HijriDate | null;
   prefs: Prefs;
   setPrefs: (p: Partial<Prefs>) => void;
@@ -99,12 +115,47 @@ interface Store {
 
 const Ctx = createContext<Store | null>(null);
 
-const DEFAULT_CALC: CalcOptions = { method: 'MWL', madhab: 'shafi', highLatitude: 'TwilightAngle' };
+const DEFAULT_CALC: CalcOptions = {
+  method: 'MWL',
+  madhab: 'shafi',
+  highLatitude: 'TwilightAngle',
+  methodAuto: true,
+};
+
+/**
+ * Normalises any location payload (reverse geocode, search hit, stored value)
+ * into a Place. Returns null when the coordinates are not real numbers, so a
+ * malformed payload can never turn into a guessed location.
+ */
+export function normalizePlace(raw: unknown): Place | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, any>;
+  const lat = Number(r.lat);
+  const lon = Number(r.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+    return null;
+  }
+  const rawCountry = String(r.country || '');
+  const codeRaw = String(r.countryCode || (rawCountry.length === 2 ? rawCountry : '') || '').toUpperCase();
+  const countryCode = /^[A-Z]{2}$/.test(codeRaw) ? codeRaw : '';
+  const city = String(r.city || r.name || r.locality || '').trim();
+  return {
+    lat,
+    lon,
+    city: city || 'Location name unavailable',
+    region: String(r.region || ''),
+    country: rawCountry.length > 2 ? rawCountry : countryCode,
+    countryCode,
+    flag: String(r.flag || '') || flagFromCode(countryCode),
+    timezone: String(r.timezone || 'UTC'),
+    manual: Boolean(r.manual),
+  };
+}
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [lang, setLangState] = useState<Lang>(() => local.get<Lang>('lang', 'en'));
   const [theme, setTheme] = useState<'light' | 'dark'>(() => local.get('theme', 'light'));
-  const [place, setPlace] = useState<Place | null>(() => local.get<Place | null>('place', null));
+  const [place, setPlace] = useState<Place | null>(() => normalizePlace(local.get<Place | null>('place', null)));
   const [locState, setLocState] = useState<LocState>(place ? (place.manual ? 'idle' : 'granted') : 'idle');
   const [locError, setLocError] = useState('');
   const [calc, setCalcState] = useState<CalcOptions>(() => local.get<CalcOptions>('calc', DEFAULT_CALC));
@@ -117,6 +168,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
   );
   const firedRef = useRef<Set<string>>(new Set());
+  const placeRef = useRef<Place | null>(place);
+
+  useEffect(() => {
+    placeRef.current = place;
+  }, [place]);
 
   const t = useCallback((phrase: string) => translate(lang, phrase), [lang]);
   const dir = dirOf(lang);
@@ -203,18 +259,58 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setCalcState((prev) => ({ ...prev, ...c }));
   }, []);
 
-  /* ------------------------------- location -------------------------------- */
-  const setManualPlace = useCallback((p: Place) => {
-    setPlace({ ...p, manual: true });
-    setLocState('idle');
-    setLocError('');
+  /**
+   * Follow the regional default until the user chooses a method themselves.
+   * An explicit choice (methodAuto: false) is never overwritten.
+   */
+  const applyAutoMethod = useCallback((countryCode: string) => {
+    setCalcState((prev) => {
+      if (prev.methodAuto === false) return prev;
+      const method = regionalMethod(countryCode);
+      return prev.method === method ? prev : { ...prev, method, methodAuto: true };
+    });
   }, []);
+
+  /* ------------------------------- location -------------------------------- */
+  const setManualPlace = useCallback(
+    (p: Place) => {
+      const chosen = normalizePlace({ ...p, manual: true });
+      if (!chosen) return;
+      setPlace(chosen);
+      setLocState('idle');
+      setLocError('');
+      applyAutoMethod(chosen.countryCode);
+    },
+    [applyAutoMethod]
+  );
 
   const clearPlace = useCallback(() => {
     setPlace(null);
     local.remove('place');
     setLocState('idle');
   }, []);
+
+  /**
+   * Reverse geocode real coordinates. The API returns the place fields flat
+   * (city/country/countryCode/timezone), so the whole payload is normalised.
+   */
+  const resolveCoords = useCallback(
+    async (lat: number, lon: number, notify: boolean): Promise<Place | null> => {
+      const previous = placeRef.current;
+      const res = await get<Record<string, unknown>>(`/geo/reverse?lat=${lat}&lon=${lon}`);
+      const resolved = normalizePlace({ ...res, lat, lon, manual: false });
+      if (!resolved) return null;
+      setPlace(resolved);
+      setLocState('granted');
+      setLocError('');
+      applyAutoMethod(resolved.countryCode);
+      const cityChanged =
+        !previous || previous.city !== resolved.city || previous.timezone !== resolved.timezone;
+      if (notify && cityChanged) toast(`Location updated: ${resolved.city}`, 'success');
+      return resolved;
+    },
+    [applyAutoMethod, toast]
+  );
 
   const detectLocation = useCallback(async () => {
     if (!('geolocation' in navigator)) {
@@ -227,12 +323,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         try {
-          const res = await get<{ place: Place }>(
-            `/geo/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`
-          );
-          setPlace({ ...res.place, manual: false });
-          setLocState('granted');
-          toast('Location updated', 'success');
+          const resolved = await resolveCoords(pos.coords.latitude, pos.coords.longitude, true);
+          if (!resolved) {
+            setLocState('error');
+            setLocError('Location unavailable');
+          }
         } catch {
           setLocState('error');
           setLocError('Could not identify the city for these coordinates.');
@@ -248,50 +343,73 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
     );
-  }, [toast]);
+  }, [resolveCoords]);
 
-  // Follow the user as they move: watch position and update when the city changes.
+  // Follow the user as they move. A manual selection is never overridden.
   useEffect(() => {
     if (!('geolocation' in navigator) || locState === 'denied') return;
+    const consider = (lat: number, lon: number) => {
+      const currentPlace = placeRef.current;
+      if (currentPlace?.manual) return;
+      const moved =
+        !currentPlace ||
+        Math.abs(currentPlace.lat - lat) > 0.02 ||
+        Math.abs(currentPlace.lon - lon) > 0.02;
+      if (!moved) return;
+      void resolveCoords(lat, lon, true).catch(() => undefined);
+    };
     const id = navigator.geolocation.watchPosition(
-      async (pos) => {
-        const moved =
-          !place ||
-          Math.abs(place.lat - pos.coords.latitude) > 0.05 ||
-          Math.abs(place.lon - pos.coords.longitude) > 0.05;
-        if (!moved || place?.manual) return;
-        try {
-          const res = await get<{ place: Place }>(
-            `/geo/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`
-          );
-          if (res.place.city !== place?.city || res.place.timezone !== place?.timezone) {
-            setPlace({ ...res.place, manual: false });
-            toast(`Location updated: ${res.place.city}`, 'info');
-          }
-        } catch {
-          /* keep the previous place */
-        }
-      },
+      (pos) => consider(pos.coords.latitude, pos.coords.longitude),
       () => undefined,
       { maximumAge: 120000, timeout: 20000 }
     );
-    return () => navigator.geolocation.clearWatch(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locState, place?.city, place?.timezone]);
+    // A watch may stay silent when the app is reopened in a new city.
+    const timer = setInterval(() => {
+      if (placeRef.current?.manual) return;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => consider(pos.coords.latitude, pos.coords.longitude),
+        () => undefined,
+        { maximumAge: 300000, timeout: 15000 }
+      );
+    }, 10 * 60 * 1000);
+    return () => {
+      navigator.geolocation.clearWatch(id);
+      clearInterval(timer);
+    };
+  }, [locState, resolveCoords]);
 
   /* ----------------------------- prayer times ------------------------------ */
-  const times = useMemo(() => {
+  // The city's own calendar date: the device timezone must never decide which
+  // day is calculated (Tokyo selected from London is still Tokyo's date).
+  const cityDay = place ? dayKey(now, place.timezone) : '';
+
+  const dayWindow = useMemo(() => {
     if (!place) return null;
     try {
-      return computeDay(now, place, calc);
+      return computeWindow(now, place, calc);
     } catch {
       return null;
     }
-  }, [place, calc, now.toDateString()]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [place, calc, cityDay]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const next = useMemo(() => (times ? computeNext(times, now) : null), [times, now]);
+  const times = dayWindow?.today ?? null;
+  const next = useMemo(
+    () => (dayWindow ? computeNext(dayWindow.today, now, dayWindow.tomorrow) : null),
+    [dayWindow, now]
+  );
+  const current = useMemo(
+    () => (dayWindow ? computeCurrent(dayWindow.today, now, dayWindow.yesterday) : null),
+    [dayWindow, now]
+  );
   const countdown = next ? formatCountdown(next.msLeft) : '--:--:--';
-  const hijri = useMemo(() => hijriDate(now, lang), [now.toDateString(), lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  const localTime = place ? formatClock(now, place.timezone, lang, prefs.hour12) : '';
+  const localDate = place ? formatZonedDate(now, place.timezone, lang) : '';
+  const tzLabel = place ? offsetLabel(place.timezone, now, lang) : '';
+  const hijri = useMemo(() => {
+    if (!place) return hijriDate(now, lang);
+    const parts = zonedParts(now, place.timezone);
+    return hijriDate(new Date(parts.year, parts.month - 1, parts.day, 12), lang);
+  }, [cityDay, lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---------------------------- notifications ------------------------------ */
   const requestNotify = useCallback(async () => {
@@ -364,8 +482,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setCalc,
     times,
     next,
+    current,
     countdown,
     now,
+    localTime,
+    localDate,
+    tzLabel,
     hijri,
     prefs,
     setPrefs,

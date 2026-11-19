@@ -1,16 +1,139 @@
-import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { createRequire } from 'node:module';
+
+/**
+ * SQLite persistence via sql.js (WebAssembly SQLite).
+ *
+ * Chosen because it needs no native compilation: the exact same engine runs in
+ * development and in the deployed container. The database lives in a real
+ * SQLite file on disk (data/rifq.db) and is written atomically after every
+ * mutation, so records survive restarts and redeploys that keep the volume.
+ */
+const require = createRequire(import.meta.url);
+const initSqlJs = require('sql.js');
 
 const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), 'data', 'rifq.db');
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
-export const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+const SQL = await initSqlJs({
+  locateFile: (file) => path.join(path.dirname(require.resolve('sql.js')), file),
+});
+
+const existing = fs.existsSync(DB_PATH) ? fs.readFileSync(DB_PATH) : null;
+const raw = existing ? new SQL.Database(existing) : new SQL.Database();
+
+/* ------------------------------ persistence ------------------------------ */
+
+let saveTimer = null;
+let dirty = false;
+
+function writeNow() {
+  if (!dirty) return;
+  dirty = false;
+  const bytes = Buffer.from(raw.export());
+  const tmp = `${DB_PATH}.tmp`;
+  fs.writeFileSync(tmp, bytes);
+  fs.renameSync(tmp, DB_PATH);
+}
+
+function scheduleSave() {
+  dirty = true;
+  if (saveTimer) return;
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    try {
+      writeNow();
+    } catch (err) {
+      console.error('[db] save failed:', err.message);
+    }
+  }, 120);
+  if (typeof saveTimer.unref === 'function') saveTimer.unref();
+}
+
+function flushAndExit(code) {
+  try {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = null;
+    dirty = true;
+    writeNow();
+  } catch {
+    /* ignore */
+  }
+  process.exit(code);
+}
+process.on('SIGINT', () => flushAndExit(0));
+process.on('SIGTERM', () => flushAndExit(0));
+process.on('beforeExit', () => {
+  try {
+    writeNow();
+  } catch {
+    /* ignore */
+  }
+});
+
+/* --------------------------- better-sqlite3-ish API ---------------------- */
+
+class Statement {
+  constructor(sql) {
+    this.sql = sql;
+  }
+
+  all(...params) {
+    const stmt = raw.prepare(this.sql);
+    try {
+      if (params.length) stmt.bind(params);
+      const rows = [];
+      while (stmt.step()) rows.push(stmt.getAsObject());
+      return rows;
+    } finally {
+      stmt.free();
+    }
+  }
+
+  get(...params) {
+    return this.all(...params)[0];
+  }
+
+  run(...params) {
+    const stmt = raw.prepare(this.sql);
+    try {
+      if (params.length) stmt.bind(params);
+      stmt.step();
+    } finally {
+      stmt.free();
+    }
+    const changes = raw.getRowsModified();
+    let lastInsertRowid = null;
+    try {
+      const res = raw.exec('SELECT last_insert_rowid() AS id');
+      lastInsertRowid = res[0]?.values?.[0]?.[0] ?? null;
+    } catch {
+      lastInsertRowid = null;
+    }
+    scheduleSave();
+    return { changes, lastInsertRowid };
+  }
+}
+
+export const db = {
+  prepare: (sql) => new Statement(sql),
+  exec: (sql) => {
+    raw.run(sql);
+    scheduleSave();
+  },
+  run: (sql, params) => {
+    raw.run(sql, params);
+    scheduleSave();
+  },
+  raw,
+  flush: () => writeNow(),
+};
 
 db.exec(`
+PRAGMA foreign_keys = ON;
+
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
@@ -147,6 +270,7 @@ CREATE TABLE IF NOT EXISTS broadcasts (
 CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON bookmarks(user_id);
 CREATE INDEX IF NOT EXISTS idx_tracker_user ON tracker(user_id);
 CREATE INDEX IF NOT EXISTS idx_posts_created ON posts(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit(created_at);
 `);
 
 export const newId = () => crypto.randomUUID();

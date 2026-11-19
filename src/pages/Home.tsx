@@ -49,23 +49,57 @@ export default function Home() {
 
   useEffect(() => {
     const pick = VERSE_OF_DAY[idx % VERSE_OF_DAY.length];
-    get<{ ayahs: { number: number; text: string; translation: string }[]; englishName: string }>(
-      `/quran/surah/${pick.surah}?translation=en.sahih`
-    )
-      .then((res) => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const load = async (attempt: number): Promise<void> => {
+      try {
+        const res = await get<{ ayahs: { number: number; text: string; translation: string }[]; englishName: string }>(
+          `/quran/surah/${pick.surah}?translation=en.sahih`
+        );
         const ayah = res.ayahs.find((a) => a.number === pick.ayah) || res.ayahs[0];
-        if (ayah) setVerse({ text: ayah.text, translation: ayah.translation, surah: res.englishName, ayah: ayah.number });
-      })
-      .catch(() => setVerse(null));
+        if (!cancelled && ayah) {
+          setVerse({ text: ayah.text, translation: ayah.translation, surah: res.englishName, ayah: ayah.number });
+        }
+      } catch {
+        if (cancelled) return;
+        if (attempt < 2) {
+          timer = setTimeout(() => void load(attempt + 1), 3000);
+          return;
+        }
+        setVerse(null);
+      }
+    };
+    void load(0);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [idx]);
 
   useEffect(() => {
-    get<{ items: { arabic: string; english: string; number: number }[]; name: string }>('/hadith/bukhari?page=1&size=30')
-      .then((res) => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const load = async (attempt: number): Promise<void> => {
+      try {
+        const res = await get<{ items: { arabic: string; english: string; number: number }[]; name: string }>(
+          '/hadith/bukhari?page=1&size=30'
+        );
         const item = res.items[idx % Math.max(1, res.items.length)];
-        if (item) setHadith({ ...item, name: res.name });
-      })
-      .catch(() => setHadith(null));
+        if (!cancelled && item) setHadith({ ...item, name: res.name });
+      } catch {
+        if (cancelled) return;
+        if (attempt < 2) {
+          timer = setTimeout(() => void load(attempt + 1), 3000);
+          return;
+        }
+        setHadith(null);
+      }
+    };
+    void load(0);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [idx]);
 
   useEffect(() => {

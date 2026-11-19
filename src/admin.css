@@ -1,0 +1,341 @@
+/* ============================================================
+   RIFQ Muslim — Super Admin dashboard
+   Emerald + gold identity, responsive from 320px to desktop.
+   Made by Eng Mohamud Yusuf
+   ============================================================ */
+
+.admin-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.admin-hero-id {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.admin-avatar {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--on-accent);
+  background: linear-gradient(145deg, var(--gold-soft), var(--gold));
+  box-shadow: 0 6px 16px rgba(212, 175, 55, 0.28);
+}
+
+.admin-hero-id strong {
+  display: block;
+  font-size: 15px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.admin-hero-id span {
+  display: block;
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.admin-layout {
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.admin-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  position: sticky;
+  top: 12px;
+}
+
+.admin-nav button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 13.5px;
+  text-align: start;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.admin-nav button:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.admin-nav button[aria-current='true'] {
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.22), rgba(22, 162, 115, 0.18));
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.admin-nav .nav-count {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(212, 175, 55, 0.18);
+  color: var(--gold-soft);
+}
+
+.admin-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.admin-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.admin-toolbar .input,
+.admin-toolbar .select {
+  flex: 1 1 150px;
+  min-width: 0;
+}
+
+.admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-item {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.admin-item-main {
+  min-width: 0;
+  flex: 1 1 210px;
+}
+
+.admin-item-main strong {
+  display: block;
+  font-size: 14px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.admin-item-main p {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.admin-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.admin-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.admin-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 10px;
+}
+
+.admin-media-card {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-media-card img {
+  width: 100%;
+  height: 92px;
+  object-fit: cover;
+  display: block;
+  background: var(--surface-3);
+}
+
+.admin-media-meta {
+  padding: 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-media-meta .name {
+  color: var(--text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-kpi {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 10px;
+}
+
+.admin-kpi .stat {
+  margin: 0;
+}
+
+.admin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid var(--border-soft);
+  background: rgba(212, 175, 55, 0.12);
+  color: var(--gold-soft);
+}
+
+.admin-badge.live {
+  background: rgba(22, 162, 115, 0.18);
+  border-color: rgba(22, 162, 115, 0.4);
+  color: #7fe3bb;
+}
+
+.admin-badge.draft {
+  background: rgba(159, 181, 168, 0.14);
+  border-color: rgba(159, 181, 168, 0.3);
+  color: var(--muted);
+}
+
+.admin-badge.danger {
+  background: rgba(224, 101, 91, 0.16);
+  border-color: rgba(224, 101, 91, 0.4);
+  color: #f0a29b;
+}
+
+.admin-note {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.admin-empty {
+  padding: 26px 14px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  border: 1px dashed var(--border-soft);
+  border-radius: 14px;
+}
+
+.admin-audit-row {
+  display: flex;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 12.5px;
+  align-items: flex-start;
+}
+
+.admin-audit-row:last-child {
+  border-bottom: 0;
+}
+
+.admin-audit-row .who {
+  color: var(--gold-soft);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.admin-audit-row .when {
+  color: var(--muted);
+  margin-left: auto;
+  white-space: nowrap;
+  font-size: 11.5px;
+}
+
+@media (max-width: 860px) {
+  .admin-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-nav {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 8px;
+    gap: 6px;
+    scrollbar-width: thin;
+  }
+
+  .admin-nav button {
+    width: auto;
+    white-space: nowrap;
+    flex: 0 0 auto;
+    padding: 8px 12px;
+  }
+
+  .admin-nav .nav-count {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .admin-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-item-actions {
+    width: 100%;
+  }
+
+  .admin-item-actions .btn {
+    flex: 1 1 auto;
+  }
+
+  .admin-media-grid {
+    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  }
+}

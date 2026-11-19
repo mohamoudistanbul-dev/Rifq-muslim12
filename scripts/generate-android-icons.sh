@@ -53,8 +53,8 @@ convert "$WORK/icon.png" "$WORK/round-mask.png" \
     -alpha off -compose CopyOpacity -composite "$WORK/icon-round.png"
 
 # --- density outputs ---------------------------------------------------------
-emit() { # name source size
-    local name="$1" src="$2" size="$3"
+emit() { # name source
+    local name="$1" src="$2"
     for d in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
         local bucket="${d%%:*}" px="${d##*:}"
         mkdir -p "$RES/mipmap-$bucket"

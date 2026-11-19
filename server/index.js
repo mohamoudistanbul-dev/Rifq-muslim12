@@ -509,6 +509,10 @@ app.post('/api/assistant', rateLimit({ windowMs: 60_000, max: 12 }), async (req,
   res.json(result);
 });
 
+/* ------------------------- Quran / hadith / places -------------------------- */
+
+app.use('/api', contentRouter);
+
 /* ---------------------------------- admin ---------------------------------- */
 
 app.get('/api/admin/overview', requireAdmin, (_req, res) => {

@@ -19,6 +19,7 @@ import {
 } from './auth.js';
 import { sendEmail, mailConfigured } from './mail.js';
 import { answerQuestion } from './assistant.js';
+import { contentRouter } from './content.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();

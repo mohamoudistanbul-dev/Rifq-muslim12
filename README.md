@@ -129,4 +129,27 @@ on Node 22 Alpine (port 3000, bound to `0.0.0.0`). The SQLite database lives in
 
 ---
 
+## Native Android application
+
+RIFQ Muslim also ships as a real standalone Android app (`com.rifqmuslim.app`),
+built with the official Android Gradle Plugin — not a PWA, browser shortcut or
+Chrome wrapper. The complete project is in [`android/`](android/): Kotlin shell
+with no browser chrome, branded emerald/gold icon and splash screen, native
+Athan notification channel with prayer alarms, Android back navigation, GPS and
+notification permissions, and HTTPS-only networking. The app's existing
+features, saved data, navigation and design are preserved.
+
+```bash
+cd android
+./gradlew assembleDebug     # installable debug APK
+./gradlew bundleRelease     # Play Store AAB (needs keystore.properties)
+```
+
+**Build status:** the source project is complete, but no APK or AAB has been
+compiled yet — the authoring environment has no Android SDK or device. Full
+prerequisites, signing steps, install commands and a post-install verification
+checklist are in [`docs/ANDROID_BUILD.md`](docs/ANDROID_BUILD.md).
+
+---
+
 Made by **Eng Mohamud Yusuf** · Contact: mohamoudistanbul@gmail.com · +252-612215593

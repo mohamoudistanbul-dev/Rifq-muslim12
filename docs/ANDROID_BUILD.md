@@ -52,6 +52,7 @@ the emerald/gold design are preserved — nothing is replaced by placeholders.
 | Gradle wrapper (8.9) included and verified | ✅ Yes |
 | Branded icon, adaptive icon, splash, theme | ✅ Provided |
 | Native notifications, permissions, back navigation, HTTPS-only | ✅ Implemented |
+| GitHub Actions workflow to build the APK | ✅ `.github/workflows/android-apk.yml` (see §4 note) |
 | **Compiled `app-debug.apk` / `app-release.apk`** | ❌ **Not built here** |
 | **Signed `app-release.aab`** | ❌ **Not built here** |
 | Install-and-launch test on a device/emulator | ❌ **Not performed here** |
@@ -88,6 +89,12 @@ sdk.dir=/absolute/path/to/Android/Sdk
 ## 4. Build the APK and AAB
 
 All commands run from the `android/` directory.
+
+> **Prefer CI?** `.github/workflows/android-apk.yml` builds the debug APK on a
+> GitHub-hosted Ubuntu runner and uploads it as a downloadable artifact — no
+> local SDK needed. Running it from an Android phone, downloading the APK, and
+> the optional encrypted release-signing setup are described in
+> [`docs/GITHUB_ACTIONS_APK.md`](GITHUB_ACTIONS_APK.md).
 
 ### 4.1 Debug APK (fastest way to install and test)
 

@@ -157,7 +157,49 @@ or delete it.
 
 ---
 
-## 5. Honest status
+## 5. Known dependency advisory (Kotlin Gradle plugin)
+
+An advisory check of the declared Maven coordinates found one open finding:
+
+| Field | Value |
+| --- | --- |
+| Advisory | GHSA-r937-wjx7-w2jp / **CVE-2026-53914** |
+| Severity | **Moderate** (CVSS 3.1 `AV:L/AC:H/PR:H` — local, high complexity, high privileges) |
+| Package | `org.jetbrains.kotlin:kotlin-gradle-plugin` |
+| Affected | all versions before `2.4.20-Beta1` (this project uses **2.0.21**) |
+| Fixed in | `2.4.20-Beta1` — a **beta**; no stable patched release exists yet |
+| Issue | unsafe deserialization of build-cache metadata can lead to code execution |
+
+**Why it is not patched here.** The only fixed version is a beta, and moving
+Kotlin from 2.0.21 to 2.4.x would also force an Android Gradle Plugin upgrade
+beyond the pinned 8.7.3. That is a toolchain migration that cannot be validated
+in this repository (no Android SDK or device/emulator is available), so it is
+left as an explicit, visible finding rather than an untested change. Bump Kotlin
+and AGP together once a **stable** patched Kotlin ships, then re-run the workflow
+and the §7 device checklist in `ANDROID_BUILD.md`.
+
+**Impact scope.** This is a build-time issue in the Gradle plugin. It is not
+linked into the shipped `app-debug.apk` / `app-release.aab`, so app users are not
+exposed by installing the app. The exposure is to whatever machine runs the
+build.
+
+**Mitigation applied.** The workflow builds with `--no-build-cache`, so no build
+cache metadata is read or written during CI. No remote build cache is configured
+(`android/settings.gradle.kts` defines none) and GitHub's runners are ephemeral,
+so there is no cache shared with an untrusted producer.
+
+**Coverage note.** The managed scanner covers the npm side (159 packages, no
+findings). The Gradle modules have no lockfile, so those coordinates were
+checked directly against the OSV API instead: AGP plugin + `com.android.tools.build:gradle`
+8.7.3, `androidx.core:core-ktx` 1.13.1, `androidx.appcompat` 1.7.0,
+`androidx.core:core-splashscreen` 1.0.1, `androidx.webkit` 1.11.0 and
+`com.google.android.material` 1.12.0 returned no advisories. Enabling Gradle
+dependency locking would let automated scanners cover these transitively in
+future.
+
+---
+
+## 6. Honest status
 
 - This workflow has been written and syntax-validated, but **no APK has been
   produced by GitHub Actions yet** — that requires a run on GitHub's runners,

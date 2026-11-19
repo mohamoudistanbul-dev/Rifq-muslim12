@@ -11,6 +11,12 @@ name: Build RIFQ Muslim Android APK
 #
 # Optional signed release builds are described in docs/GITHUB_ACTIONS_APK.md
 # and are gated behind the repository variable ENABLE_RELEASE_SIGNING.
+#
+# --no-build-cache is deliberate: CVE-2026-53914 (GHSA-r937-wjx7-w2jp) is an
+# unsafe-deserialization issue in Kotlin build-cache metadata that affects
+# org.jetbrains.kotlin:kotlin-gradle-plugin before 2.4.20-Beta1 (this project
+# uses 2.0.21, and the only fixed release is a beta). Disabling the build cache
+# for CI removes that metadata path entirely; see docs/GITHUB_ACTIONS_APK.md §5.
 
 on:
   workflow_dispatch:
@@ -74,7 +80,7 @@ jobs:
           if [ -n "${APP_URL_INPUT}" ]; then
             ARGS="-Prifq.appUrl=${APP_URL_INPUT}"
           fi
-          ./gradlew --no-daemon --stacktrace assembleDebug ${ARGS}
+          ./gradlew --no-daemon --no-build-cache --stacktrace assembleDebug ${ARGS}
 
       - name: Verify APK output
         run: |
@@ -161,7 +167,7 @@ jobs:
           if [ -n "${APP_URL_INPUT}" ]; then
             ARGS="-Prifq.appUrl=${APP_URL_INPUT}"
           fi
-          ./gradlew --no-daemon --stacktrace assembleRelease bundleRelease ${ARGS}
+          ./gradlew --no-daemon --no-build-cache --stacktrace assembleRelease bundleRelease ${ARGS}
 
       - name: Verify signing certificate
         run: |

@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../lib/store';
 import { AppIcon } from '../components/Icons';
-import { TopBar, Modal, Loading } from '../components/Shell';
+import { TopBar } from '../components/Shell';
 import { get } from '../lib/api';
-import { formatTime, FIVE, PRAYER_KEYS, type Place } from '../lib/prayer';
+import { formatTime, FIVE, PRAYER_KEYS, zonedHour } from '../lib/prayer';
+import LocationPanel from '../components/LocationPanel';
 import { gregorianDate } from '../lib/hijri';
 import { REMINDERS, dayIndex } from '../lib/data';
 
@@ -30,11 +31,8 @@ function greetingKey(hour: number) {
 }
 
 export default function Home() {
-  const { t, lang, place, locState, locError, detectLocation, setManualPlace, times, next, countdown, now, hijri, prefs, user, toast } = useStore();
-  const [showLoc, setShowLoc] = useState(false);
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Place[]>([]);
-  const [searching, setSearching] = useState(false);
+  const { t, lang, place, detectLocation, times, next, current, countdown, now, localDate, hijri, user } =
+    useStore();
   const [verse, setVerse] = useState<{ text: string; translation: string; surah: string; ayah: number } | null>(null);
   const [hadith, setHadith] = useState<{ arabic: string; english: string; name: string; number: number } | null>(null);
   const [tracker, setTracker] = useState<Record<string, boolean>>({});
@@ -115,21 +113,9 @@ export default function Home() {
       .catch(() => undefined);
   }, [user]);
 
-  const searchCity = async (q: string) => {
-    setQuery(q);
-    if (q.trim().length < 2) return setResults([]);
-    setSearching(true);
-    try {
-      const res = await get<{ results: Place[] }>(`/geo/search?q=${encodeURIComponent(q)}`);
-      setResults(res.results);
-    } catch {
-      setResults([]);
-    } finally {
-      setSearching(false);
-    }
-  };
-
   const prayerDone = FIVE.filter((k) => tracker[`prayer:${k}`]).length;
+  // Greeting follows the selected city's clock, not the device clock.
+  const cityHour = place ? zonedHour(now, place.timezone) : now.getHours();
 
   return (
     <>
@@ -141,30 +127,16 @@ export default function Home() {
             {t('Assalamu alaikum')}
           </p>
           <h1 className="page-title" style={{ margin: '4px 0 2px' }}>
-            {t(greetingKey(now.getHours()))}
+            {t(greetingKey(cityHour))}
             {user ? `, ${user.name.split(' ')[0]}` : ''}
           </h1>
           <p className="small muted" style={{ margin: 0 }}>
-            {hijri ? `${hijri.day} ${hijri.monthName} ${hijri.year} AH` : t('Hijri date unavailable')} · {gregorianDate(now, lang)}
+            {hijri ? `${hijri.day} ${hijri.monthName} ${hijri.year} AH` : t('Hijri date unavailable')} · {place ? localDate : gregorianDate(now, lang)}
           </p>
 
-          <div className="row" style={{ marginTop: 14, gap: 10, flexWrap: 'wrap' }}>
-            <button className="chip" onClick={() => void detectLocation()} aria-label={t('Detect my location')}>
-              <AppIcon name="location" size={15} />
-              {locState === 'locating' ? t('Locating…') : place ? `${place.flag || ''} ${place.city}` : t('Location unavailable')}
-            </button>
-            <button className="chip" onClick={() => setShowLoc(true)}>
-              <AppIcon name="search" size={15} /> {t('Choose city')}
-            </button>
-          </div>
-          {place && (
-            <p className="tiny muted" style={{ margin: '8px 0 0' }}>
-              {[place.region, place.country].filter(Boolean).join(', ')} · {place.timezone} · {place.lat.toFixed(3)}, {place.lon.toFixed(3)}
-              {place.manual ? ` · ${t('Selected manually')}` : ` · ${t('GPS detected')}`}
-            </p>
-          )}
-          {!place && locError && <p className="tiny" style={{ margin: '8px 0 0', color: '#e0655b' }}>{t(locError)}</p>}
         </section>
+
+        <LocationPanel />
 
         <section className="card" style={{ padding: 18 }}>
           {next ? (
@@ -200,15 +172,17 @@ export default function Home() {
             <div className="stack" style={{ gap: 4 }}>
               {PRAYER_KEYS.map((key) => {
                 const isNext = next?.key === key;
+                const isCurrent = current === key;
                 return (
                   <div
                     key={key}
-                    className="prayer-row"
+                    className={`prayer-row${isNext ? ' next' : ''}${isCurrent ? ' current' : ''}`}
                     style={isNext ? { borderColor: 'var(--gold)', background: 'var(--gold-wash)' } : undefined}
                   >
                     <span className="row" style={{ gap: 8 }}>
                       <AppIcon name={key === 'sunrise' ? 'sun' : key === 'fajr' ? 'moon' : 'mosque'} size={16} />
                       {t(key[0].toUpperCase() + key.slice(1))}
+                      {isCurrent && <span className="pill-current">{t('Now')}</span>}
                     </span>
                     <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatTime(times[key], place.timezone, lang)}</span>
                   </div>
@@ -307,40 +281,6 @@ export default function Home() {
           RIFQ Muslim · {t('Made by Eng Mohamud Yusuf')}
         </p>
       </div>
-
-      <Modal open={showLoc} onClose={() => setShowLoc(false)} title={t('Choose your city')}>
-        <p className="small muted" style={{ marginTop: 0 }}>
-          {t('Search any city, town or village worldwide. Manually selected locations are labelled in the app.')}
-        </p>
-        <input
-          className="input"
-          placeholder={t('Search city, e.g. Mogadishu')}
-          value={query}
-          onChange={(e) => void searchCity(e.target.value)}
-          autoFocus
-        />
-        <div className="stack" style={{ marginTop: 12, gap: 8, maxHeight: 320, overflowY: 'auto' }}>
-          {searching && <Loading />}
-          {!searching && results.length === 0 && query.length > 1 && (
-            <p className="small muted">{t('No matching place found. Try a different spelling.')}</p>
-          )}
-          {results.map((r, i) => (
-            <button
-              key={`${r.city}-${r.lat}-${i}`}
-              className="prayer-row"
-              style={{ width: '100%', textAlign: 'start' }}
-              onClick={() => {
-                setManualPlace(r);
-                setShowLoc(false);
-                toast(`${r.city} · ${r.timezone}`, 'success');
-              }}
-            >
-              <span>{r.flag} {r.city}</span>
-              <span className="tiny muted">{[r.region, r.country].filter(Boolean).join(', ')}</span>
-            </button>
-          ))}
-        </div>
-      </Modal>
     </>
   );
 }

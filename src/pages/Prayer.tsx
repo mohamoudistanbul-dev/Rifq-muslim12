@@ -2,38 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { useStore } from '../lib/store';
 import { Page } from '../components/Shell';
 import { AppIcon } from '../components/Icons';
+import LocationPanel from '../components/LocationPanel';
 import {
   METHODS,
   HIGH_LAT,
   PRAYER_KEYS,
   FIVE,
   formatTime,
+  regionalMethod,
   type MethodId,
   type HighLat,
   type PrayerKey,
 } from '../lib/prayer';
 
-const REGION_DEFAULT: Record<string, MethodId> = {
-  SO: 'MWL',
-  SA: 'UmmAlQura',
-  AE: 'Dubai',
-  EG: 'Egyptian',
-  PK: 'Karachi',
-  IN: 'Karachi',
-  BD: 'Karachi',
-  TR: 'Diyanet',
-  KW: 'Kuwait',
-  QA: 'Qatar',
-  SG: 'Singapore',
-  MY: 'Singapore',
-  ID: 'Singapore',
-  US: 'ISNA',
-  CA: 'ISNA',
-  GB: 'MoonsightingCommittee',
-};
-
 export default function Prayer() {
-  const { t, lang, place, times, next, countdown, calc, setCalc, now, toast } = useStore();
+  const { t, lang, place, times, next, current, countdown, calc, setCalc, localTime } = useStore();
   const [mosque, setMosque] = useState<Record<string, string>>(() => {
     try {
       return JSON.parse(localStorage.getItem('rifq.mosque') || '{}');
@@ -46,7 +29,7 @@ export default function Prayer() {
     localStorage.setItem('rifq.mosque', JSON.stringify(mosque));
   }, [mosque]);
 
-  const suggested = place ? REGION_DEFAULT[place.countryCode] : undefined;
+  const suggested = place ? regionalMethod(place.countryCode) : undefined;
 
   const diffMinutes = (key: PrayerKey): number | null => {
     const value = mosque[key];
@@ -64,7 +47,9 @@ export default function Prayer() {
   };
 
   return (
-    <Page title="Prayer" subtitle={place ? `${place.city} · ${place.timezone}` : t('Location unavailable')}>
+    <Page title="Prayer" subtitle={place ? `${place.city} · ${localTime} · ${place.timezone}` : t('Location unavailable')}>
+      <LocationPanel />
+
       {!place && (
         <div className="card">
           <p className="small" style={{ margin: 0 }}>
@@ -85,8 +70,15 @@ export default function Prayer() {
           </div>
           <div className="stack" style={{ gap: 4, marginTop: 10 }}>
             {PRAYER_KEYS.map((key) => (
-              <div key={key} className={`prayer-row ${next?.key === key ? 'active' : ''}`} style={next?.key === key ? { borderColor: 'var(--gold)' } : undefined}>
-                <span>{t(key[0].toUpperCase() + key.slice(1))}</span>
+              <div
+                key={key}
+                className={`prayer-row${next?.key === key ? ' next active' : ''}${current === key ? ' current' : ''}`}
+                style={next?.key === key ? { borderColor: 'var(--gold)' } : undefined}
+              >
+                <span className="row" style={{ gap: 8 }}>
+                  {t(key[0].toUpperCase() + key.slice(1))}
+                  {current === key && <span className="pill-current">{t('Now')}</span>}
+                </span>
                 <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatTime(times[key], place.timezone, lang)}</span>
               </div>
             ))}
@@ -104,7 +96,7 @@ export default function Prayer() {
             {t('Suggested for your region')}: {METHODS.find((m) => m.id === suggested)?.label}
           </p>
         )}
-        <select className="select" value={calc.method} onChange={(e) => setCalc({ method: e.target.value as MethodId })}>
+        <select className="select" value={calc.method} onChange={(e) => setCalc({ method: e.target.value as MethodId, methodAuto: false })}>
           {METHODS.map((m) => (
             <option key={m.id} value={m.id}>
               {m.label}
@@ -187,7 +179,7 @@ export default function Prayer() {
           <AppIcon name="bell" size={17} /> {t('Athan and notifications')}
         </a>
         <p className="tiny muted" style={{ marginBottom: 0 }}>
-          {t('Times recalculate automatically when your location, the date or the calculation method changes.')} {now.toLocaleTimeString(lang)}
+          {t('Times recalculate automatically when your location, the date or the calculation method changes.')} {localTime}
         </p>
       </div>
 

@@ -46,9 +46,12 @@ const countries = raw.countries.map((c) => ({
 }));
 const countryByCode = new Map(countries.map((c) => [c.code, c]));
 
-/** [name, countryIdx, regionIdx, lat, lon, tzIdx, population, isCapital] */
-const places = raw.cities.map(([name, ci, ri, lat, lon, tzi, population, capital]) => {
+/** [name, countryIdx, regionIdx, lat, lon, tzIdx, population, isCapital, aliases] */
+const places = raw.cities.map(([name, ci, ri, lat, lon, tzi, population, capital, aliases]) => {
   const countryCode = raw.codes[ci];
+  const alias = String(aliases || '')
+    .split('|')
+    .filter(Boolean);
   return {
     city: name,
     countryCode,
@@ -59,6 +62,8 @@ const places = raw.cities.map(([name, ci, ri, lat, lon, tzi, population, capital
     population,
     capital: capital === 1,
     key: norm(name),
+    // Familiar spellings from GeoNames ("Hargeisa" for Hargeysa, Arabic مقديشو)
+    aliasKey: alias.length ? norm(alias.join(' ')) : '',
     countryKey: countryCode,
   };
 });
@@ -106,6 +111,12 @@ const score = (place, q) => {
   const word = place.key.indexOf(` ${q}`);
   if (word !== -1) return 2;
   if (place.key.includes(q)) return 3;
+  // Alternate spellings rank just below the primary name so "Hargeisa" and
+  // "Muqdisho" reach the same city as "Hargeysa" and "Mogadishu".
+  if (place.aliasKey) {
+    if (place.aliasKey.startsWith(q) || place.aliasKey.includes(` ${q}`)) return 2;
+    if (place.aliasKey.includes(q)) return 4;
+  }
   return -1;
 };
 

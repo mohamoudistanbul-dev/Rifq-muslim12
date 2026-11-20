@@ -88,6 +88,28 @@ kotlin {
     }
 }
 
+// Build-tooling security pins, mirrored from android/build.gradle.kts. These libraries reach
+// this module through AGP's lint and test-platform classpaths, never through the APK runtime,
+// and the versions below are the fixed releases named by the advisories. They are applied
+// before locking so app/gradle.lockfile describes the patched graph the scanner reads.
+configurations.configureEach {
+    resolutionStrategy.eachDependency {
+        when {
+            requested.group == "io.netty" -> useVersion("4.1.137.Final")
+            requested.group == "org.bouncycastle" -> useVersion("1.85")
+            requested.group == "com.google.guava" && requested.name == "guava" ->
+                useVersion("33.7.2-jre")
+            requested.group == "com.google.protobuf" -> useVersion("3.25.5")
+            requested.group == "org.bitbucket.b_c" -> useVersion("0.9.6")
+            requested.group == "org.jdom" && requested.name == "jdom2" -> useVersion("2.0.6.1")
+            requested.group == "org.apache.commons" && requested.name == "commons-compress" ->
+                useVersion("1.26.0")
+            requested.group == "org.apache.commons" && requested.name == "commons-lang3" ->
+                useVersion("3.18.0")
+        }
+    }
+}
+
 // Dependency locking: app/gradle.lockfile is the resolved dependency list for this module.
 // It is what the repository security scan reads for AndroidX + Material, and it pins what
 // CI resolves. Regenerate after changing dependencies below:

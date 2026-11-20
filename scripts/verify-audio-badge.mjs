@@ -267,6 +267,77 @@ try {
   const historyAfter = await call('/api/admin/verifications', { cookie: adminCookie });
   check('audit history records the revoke', JSON.stringify(historyAfter.json || {}).includes('admin.badge.revoke'));
 
+  /* ------------------------- verification requests ------------------------ */
+
+  const reqGet = await call('/api/badge/request', { cookie: userBCookie });
+  check(
+    'user can read their own verification request status',
+    reqGet.status === 200 && reqGet.json?.request === null,
+    reqGet.text.slice(0, 140)
+  );
+
+  const reqPost = await call('/api/badge/request', {
+    method: 'POST',
+    body: { note: 'Community contributor.' },
+    cookie: userBCookie,
+  });
+  check(
+    'signed-in user can request the blue badge',
+    reqPost.status === 201 && reqPost.json?.request?.status === 'pending',
+    reqPost.text.slice(0, 160)
+  );
+
+  const reqAgain = await call('/api/badge/request', { method: 'POST', body: {}, cookie: userBCookie });
+  check('a second pending request is refused (409)', reqAgain.status === 409, `status=${reqAgain.status}`);
+
+  const reqAnon = await call('/api/badge/request', { method: 'POST', body: {} });
+  check('signed-out request cannot ask for a badge (401)', reqAnon.status === 401, `status=${reqAnon.status}`);
+
+  const listAsUser = await call('/api/admin/badge-requests', { cookie: userBCookie });
+  check('ordinary user cannot list verification requests (403)', listAsUser.status === 403, `status=${listAsUser.status}`);
+
+  const listAsAdmin = await call('/api/admin/badge-requests', { cookie: adminCookie });
+  const reqRow = (listAsAdmin.json?.requests || []).find((r) => r.userId === userBId);
+  check(
+    'admin sees the pending request with the user details',
+    listAsAdmin.status === 200 && Boolean(reqRow) && reqRow.status === 'pending',
+    listAsAdmin.text.slice(0, 200)
+  );
+
+  const adminOwnReq = await call('/api/badge/request', { method: 'POST', body: { note: 'self' }, cookie: adminCookie });
+  const selfDecide = await call(`/api/admin/badge-requests/${adminOwnReq.json?.request?.id}`, {
+    method: 'PATCH',
+    body: { action: 'approve' },
+    cookie: adminCookie,
+  });
+  check('super admin cannot decide their own request (403)', selfDecide.status === 403, `status=${selfDecide.status}`);
+
+  const approveReq = await call(`/api/admin/badge-requests/${reqPost.json?.request?.id}`, {
+    method: 'PATCH',
+    body: { action: 'approve' },
+    cookie: adminCookie,
+  });
+  check(
+    'super admin approves the request and the badge is granted',
+    approveReq.status === 200 && approveReq.json?.status === 'approved' && approveReq.json?.user?.badgeVerified === true,
+    approveReq.text.slice(0, 200)
+  );
+  check(
+    'approval records the deciding administrator',
+    approveReq.json?.user?.badgeVerifiedBy === ADMIN_EMAIL,
+    String(approveReq.json?.user?.badgeVerifiedBy)
+  );
+
+  const decideTwice = await call(`/api/admin/badge-requests/${reqPost.json?.request?.id}`, {
+    method: 'PATCH',
+    body: { action: 'reject' },
+    cookie: adminCookie,
+  });
+  check('a decided request cannot be decided twice (409)', decideTwice.status === 409, `status=${decideTwice.status}`);
+
+  const reqWhenVerified = await call('/api/badge/request', { method: 'POST', body: {}, cookie: userBCookie });
+  check('a verified account cannot request again (400)', reqWhenVerified.status === 400, `status=${reqWhenVerified.status}`);
+
   check('normal user id was captured for the permission tests', Boolean(userAId), String(userAId));
 } catch (err) {
   failures.push(`unexpected error: ${err?.message || err}`);

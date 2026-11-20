@@ -4,7 +4,7 @@ import { Page, Loading } from '../components/Shell';
 import { AppIcon } from '../components/Icons';
 import VerifiedBadge from '../components/VerifiedBadge';
 import { useStore } from '../lib/store';
-import { patch, post, del } from '../lib/api';
+import { get, patch, post, del } from '../lib/api';
 import { LANGS, type Lang } from '../lib/i18n';
 
 export default function Profile() {
@@ -14,11 +14,29 @@ export default function Profile() {
   const [pw, setPw] = useState({ current: '', next: '' });
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState('');
+  const [badgeReq, setBadgeReq] = useState<{ id: string; status: string } | null>(null);
+  const [badgeNote, setBadgeNote] = useState('');
+  const [badgeBusy, setBadgeBusy] = useState(false);
 
   useEffect(() => {
     if (authReady && !user) navigate('/login?next=/profile', { replace: true });
     if (user) setName(user.name);
   }, [authReady, user, navigate]);
+
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    get<{ request: { id: string; status: string } | null }>('/badge/request')
+      .then((r) => {
+        if (alive) setBadgeReq(r.request);
+      })
+      .catch(() => {
+        /* the card simply stays in its default state */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [user]);
 
   if (!authReady) return <Page title="Profile"><Loading /></Page>;
   if (!user) return <Page title="Profile"><p className="small">{t('Redirecting to sign in…')}</p></Page>;
@@ -46,6 +64,20 @@ export default function Profile() {
       toast((err as Error).message || t('The password could not be changed'), 'error');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const requestVerification = async () => {
+    setBadgeBusy(true);
+    try {
+      const r = await post<{ request: { id: string; status: string } }>('/badge/request', { note: badgeNote });
+      setBadgeReq(r.request);
+      setBadgeNote('');
+      toast(t('Verification request sent. A Super Admin will review it.'), 'success');
+    } catch (err) {
+      toast((err as Error).message || t('The request could not be sent'), 'error');
+    } finally {
+      setBadgeBusy(false);
     }
   };
 
@@ -85,6 +117,35 @@ export default function Profile() {
           {user.role === 'admin' ? ` · ${t('Administrator')}` : ''}
         </p>
       </div>
+
+      {!user.badgeVerified && (
+        <div className="card">
+          <h3 className="section-title">{t('Blue verified badge')}</h3>
+          <p className="tiny muted">
+            {badgeReq?.status === 'pending'
+              ? t('Your verification request is waiting for a Super Admin to review it.')
+              : badgeReq?.status === 'rejected'
+                ? t('Your last verification request was not approved. You can send a new one.')
+                : t('Verified accounts are reviewed and approved by a Super Admin. Sending a request never grants the badge automatically.')}
+          </p>
+          {badgeReq?.status !== 'pending' && (
+            <>
+              <div className="field">
+                <label>{t('Why should this account be verified? (optional)')}</label>
+                <input
+                  className="input"
+                  value={badgeNote}
+                  maxLength={500}
+                  onChange={(e) => setBadgeNote(e.target.value)}
+                />
+              </div>
+              <button className="btn btn-soft btn-block" onClick={() => void requestVerification()} disabled={badgeBusy}>
+                {t('Request verification')}
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="card">
         <h3 className="section-title">{t('Edit profile')}</h3>

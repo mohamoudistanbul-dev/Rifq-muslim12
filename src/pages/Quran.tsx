@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Page, Loading, ErrorBox, TopBar } from '../components/Shell';
 import { AppIcon } from '../components/Icons';
 import { useStore } from '../lib/store';
+import { setReadingSelection } from '../lib/touchGuard';
 import { get, post, local } from '../lib/api';
 
 interface SurahMeta {
@@ -253,6 +254,12 @@ export function QuranReader() {
     }
   };
 
+  /** Deliberate opt-in: the only way Quran text becomes selectable. */
+  const [selectMode, setSelectMode] = useState(false);
+
+  // Leaving the reader must never leave the native selection toolbar unlocked.
+  useEffect(() => () => setReadingSelection(false), []);
+
   const audioUrl = `https://cdn.islamic.network/quran/audio-surah/128/${reciter}/${surahNumber}.mp3`;
 
   return (
@@ -292,6 +299,21 @@ export function QuranReader() {
                 >
                   A−
                 </button>
+                <button
+                  className={`btn btn-sm ${selectMode ? 'btn-primary' : 'btn-soft'}`}
+                  aria-pressed={selectMode}
+                  onClick={() => {
+                    const next = !selectMode;
+                    setSelectMode(next);
+                    setReadingSelection(next);
+                    toast(
+                      next ? t('Text selection on — long-press to copy') : t('Text selection off'),
+                      'success'
+                    );
+                  }}
+                >
+                  {t('Select text')}
+                </button>
               </div>
               <audio ref={audioRef} src={audioUrl} onEnded={() => setPlaying(false)} preload="none" />
               <div className="field" style={{ marginTop: 12 }}>
@@ -319,7 +341,7 @@ export function QuranReader() {
               </p>
             )}
 
-            <div className="stack" style={{ gap: 10 }}>
+            <div className={`stack${selectMode ? ' selection-enabled' : ''}`} style={{ gap: 10 }}>
               {data.ayahs.map((ayah) => (
                 <article key={ayah.number} id={`ayah-${ayah.number}`} className="card" style={{ scrollMarginTop: 90 }}>
                   <div className="row" style={{ justifyContent: 'space-between' }}>

@@ -37,4 +37,15 @@ class WebAppBridge(private val activity: MainActivity) {
 
     @JavascriptInterface
     fun isNativeApp(): Boolean = true
+
+    /**
+     * Opens or closes Android's text-selection toolbar. RIFQ Muslim keeps it
+     * closed for reading content so a long press cannot raise Copy / Select all /
+     * Web search / Google lookup over Quran text; the web layer opens it only for
+     * a focused form field or the reader's explicit "Select text" mode.
+     */
+    @JavascriptInterface
+    fun setTextSelectionAllowed(allowed: Boolean) {
+        activity.runOnUiThread { activity.setTextSelectionAllowed(allowed) }
+    }
 }

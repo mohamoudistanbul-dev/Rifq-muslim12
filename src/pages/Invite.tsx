@@ -4,9 +4,11 @@ import { Page } from '../components/Shell';
 import { AppIcon } from '../components/Icons';
 import { useStore } from '../lib/store';
 import { get } from '../lib/api';
+import DownloadApp from '../components/DownloadApp';
 
 interface Config {
   downloadUrl: string;
+  siteUrl?: string;
   appName: string;
   tagline: string;
 }
@@ -20,13 +22,22 @@ export default function Invite() {
     get<Config>('/config')
       .then((res) => {
         setConfig(res);
-        return QRCode.toDataURL(res.downloadUrl, { margin: 1, width: 320, color: { dark: '#0b3b2e', light: '#ffffff' } });
+        // The QR code and every share button point at the official website link.
+        const target = res.siteUrl || res.downloadUrl || window.location.origin;
+        return QRCode.toDataURL(target, { margin: 1, width: 320, color: { dark: '#0b3b2e', light: '#ffffff' } });
       })
       .then((url) => setQr(url))
-      .catch(() => setConfig({ downloadUrl: window.location.origin, appName: 'RIFQ Muslim', tagline: 'Your Faith, Your Daily Companion' }));
+      .catch(() =>
+        setConfig({
+          downloadUrl: window.location.origin,
+          siteUrl: window.location.origin,
+          appName: 'RIFQ Muslim',
+          tagline: 'Your Faith, Your Daily Companion',
+        })
+      );
   }, []);
 
-  const link = config?.downloadUrl || window.location.origin;
+  const link = config?.siteUrl || config?.downloadUrl || window.location.origin;
   const message = `RIFQ Muslim — ${config?.tagline || 'Your Faith, Your Daily Companion'}\nPrayer times, Quran, Hadith, Qibla and more.\n${link}`;
 
   const open = (url: string) => window.open(url, '_blank', 'noopener,noreferrer');
@@ -75,9 +86,11 @@ export default function Invite() {
 
       <div className="notice">
         <p className="small" style={{ margin: 0 }}>
-          {t('This link is the single official download address configured for RIFQ Muslim. When the Google Play release is published, the administrator can point it at the Play Store listing — it is never hardcoded to a fake address.')}
+          {t('This link is the single official address of RIFQ Muslim. The QR code and every share button use it, so an invitation always opens the official website.')}
         </p>
       </div>
+
+      <DownloadApp compact />
     </Page>
   );
 }

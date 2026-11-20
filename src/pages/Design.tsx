@@ -22,7 +22,7 @@ const BRAND_FIELDS: { key: string; label: string; hint: string; placeholder?: st
 ];
 
 const CONTENT_FIELDS: { key: string; label: string; hint: string }[] = [
-  { key: 'download_url', label: 'Official download / invite URL', hint: 'Must start with http:// or https://. Used by Invite Friends.' },
+  { key: 'download_url', label: 'Android APK URL (Cloudflare R2)', hint: 'Direct https link to the APK file. The Download button streams it and saves it as RIFQ-Muslim.apk.' },
 ];
 
 const CONTACT_FIELDS: { key: string; label: string; hint: string }[] = [

@@ -177,7 +177,7 @@ const SETTING_FIELDS: { key: string; label: string; kind?: 'text' | 'email' | 'u
   { key: 'contact_email', label: 'Official contact email', kind: 'email' },
   { key: 'contact_phone', label: 'Contact phone' },
   { key: 'whatsapp', label: 'WhatsApp number' },
-  { key: 'download_url', label: 'Download / invitation URL', kind: 'url' },
+  { key: 'download_url', label: 'APK download URL (Cloudflare R2)', kind: 'url' },
   { key: 'announcement_text', label: 'Announcement banner', kind: 'textarea' },
   { key: 'announcement_active', label: 'Show announcement on Home', kind: 'bool' },
   { key: 'community_enabled', label: 'Community enabled', kind: 'bool' },

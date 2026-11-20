@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Page } from '../components/Shell';
 import { AppIcon, type IconName } from '../components/Icons';
 import { useStore } from '../lib/store';
+import { startApkDownload } from '../lib/download';
 
 interface Item {
   to: string;
@@ -119,6 +120,14 @@ export default function More() {
           <span className="menu-cta-desc">{t('WhatsApp and email')}</span>
         </Link>
       </div>
+
+      <button
+        className="btn btn-primary btn-block"
+        style={{ marginTop: 10 }}
+        onClick={() => startApkDownload()}
+      >
+        <AppIcon name="download" size={17} /> {t('DOWNLOAD RIFQ MUSLIM')}
+      </button>
 
       {GROUPS.map((group) => {
         const items = group.items.filter((i) => !i.authOnly || user);

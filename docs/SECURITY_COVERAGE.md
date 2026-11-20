@@ -64,6 +64,23 @@ outside the scan. Every manifest that declares dependencies has a committed reso
 lockfile beside it; the single exception is `android/build.gradle.kts`, which declares
 none of its own (§3).
 
+Reconciliation against the report itself (`packages_checked: 444`,
+`ecosystems: ["Maven", "npm"]`, `unmatched_packages: 0`):
+
+| Source | Resolved entries |
+| --- | --- |
+| `package-lock.json` | 160 |
+| `android/app/gradle.lockfile` | 196 |
+| `android/buildscript-gradle.lockfile` | 149 |
+| `deps-audit/gradle.lockfile` | 200 (mirrors the `:app` AAR graph) |
+
+`unmatched_packages: 0` means every resolved package in those files was matched against
+the advisory database — none were dropped as unparseable. The report carries exactly one
+warning, the expected one:
+
+> No resolved dependency file for android/build.gradle.kts. Generate the normal project
+> lockfile when appropriate; do not invent versions or install a test framework.
+
 ### 2.1 Upgrades that produced this result
 
 The earlier scan reported 27 high/critical advisories, all in AGP 8.7.3's transitive

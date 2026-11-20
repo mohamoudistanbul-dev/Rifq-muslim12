@@ -1,7 +1,16 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppIcon } from '../components/Icons';
 import { getTrackBlob, trackKey } from './audioStore';
-import { fetchReciters, fetchSurahs, streamUrl, type AudioReciter, type AudioSurah } from './quranAudio';
+import { useDownloads, formatBytes } from './downloads';
+import {
+  fetchReciters,
+  fetchSurahs,
+  streamUrl,
+  reciterArtwork,
+  absoluteArtwork,
+  type AudioReciter,
+  type AudioSurah,
+} from './quranAudio';
 
 /**
  * One shared <audio> element for the whole app, so recitation keeps playing
@@ -23,8 +32,12 @@ interface LastPlayed {
 export interface PlayerState {
   reciterId: string;
   reciterName: string;
+  reciterArabic: string;
   surah: number;
   surahName: string;
+  surahArabic: string;
+  /** Artwork for the current reciter (full-screen player + media notification). */
+  artwork: string;
   playing: boolean;
   loading: boolean;
   position: number;
@@ -33,6 +46,8 @@ export interface PlayerState {
   repeat: RepeatMode;
   offline: boolean;
   error: string;
+  /** True while the dedicated full-screen Now Playing view is open. */
+  nowPlaying: boolean;
 }
 
 interface PlayerApi {
@@ -43,6 +58,10 @@ interface PlayerApi {
   catalogError: string;
   lastPlayed: LastPlayed | null;
   play: (reciterId: string, surah: number) => Promise<void>;
+  /** Switch reciter immediately, keeping the current surah and playback state. */
+  setReciter: (reciterId: string) => Promise<void>;
+  openNowPlaying: () => void;
+  closeNowPlaying: () => void;
   resumeLast: () => Promise<void>;
   toggle: () => void;
   next: () => void;
@@ -55,6 +74,8 @@ interface PlayerApi {
 
 const LAST_KEY = 'rifq.quranAudio.last';
 const SPEED_KEY = 'rifq.quranAudio.speed';
+/** Shared with the Quran Audio page so the chosen reciter survives a reload. */
+export const RECITER_KEY = 'rifq.quranAudio.reciter';
 
 export function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) return '0:00';
@@ -99,8 +120,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<PlayerState>({
     reciterId: '',
     reciterName: '',
+    reciterArabic: '',
     surah: 0,
     surahName: '',
+    surahArabic: '',
+    artwork: '',
     playing: false,
     loading: false,
     position: 0,
@@ -109,6 +133,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     repeat: 'off',
     offline: false,
     error: '',
+    nowPlaying: false,
   });
 
   const stateRef = useRef(state);
@@ -160,31 +185,64 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setLastPlayed(payload);
   }, []);
 
-  const publishMetadata = useCallback((surahName: string, reciterName: string) => {
-    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
-    try {
-      if (typeof MediaMetadata !== 'undefined') {
-        navigator.mediaSession.metadata = new MediaMetadata({
-          title: surahName || 'Quran recitation',
-          artist: reciterName || 'RIFQ Muslim',
-          album: 'RIFQ Muslim — Quran Audio',
-        });
+  /**
+   * Android reads this for the lock screen and the media notification, so the
+   * reciter, surah and artwork must be republished on every track change.
+   */
+  const publishMetadata = useCallback(
+    (surahName: string, surahArabic: string, reciterName: string, reciterId: string) => {
+      if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+      try {
+        if (typeof MediaMetadata !== 'undefined') {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: surahArabic ? `${surahName} · ${surahArabic}` : surahName || 'Quran recitation',
+            artist: reciterName || 'RIFQ Muslim',
+            album: 'RIFQ Muslim — Quran Audio',
+            artwork: [{ src: absoluteArtwork(reciterId), sizes: '512x512', type: 'image/png' }],
+          });
+        }
+      } catch {
+        /* older WebView without MediaMetadata */
       }
-    } catch {
-      /* older WebView without MediaMetadata */
-    }
-  }, []);
+    },
+    []
+  );
 
-  const play = useCallback(
-    async (reciterId: string, surah: number) => {
+  /**
+   * Loads one surah for one reciter. `autoplay: false` cues the new source
+   * without interrupting a paused session, which is what reciter switching does.
+   */
+  const load = useCallback(
+    async (reciterId: string, surah: number, options: { autoplay: boolean; open?: boolean }) => {
       const el = audioRef.current;
       if (!el) return;
       const reciter = recitersRef.current.find((r) => r.id === reciterId);
       const meta = surahsRef.current.find((s) => s.number === surah);
       const surahName = meta?.name || `Surah ${surah}`;
+      const surahArabic = meta?.arabic || '';
       const reciterName = reciter?.name || reciterId;
+      const reciterArabic = reciter?.arabic || '';
+      const artwork = reciter?.artwork || reciterArtwork(reciterId);
 
-      setState((prev) => ({ ...prev, reciterId, reciterName, surah, surahName, loading: true, error: '' }));
+      try {
+        localStorage.setItem(RECITER_KEY, reciterId);
+      } catch {
+        /* storage may be blocked */
+      }
+
+      setState((prev) => ({
+        ...prev,
+        reciterId,
+        reciterName,
+        reciterArabic,
+        surah,
+        surahName,
+        surahArabic,
+        artwork,
+        loading: true,
+        error: '',
+        ...(options.open ? { nowPlaying: true } : {}),
+      }));
 
       let source = streamUrl(reciterId, surah);
       let offline = false;
@@ -200,9 +258,20 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         /* streaming is the fallback */
       }
 
-      if (el.src !== source) el.src = source;
+      if (el.getAttribute('src') !== source) {
+        if (objectUrlRef.current && source !== objectUrlRef.current) {
+          URL.revokeObjectURL(objectUrlRef.current);
+          objectUrlRef.current = '';
+        }
+        el.src = source;
+      }
       el.playbackRate = stateRef.current.speed;
-      publishMetadata(surahName, reciterName);
+      publishMetadata(surahName, surahArabic, reciterName, reciterId);
+
+      if (!options.autoplay) {
+        setState((prev) => ({ ...prev, offline, playing: false, loading: false, position: 0, duration: 0 }));
+        return;
+      }
 
       try {
         await el.play();
@@ -218,6 +287,38 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     },
     [publishMetadata]
   );
+
+  const play = useCallback(
+    (reciterId: string, surah: number) => load(reciterId, surah, { autoplay: true, open: true }),
+    [load]
+  );
+
+  /** Tapping a different reciter swaps the audio source immediately. */
+  const setReciter = useCallback(
+    async (reciterId: string) => {
+      const reciter = recitersRef.current.find((r) => r.id === reciterId);
+      const current = stateRef.current;
+      try {
+        localStorage.setItem(RECITER_KEY, reciterId);
+      } catch {
+        /* storage may be blocked */
+      }
+      setState((prev) => ({
+        ...prev,
+        reciterId,
+        reciterName: reciter?.name || prev.reciterName,
+        reciterArabic: reciter?.arabic || prev.reciterArabic,
+        artwork: reciter?.artwork || reciterArtwork(reciterId),
+      }));
+      if (current.surah > 0) {
+        await load(reciterId, current.surah, { autoplay: current.playing });
+      }
+    },
+    [load]
+  );
+
+  const openNowPlaying = useCallback(() => setState((prev) => ({ ...prev, nowPlaying: true })), []);
+  const closeNowPlaying = useCallback(() => setState((prev) => ({ ...prev, nowPlaying: false })), []);
 
   const resumeLast = useCallback(async () => {
     const last = readLast();
@@ -257,8 +358,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     const target = current.surah >= total ? 1 : current.surah + 1;
-    void play(current.reciterId, target);
-  }, [persist, play]);
+    void load(current.reciterId, target, { autoplay: true });
+  }, [persist, load]);
 
   const step = useCallback(
     (delta: number) => {
@@ -268,9 +369,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       let target = current.surah + delta;
       if (target < 1) target = total;
       if (target > total) target = 1;
-      void play(current.reciterId, target);
+      void load(current.reciterId, target, { autoplay: true });
     },
-    [play]
+    [load]
   );
 
   const next = useCallback(() => step(1), [step]);
@@ -427,11 +528,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       ...prev,
       surah: 0,
       surahName: '',
+      surahArabic: '',
       playing: false,
       loading: false,
       position: 0,
       duration: 0,
       error: '',
+      nowPlaying: false,
     }));
   }, [persist]);
 

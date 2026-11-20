@@ -8,6 +8,8 @@
 //   io.netty        -> 4.1.137.Final (GHSA-c4c3-7fpv-j4q5 and the 4.1.13x fixes)
 //   org.bouncycastle -> 1.85          (GHSA-574f-3g2m-x479, GHSA-9pwp-9qqc-pr26)
 //   com.google.guava:guava -> 33.7.2-jre (GHSA-xxph-c9ww-hj94)
+//   org.bitbucket.b_c:jose4j -> 0.9.6     (JWT/JOSE parsing fixes)
+//   org.jdom:jdom2     -> 2.0.6.1         (XXE fix)
 buildscript {
     repositories {
         google()
@@ -21,6 +23,9 @@ buildscript {
                     requested.group == "org.bouncycastle" -> useVersion("1.85")
                     requested.group == "com.google.guava" && requested.name == "guava" ->
                         useVersion("33.7.2-jre")
+                    requested.group == "org.bitbucket.b_c" -> useVersion("0.9.6")
+                    requested.group == "org.jdom" && requested.name == "jdom2" ->
+                        useVersion("2.0.6.1")
                 }
             }
         }

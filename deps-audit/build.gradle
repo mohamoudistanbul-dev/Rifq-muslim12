@@ -29,6 +29,21 @@ configurations {
             attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category, Category.LIBRARY))
             attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, objects.named(LibraryElements, 'aar'))
         }
+        // Security pins. These mirror the resolutionStrategy in android/build.gradle.kts
+        // exactly, so this lockfile keeps describing what the real Android build resolves.
+        // Versions are the fixed releases named by the advisories:
+        //   netty 4.1.137.Final (GHSA-c4c3-7fpv-j4q5 and the 4.1.13x codec/handler fixes)
+        //   bouncycastle 1.85   (GHSA-574f-3g2m-x479, GHSA-9pwp-9qqc-pr26)
+        //   guava 33.7.2        (GHSA-xxph-c9ww-hj94)
+        resolutionStrategy {
+            eachDependency { details ->
+                if (details.requested.group == 'io.netty') details.useVersion('4.1.137.Final')
+                if (details.requested.group == 'org.bouncycastle') details.useVersion('1.85')
+                if (details.requested.group == 'com.google.guava' && details.requested.name == 'guava') {
+                    details.useVersion('33.7.2-jre')
+                }
+            }
+        }
     }
 }
 
@@ -38,7 +53,7 @@ dependencies {
     audit 'androidx.core:core-splashscreen:1.0.1'
     audit 'androidx.webkit:webkit:1.11.0'
     audit 'com.google.android.material:material:1.12.0'
-    audit 'com.android.tools.build:gradle:8.7.3'
+    audit 'com.android.tools.build:gradle:8.13.2'
     audit 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21'
 }
 

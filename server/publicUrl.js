@@ -1,5 +1,3 @@
-'use strict';
-
 /**
  * One source of truth for the public address of RIFQ Muslim.
  *
@@ -8,14 +6,14 @@
  * visitors open over HTTPS. Everything that is not loopback is therefore
  * published as https, and a configured PUBLIC_APP_URL (custom domain) wins over
  * the request host so invite links, QR codes and shared metadata stay on the
- * official domain even when the app is reached through a platform URL.
+ * official domain even when the app is also reachable through a platform URL.
  */
 
-const APP_NAME = 'RIFQ Muslim';
-const APP_TITLE = 'RIFQ Muslim — Your Faith, Your Daily Companion';
-const APP_DESCRIPTION =
+export const APP_NAME = 'RIFQ Muslim';
+export const APP_TITLE = 'RIFQ Muslim — Your Faith, Your Daily Companion';
+export const APP_DESCRIPTION =
   'Prayer times, the Holy Quran, authentic Hadith, Duas, Qibla, Zakat and daily worship. RIFQ Muslim, your faith, your daily companion. Made by Eng Mohamud Yusuf.';
-const MARKER = '<!--APP-META-->';
+export const MARKER = '<!--APP-META-->';
 
 const trimSlash = (value) => String(value || '').trim().replace(/\/+$/, '');
 
@@ -24,7 +22,7 @@ const configuredBase = () =>
     .map(trimSlash)
     .find((value) => /^https?:\/\/[^\s/]+/i.test(value)) || '';
 
-function publicBaseUrl(req) {
+export function publicBaseUrl(req) {
   const configured = configuredBase();
   if (configured) return configured;
 
@@ -49,7 +47,7 @@ const escapeAttr = (value) =>
  * Canonical + Open Graph tags for the address the visitor actually reached.
  * WhatsApp, Facebook and Telegram read these when an invitation is shared.
  */
-function metaBlock(base) {
+export function metaBlock(base) {
   const url = `${base}/`;
   const image = `${base}/logo.svg`;
   return [
@@ -67,11 +65,9 @@ function metaBlock(base) {
   ].join('\n    ');
 }
 
-function renderIndex(html, req) {
+export function renderIndex(html, req) {
   const block = metaBlock(publicBaseUrl(req));
   if (html.includes(MARKER)) return html.replace(MARKER, block);
   // The bundler may drop HTML comments; keep working if the marker is gone.
   return html.includes('</head>') ? html.replace('</head>', `  ${block}\n  </head>`) : html;
 }
-
-module.exports = { publicBaseUrl, metaBlock, renderIndex, MARKER };

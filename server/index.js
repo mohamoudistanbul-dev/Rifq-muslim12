@@ -20,6 +20,7 @@ import {
 import { sendEmail, mailConfigured } from './mail.js';
 import { answerQuestion } from './assistant.js';
 import { contentRouter, warmContent } from './content.js';
+import { publicBaseUrl, renderIndex } from './publicUrl.js';
 import { geoRouter } from './geo.js';
 import { adminRouter, UPLOAD_DIR } from './admin.js';
 import { seedSuperAdmin, SUPER_ADMIN_EMAIL } from './seed.js';
@@ -57,26 +58,6 @@ app.use((req, _res, next) => {
 });
 app.use(attachUser);
 
-/**
- * Absolute origin for share/invite links.
- *
- * The container itself only ever sees plain HTTP from the platform proxy, so
- * trusting `req.protocol` produced "http://" links for a site that is served
- * over HTTPS. Anything that is not a loopback host is therefore published as
- * https; a deployment that really runs without TLS can set PUBLIC_URL.
- */
-const originOf = (req) => {
-  if (process.env.PUBLIC_URL) return String(process.env.PUBLIC_URL).replace(/\/+$/, '');
-  const host = req.get('host') || 'localhost:3000';
-  const forwarded = String(req.headers['x-forwarded-proto'] || '')
-    .split(',')[0]
-    .trim()
-    .toLowerCase();
-  const isLoopback = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(host);
-  const proto = isLoopback ? forwarded || req.protocol || 'http' : 'https';
-  return `${proto}://${host}`;
-};
-
 // Create (or repair) the Super Admin account and official contact defaults.
 seedSuperAdmin();
 
@@ -92,7 +73,8 @@ app.get('/api/config', (req, res) => {
     contactEmail: getSetting('contact_email', 'rifqmuslim@gmail.com'),
     contactPhone: getSetting('contact_phone', '+252612215593'),
     whatsapp: getSetting('whatsapp', '+252612215593'),
-    downloadUrl: getSetting('download_url', '') || originOf(req),
+    downloadUrl: getSetting('download_url', '') || publicBaseUrl(req),
+    publicUrl: publicBaseUrl(req),
     communityEnabled: getSetting('community_enabled', 'true') === 'true',
     announcement:
       getSetting('announcement_active', 'false') === 'true'
@@ -170,7 +152,7 @@ app.post('/api/auth/register', rateLimit({ windowMs: 60_000, max: 8 }), async (r
   ).run(id, email, name, hashPassword(password), role, 0, verifyToken, lang, nowIso());
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
-  const link = `${originOf(req)}/verify?token=${verifyToken}`;
+  const link = `${publicBaseUrl(req)}/verify?token=${verifyToken}`;
   const delivery = await sendEmail({
     to: email,
     subject: 'Verify your RIFQ Muslim account',
@@ -265,7 +247,7 @@ app.post('/api/auth/forgot', rateLimit({ windowMs: 60_000, max: 6 }), async (req
       Date.now() + 1000 * 60 * 60,
       user.id
     );
-    const link = `${originOf(req)}/reset?token=${resetToken}`;
+    const link = `${publicBaseUrl(req)}/reset?token=${resetToken}`;
     delivery = await sendEmail({
       to: user.email,
       subject: 'Reset your RIFQ Muslim password',
@@ -316,7 +298,7 @@ app.post('/api/auth/resend-verification', requireAuth, async (req, res) => {
   const delivery = await sendEmail({
     to: req.user.email,
     subject: 'Verify your RIFQ Muslim account',
-    text: `Confirm your email address: ${originOf(req)}/verify?token=${verifyToken}`,
+    text: `Confirm your email address: ${publicBaseUrl(req)}/verify?token=${verifyToken}`,
   });
   res.json({ sent: delivery.delivered, note: delivery.delivered ? 'Verification email sent.' : delivery.reason });
 });
@@ -588,11 +570,24 @@ app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '30d', immutable: true,
 if (fs.existsSync(dist)) {
   app.use(express.static(dist, { index: false, maxAge: '1h' }));
 }
+let indexCache = { mtimeMs: 0, html: '' };
+const readIndexHtml = (file) => {
+  const { mtimeMs } = fs.statSync(file);
+  if (indexCache.mtimeMs !== mtimeMs) {
+    indexCache = { mtimeMs, html: fs.readFileSync(file, 'utf8') };
+  }
+  return indexCache.html;
+};
+
 app.use((req, res, next) => {
   if (req.method !== 'GET' || req.path.startsWith('/api/')) return next();
   const index = path.join(dist, 'index.html');
-  if (fs.existsSync(index)) return res.sendFile(index);
-  res.status(503).json({ error: 'The app is starting up. Please refresh in a moment.' });
+  if (!fs.existsSync(index)) {
+    return res.status(503).json({ error: 'The app is starting up. Please refresh in a moment.' });
+  }
+  // Canonical and Open Graph tags follow the hostname the visitor used, or the
+  // configured PUBLIC_APP_URL once a custom domain is attached.
+  res.type('html').set('Cache-Control', 'no-cache').send(renderIndex(readIndexHtml(index), req));
 });
 
 app.use((req, res) => res.status(404).json({ error: 'Not found.' }));

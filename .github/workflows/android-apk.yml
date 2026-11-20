@@ -24,7 +24,7 @@ on:
       app_url:
         description: "HTTPS URL the native shell loads (BuildConfig.RIFQ_APP_URL)"
         required: false
-        default: "https://pqjm8aoyzd.dev.onappjet.com"
+        default: "https://www.rifq-muslim.com"
         type: string
   push:
     branches:

@@ -57,7 +57,7 @@ const upstream = http.createServer((req, res) => {
   if (req.method === 'HEAD') return res.end();
   return res.end(APK_BYTES);
 });
-upstream.listen(FIXTURE_PORT, '127.0.0.1');
+upstream.listen(FIXTURE_PORT);
 await once(upstream, 'listening');
 
 /* ------------------------------- the app ---------------------------------- */

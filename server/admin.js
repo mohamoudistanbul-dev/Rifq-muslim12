@@ -14,6 +14,7 @@ import {
   cookieOptions,
 } from './auth.js';
 import { mailConfigured } from './mail.js';
+import { APK_DIR, APK_FILE, APK_MAX_BYTES, apkInfoSnapshot } from './download.js';
 
 /**
  * Super Admin control surface.
@@ -586,4 +587,95 @@ adminRouter.get('/backup', requireSuperAdmin, (_req, res) => {
   };
   res.setHeader('Content-Disposition', 'attachment; filename="rifq-muslim-backup.json"');
   res.json(payload);
+});
+
+/* ------------------------------ android APK -------------------------------- */
+
+/** Status of the Android download: source, size and whether it is ready. */
+adminRouter.get('/apk', requireAdmin, (_req, res) => {
+  res.json(apkInfoSnapshot());
+});
+
+/**
+ * Stores the APK the owner uploads from the dashboard.
+ *
+ * The body is streamed straight to disk (no full-file buffer in memory) and the
+ * first four bytes are checked, so a renamed image or HTML page is rejected
+ * instead of being served to phones as a broken APK.
+ */
+adminRouter.put('/apk', requireSuperAdmin, (req, res) => {
+  const declared = Number(req.headers['content-length'] || 0);
+  if (declared && declared > APK_MAX_BYTES) {
+    return res.status(413).json({ error: 'The APK must be smaller than 200 MB.' });
+  }
+
+  try {
+    fs.mkdirSync(APK_DIR, { recursive: true });
+  } catch (err) {
+    return res.status(500).json({ error: `The APK folder could not be created: ${err.message}` });
+  }
+
+  const temp = path.join(APK_DIR, `.upload-${newId()}.tmp`);
+  const out = fs.createWriteStream(temp);
+  let bytes = 0;
+  let magic = Buffer.alloc(0);
+  let aborted = false;
+
+  const fail = (status, message) => {
+    if (aborted) return;
+    aborted = true;
+    out.destroy();
+    try {
+      if (fs.existsSync(temp)) fs.unlinkSync(temp);
+    } catch {
+      /* nothing to clean up */
+    }
+    if (!res.headersSent) res.status(status).json({ error: message });
+  };
+
+  req.on('data', (chunk) => {
+    bytes += chunk.length;
+    if (magic.length < 4) magic = Buffer.concat([magic, chunk.subarray(0, 4 - magic.length)]);
+    if (bytes > APK_MAX_BYTES) {
+      fail(413, 'The APK must be smaller than 200 MB.');
+      req.destroy();
+    }
+  });
+  req.on('aborted', () => {
+    aborted = true;
+    out.destroy();
+    try {
+      if (fs.existsSync(temp)) fs.unlinkSync(temp);
+    } catch {
+      /* nothing to clean up */
+    }
+  });
+  out.on('error', () => fail(500, 'The APK could not be stored on the server.'));
+
+  out.on('finish', () => {
+    if (aborted) return;
+    if (!bytes) return fail(400, 'The uploaded file was empty.');
+    // Every APK is a ZIP archive, so it must start with "PK\x03\x04".
+    if (magic.length < 4 || magic[0] !== 0x50 || magic[1] !== 0x4b || magic[2] !== 0x03 || magic[3] !== 0x04) {
+      return fail(400, 'That file is not an Android APK. Upload the .apk file itself.');
+    }
+    try {
+      fs.renameSync(temp, APK_FILE);
+    } catch (err) {
+      return fail(500, `The APK could not be stored: ${err.message}`);
+    }
+    auditLog(req.user, 'admin.apk.upload', `${bytes} bytes`);
+    return res.status(201).json(apkInfoSnapshot());
+  });
+
+  req.pipe(out);
+});
+
+adminRouter.delete('/apk', requireSuperAdmin, (_req, res) => {
+  try {
+    if (fs.existsSync(APK_FILE)) fs.unlinkSync(APK_FILE);
+  } catch (err) {
+    return res.status(500).json({ error: `The APK could not be removed: ${err.message}` });
+  }
+  res.json(apkInfoSnapshot());
 });

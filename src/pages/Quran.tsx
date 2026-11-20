@@ -4,6 +4,7 @@ import { Page, Loading, ErrorBox, TopBar } from '../components/Shell';
 import { AppIcon } from '../components/Icons';
 import { useStore } from '../lib/store';
 import { get, post, local } from '../lib/api';
+import { ZoomSurface, ZoomControls, useReaderZoom } from '../lib/zoom';
 
 interface SurahMeta {
   number: number;
@@ -253,6 +254,8 @@ export function QuranReader() {
     }
   };
 
+  const readerZoom = useReaderZoom();
+
   const audioUrl = `https://cdn.islamic.network/quran/audio-surah/128/${reciter}/${surahNumber}.mp3`;
 
   return (
@@ -319,6 +322,15 @@ export function QuranReader() {
               </p>
             )}
 
+            <ZoomControls
+              zoom={readerZoom.zoom}
+              zoomIn={readerZoom.zoomIn}
+              zoomOut={readerZoom.zoomOut}
+              reset={readerZoom.reset}
+              atMin={readerZoom.atMin}
+              atMax={readerZoom.atMax}
+            />
+            <ZoomSurface zoom={readerZoom.zoom} onZoom={readerZoom.setZoom}>
             <div className="stack" style={{ gap: 10 }}>
               {data.ayahs.map((ayah) => (
                 <article key={ayah.number} id={`ayah-${ayah.number}`} className="card" style={{ scrollMarginTop: 90 }}>
@@ -326,10 +338,10 @@ export function QuranReader() {
                     <span className="ayah-num">{surahNumber}:{ayah.number}</span>
                     <span className="tiny muted">Juz {ayah.juz} · {t('Page')} {ayah.page}</span>
                   </div>
-                  <p className="arabic" dir="rtl" lang="ar" style={{ fontSize: prefs.quranFontSize, lineHeight: 2.1, margin: '10px 0' }}>
+                  <p className="arabic" data-selectable dir="rtl" lang="ar" style={{ fontSize: prefs.quranFontSize, lineHeight: 2.1, margin: '10px 0' }}>
                     {ayah.text}
                   </p>
-                  <p className="small" style={{ margin: 0 }}>{ayah.translation}</p>
+                  <p className="small" data-selectable style={{ margin: 0 }}>{ayah.translation}</p>
                   <div className="ayah-actions">
                     <button className="icon-btn" onClick={() => void toggleBookmark(ayah)} aria-label={t('Bookmark')}>
                       <AppIcon name="bookmark" size={17} />
@@ -350,6 +362,7 @@ export function QuranReader() {
                 </article>
               ))}
             </div>
+            </ZoomSurface>
 
             <div className="btn-row" style={{ marginTop: 14 }}>
               {surahNumber > 1 && (

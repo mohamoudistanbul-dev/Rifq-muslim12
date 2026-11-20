@@ -6,7 +6,8 @@ This document records exactly what the automated dependency scan covers, what it
 reports, what it **cannot** cover in this environment, and how to close the rest.
 It is **not** a statement that the application is secure.
 
-Last updated: revision 60 (AGP 8.13.2 / Gradle 8.14.4 / Kotlin 2.4.21).
+Last updated: 2026-11-20 — scan re-run on the current application revision
+(AGP 8.13.2 / Gradle 8.14.4 / Kotlin 2.4.21).
 
 ---
 
@@ -23,6 +24,16 @@ Last updated: revision 60 (AGP 8.13.2 / Gradle 8.14.4 / Kotlin 2.4.21).
 
 `incomplete` is **not** a findings result — it is the scanner saying it could not
 attribute a resolved dependency file to one Android build script. See §3.
+
+Re-run evidence for this revision: the committed lockfiles still carry every
+advisory-named fixed version, so the zero-findings result describes the packages that
+are actually built and shipped —
+`android/buildscript-gradle.lockfile`: netty 4.1.137.Final, bcprov-jdk18on 1.85,
+guava 33.7.2-jre, jose4j 0.9.6, jdom2 2.0.6.1, commons-compress 1.26.0,
+commons-lang3 3.18.0;
+`android/app/gradle.lockfile`: netty 4.1.137.Final, guava 33.7.2-jre,
+protobuf-java 3.25.5;
+`deps-audit/gradle.lockfile`: the same pins plus protobuf-java 3.25.5.
 
 ## 2. What is covered, and by which file
 
@@ -81,6 +92,13 @@ from it). What is missing is the scanner's bookkeeping association, not evidence
 
 A hand-written `android/gradle.lockfile` would silence the warning with invented
 data, so none was created.
+
+**Missing capability, stated plainly:** OSV-Scanner 2.7.0 cannot associate a
+buildscript-only lockfile with the build script that produces it, and Gradle cannot
+emit a project-level lockfile for a root project that applies no plugins. No
+repository change closes this, and adding an artificial configuration just to produce
+that file would be fabricating build structure. It is a scanner bookkeeping
+limitation, not a set of unexamined dependencies.
 
 ### 3.1 Not expressible as a dependency file at all
 

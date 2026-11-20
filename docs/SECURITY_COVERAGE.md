@@ -64,7 +64,7 @@ outside the scan. Every manifest that declares dependencies has a committed reso
 lockfile beside it; the single exception is `android/build.gradle.kts`, which declares
 none of its own (§3).
 
-### 3.1 If you need a fully attributed scan
+### 3.2 If you need a fully attributed scan
 
 Nothing in this repository can close the gap, but two external routes can, without touching
 the application or its build:
@@ -198,3 +198,39 @@ project-level `android/gradle.lockfile` that Gradle cannot produce for a
 plugin-free root project. No lockfile was fabricated and no finding was suppressed.
 Unknown: anything the advisory database has not yet published, the Gradle
 distribution and SDK components themselves, and everything in §5.
+
+## 4. Runtime external resources (outside dependency scanning)
+
+The scanner's own coverage note states that "unlocked, vendored and CDN dependencies may be
+outside coverage". Build-time packages are covered by §2. This section enumerates the
+*runtime* surface of the shipped frontend, obtained by listing every `http(s)://` reference
+in `index.html`, `src/` and `public/`.
+
+**No third-party code is loaded.** `index.html` references only local assets:
+
+| Tag | Target |
+| --- | --- |
+| `rel="manifest"` | `/manifest.webmanifest` |
+| `rel="icon"`, `rel="apple-touch-icon"` | `/logo.svg` |
+| `script type="module"` | `/src/main.tsx` |
+
+There is no remote script, stylesheet, font or CSS `@import` anywhere in the shipped UI, so
+no CDN-supplied JavaScript or CSS executes in the application. The supply-chain exposure the
+caveat warns about does not apply to executable code here.
+
+**Two runtime data hosts** are fetched by the browser at the moment of use and are not
+packages in any lockfile:
+
+| Host | Used for | Risk profile |
+| --- | --- | --- |
+| `cdn.islamic.network` | surah audio (`src/pages/Quran.tsx:256`) and athan audio (`src/lib/store.tsx:459`) | Third-party availability and privacy dependency: the CDN observes the user's IP when audio streams. Downloaded audio is copied into device storage, so offline playback does not depend on it. No executable content. |
+| `wa.me`, `t.me`, `www.facebook.com`, `www.google.com` | share, contact and directions links | User-initiated navigation only. No automatic requests, no executable content. |
+
+One further match, `your-app.example.com`, is not a runtime resource: it appears only inside a
+code comment in `src/lib/api.ts:6` explaining the `VITE_API_BASE` override, and is never
+rendered or fetched.
+
+**Consequence for the security statement.** The 444-package scan covers every library the
+application compiles or ships, and no CDN code runs inside it. It does not, and cannot, cover
+the availability, integrity or privacy terms of the audio CDN. That is a service dependency
+to assess on its own terms, not an unexamined dependency.

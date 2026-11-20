@@ -112,6 +112,10 @@ class MainActivity : AppCompatActivity() {
             cacheMode = WebSettings.LOAD_DEFAULT
             useWideViewPort = true
             loadWithOverviewMode = true
+            // Page-level zoom stays with the app: the reader exposes its own
+            // Zoom In / Zoom Out / Reset controls plus two-finger pinch on
+            // reading content. The shell therefore never gets stuck in a
+            // zoomed layout and shows no browser-style zoom buttons.
             setSupportZoom(false)
             builtInZoomControls = false
             displayZoomControls = false
@@ -119,6 +123,22 @@ class MainActivity : AppCompatActivity() {
         }
         view.isVerticalScrollBarEnabled = false
         view.overScrollMode = View.OVER_SCROLL_NEVER
+
+        // Long-press policy: a native app must not offer "Open in new tab",
+        // "Copy link address", "Download link" or "Download image" over its own
+        // controls. Links and images are consumed here; a long press on ordinary
+        // text is left to the WebView so Quran verses, translations and hadith
+        // stay selectable and copyable.
+        view.isLongClickable = true
+        view.setOnLongClickListener { target ->
+            val hit = (target as WebView).hitTestResult
+            when (hit.type) {
+                WebView.HitTestResult.SRC_ANCHOR_TYPE,
+                WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE,
+                WebView.HitTestResult.IMAGE_TYPE -> true
+                else -> false
+            }
+        }
 
         view.addJavascriptInterface(WebAppBridge(this), "RifqNative")
 

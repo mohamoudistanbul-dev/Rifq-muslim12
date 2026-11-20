@@ -283,3 +283,26 @@ bash scripts/generate-android-icons.sh    # requires ImageMagick
 
 To change the logo, edit `res/drawable/ic_launcher_foreground.xml` (adaptive
 icon) and the matching shapes in the script (legacy PNGs), then rerun it.
+
+---
+
+## 11. Dependency locking
+
+`android/app/gradle.lockfile` pins every artifact the app module resolves — AndroidX,
+Material, Kotlin, and the build-tooling libraries AGP pulls into its lint and test-platform
+classpaths. It is what the repository dependency scan reads for the Android side, and it makes
+CI resolve exactly the versions that were reviewed.
+
+Regenerate it whenever the `dependencies { }` block changes:
+
+```bash
+./gradlew -p android :app:dependencies --write-locks
+```
+
+The build-tooling security pins in `android/app/build.gradle.kts` (netty, Guava, protobuf,
+bouncycastle, jose4j, jdom2, commons-*) are applied before locking, so the lockfile always
+describes the patched graph. Because the pins only touch AGP tooling classpaths, the APK
+runtime stays AndroidX/Material only.
+
+`android/build.gradle.kts` declares no dependencies of its own (the plugins there are applied in
+`:app`), so it has no lockfile; the AGP plugin classpath is covered by `daps-audit/gradle.lockfile`.

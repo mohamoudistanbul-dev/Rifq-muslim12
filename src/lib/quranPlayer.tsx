@@ -686,6 +686,9 @@ export function PlayerBar() {
           >
             {state.repeat === 'one' ? 'Repeat 1' : state.repeat === 'all' ? 'Repeat all' : 'Repeat'}
           </button>
+          <button className="icon-btn player-bar-expand" onClick={openNowPlaying} aria-label="Open full player" title="Open full player">
+            <AppIcon name="chevron" size={16} />
+          </button>
           <button className="icon-btn" onClick={close} aria-label="Close player">
             <AppIcon name="close" size={16} />
           </button>

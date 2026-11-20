@@ -182,6 +182,8 @@ quranAudioRouter.get('/quran/audio/reciters', async (_req, res) => {
       arabic: reciter.arabic,
       bitrate: reciter.bitrate,
       source: SOURCE,
+      /* Branded artwork shipped with the app (no reciter photography exists at the source). */
+      artwork: `/reciters/${reciter.id}.png`,
       ...(await reciterStatus(reciter)),
     }))
   );

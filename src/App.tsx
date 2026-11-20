@@ -34,7 +34,7 @@ import Articles, { ArticleDetail } from './pages/Articles';
 import SiteFooter from './components/SiteFooter';
 import { Login, Register, Forgot, Reset, Verify } from './pages/Auth';
 import QuranAudio from './pages/QuranAudio';
-import { PlayerProvider, PlayerBar } from './lib/quranPlayer';
+import { PlayerProvider, PlayerBar, NowPlayingSheet } from './lib/quranPlayer';
 
 export default function App() {
   return (
@@ -86,6 +86,7 @@ export default function App() {
             <SiteFooter />
           </main>
           <PlayerBar />
+          <NowPlayingSheet />
           <BottomNav />
         </div>
         <Toasts />

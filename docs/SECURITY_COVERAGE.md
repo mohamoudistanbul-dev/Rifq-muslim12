@@ -234,3 +234,27 @@ rendered or fetched.
 application compiles or ships, and no CDN code runs inside it. It does not, and cannot, cover
 the availability, integrity or privacy terms of the audio CDN. That is a service dependency
 to assess on its own terms, not an unexamined dependency.
+
+## 8. Vendored code and version pinning
+
+The scanner's caveat names three things that may fall outside coverage: "unlocked, vendored
+and CDN dependencies". §7 covers the CDN surface. This section closes the other two.
+
+**No vendored third-party code.** A license-header sweep across `src/`, `public/`, `server/`
+and `scripts/` found no vendored libraries, and `public/` holds no JavaScript, ES-module or
+CSS assets at all — every shipped asset is either authored in this repository or produced by
+the Vite build. Nothing executes from a copied-in dependency that the scan could miss.
+
+**No unlocked version specifiers.**
+
+| Ecosystem | Declared specifiers | Resolution |
+| --- | --- | --- |
+| npm | 14 dependencies, all caret ranges (`^19.3.1`, `^8.3.8`, …); zero `*`, `latest` or `>=` | `package-lock.json` pins every resolved and transitive version (160 entries), so the scan sees exact versions and installs are reproducible |
+| Gradle | no dynamic versions (`+`, `latest.release`, version ranges) in `android/` or `deps-audit/` | the committed lockfiles pin exact coordinates (196 + 149 + 200 entries) |
+
+A caret range is a declaration, not an unlocked install: `npm ci` and the committed lockfile
+resolve it to the exact version the scan checked. The genuinely unlocked cases would be a `*`,
+`latest` or `>=` specifier, and none exists in this repository.
+
+CI workflow steps are not part of the shipped application and are already covered as outside
+scope in §5; the scan's 444 packages describe what the app compiles, bundles and runs.

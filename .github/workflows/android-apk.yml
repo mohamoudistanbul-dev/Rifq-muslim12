@@ -137,17 +137,14 @@ jobs:
           java-version: "17"
           cache: gradle
 
+      
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
-
-      - name: Install SDK platform 35 and build-tools 35.0.0
-        run: |
-          set -euo pipefail
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Point Gradle at the SDK
-        run: echo "sdk.dir=${ANDROID_HOME}" > android/local.properties
+        with:
+          accept-android-sdk-licenses: 'true'
+          log-accepted-android-sdk-licenses: 'false'
+          packages: 'platform-tools'
+          
 
       # Secrets are written to files the runner needs, never echoed, and are
       # removed again in the always() cleanup step below. The runner is

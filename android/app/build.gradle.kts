@@ -67,10 +67,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         buildConfig = true
     }
@@ -81,6 +77,14 @@ android {
             "META-INF/LGPL2.1",
             "META-INF/*.kotlin_module"
         )
+    }
+}
+
+// Kotlin 2.x requires the compilerOptions DSL; the old kotlinOptions.jvmTarget
+// string form is an error since Kotlin 2.2+.
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 

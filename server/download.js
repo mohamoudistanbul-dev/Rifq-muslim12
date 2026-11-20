@@ -1,54 +1,108 @@
 /**
  * Android APK delivery for RIFQ Muslim.
  *
- * The APK itself lives in the owner's Cloudflare R2 bucket. Browsers do not
- * honour a custom filename from a third-party object URL, and an R2 public
- * bucket may be slow or unavailable, so this route streams the object through
- * the app and always answers with:
+ * Three real sources, in priority order:
+ *   1. APK_DOWNLOAD_URL          — hosting environment variable (Cloudflare R2)
+ *   2. the admin setting          — Admin -> Settings -> APK download URL
+ *   3. an uploaded APK file       — Admin -> Settings -> Upload APK file
+ *
+ * Source 3 means the download works without any external bucket: the file is
+ * stored inside the app and streamed from here. Every source answers with
  *
  *   Content-Disposition: attachment; filename="RIFQ-Muslim.apk"
  *   Content-Type: application/vnd.android.package-archive
  *
- * Range requests are forwarded untouched so Android's Download Manager can
- * resume an interrupted download instead of starting over.
+ * Range requests are honoured so Android's Download Manager can resume an
+ * interrupted download instead of starting over on mobile data.
  */
 import express from 'express';
+import fs from 'node:fs';
+import path from 'node:path';
 import { Readable } from 'node:stream';
 import { getSetting } from './db.js';
 
 export const APK_FILENAME = 'RIFQ-Muslim.apk';
 export const APK_PATH = `/download/${APK_FILENAME}`;
 export const APK_MIME = 'application/vnd.android.package-archive';
+export const APK_DIR = path.join(process.cwd(), 'data', 'apk');
+export const APK_FILE = path.join(APK_DIR, APK_FILENAME);
+export const APK_MAX_BYTES = 200 * 1024 * 1024;
 
 const isHttpUrl = (value) => /^https?:\/\/[^\s]+$/i.test(String(value || '').trim());
 
-/** The APK address: APK_DOWNLOAD_URL wins, otherwise the admin's download_url. */
-export function apkSource() {
-  const fromEnv = String(process.env.APK_DOWNLOAD_URL || '').trim();
-  if (isHttpUrl(fromEnv)) return fromEnv;
-
-  const fromSetting = String(getSetting('download_url', '') || '').trim();
-  if (!isHttpUrl(fromSetting)) return '';
-  // Never point the route at itself: that would loop instead of downloading.
-  if (/\/download\/rifq-muslim\.apk$/i.test(fromSetting)) return '';
-  return fromSetting;
-}
-
 const attachment = `attachment; filename="${APK_FILENAME}"; filename*=UTF-8''${encodeURIComponent(APK_FILENAME)}`;
 
-async function apkHandler(req, res) {
-  const source = apkSource();
-  if (!source) {
-    return res.status(503).json({
-      error: 'The Android APK download link is not published yet. Please try again soon.',
-      code: 'apk_not_configured',
-    });
+/** Where the APK currently comes from, or null when nothing is configured. */
+export function apkSource() {
+  const fromEnv = String(process.env.APK_DOWNLOAD_URL || '').trim();
+  if (isHttpUrl(fromEnv)) return { kind: 'url', url: fromEnv, origin: 'environment' };
+
+  const fromSetting = String(getSetting('download_url', '') || '').trim();
+  if (isHttpUrl(fromSetting) && !/\/download\/rifq-muslim\.apk$/i.test(fromSetting)) {
+    return { kind: 'url', url: fromSetting, origin: 'setting' };
   }
 
+  try {
+    const stat = fs.statSync(APK_FILE);
+    if (stat.isFile() && stat.size > 0) return { kind: 'file', file: APK_FILE, size: stat.size, origin: 'upload' };
+  } catch {
+    /* no uploaded file */
+  }
+  return null;
+}
+
+/** Status used by the download card and the admin panel. */
+export function apkInfoSnapshot() {
+  const source = apkSource();
+  if (!source) {
+    return {
+      configured: false,
+      filename: APK_FILENAME,
+      url: APK_PATH,
+      size: null,
+      source: 'none',
+      uploaded: fs.existsSync(APK_FILE),
+    };
+  }
+  if (source.kind === 'file') {
+    return {
+      configured: true,
+      filename: APK_FILENAME,
+      url: APK_PATH,
+      size: source.size,
+      source: 'upload',
+      uploaded: true,
+    };
+  }
+  return { configured: true, filename: APK_FILENAME, url: APK_PATH, size: null, source: 'url', uploaded: fs.existsSync(APK_FILE) };
+}
+
+function parseRange(header, size) {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(String(header || '').trim());
+  if (!match) return null;
+  const [, rawStart, rawEnd] = match;
+  let start;
+  let end;
+  if (rawStart === '' && rawEnd === '') return null;
+  if (rawStart === '') {
+    // Suffix range: last N bytes.
+    const suffix = Number(rawEnd);
+    if (!Number.isFinite(suffix) || suffix <= 0) return null;
+    start = Math.max(0, size - suffix);
+    end = size - 1;
+  } else {
+    start = Number(rawStart);
+    end = rawEnd === '' ? size - 1 : Number(rawEnd);
+  }
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start >= size) return null;
+  return { start, end: Math.min(end, size - 1) };
+}
+
+async function streamRemote(req, res, source) {
   const range = req.headers.range;
   let upstream;
   try {
-    upstream = await fetch(source, {
+    upstream = await fetch(source.url, {
       headers: range ? { Range: String(range) } : {},
       redirect: 'follow',
     });
@@ -87,24 +141,64 @@ async function apkHandler(req, res) {
   body.pipe(res);
 }
 
-/** Size and availability for the download card, without exposing the bucket. */
-async function apkInfo(_req, res) {
+function streamLocal(req, res, source) {
+  const { size } = source;
+  const range = req.headers.range ? parseRange(req.headers.range, size) : null;
+
+  if (req.headers.range && !range) {
+    res.status(416).set('Content-Range', `bytes */${size}`);
+    return res.end();
+  }
+
+  const start = range ? range.start : 0;
+  const end = range ? range.end : size - 1;
+
+  res.status(range ? 206 : 200);
+  res.set({
+    'Content-Type': APK_MIME,
+    'Content-Disposition': attachment,
+    'Accept-Ranges': 'bytes',
+    'Content-Length': String(end - start + 1),
+    'Cache-Control': 'public, max-age=300',
+    'X-Content-Type-Options': 'nosniff',
+  });
+  if (range) res.set('Content-Range', `bytes ${start}-${end}/${size}`);
+
+  if (req.method === 'HEAD') return res.end();
+
+  const stream = fs.createReadStream(source.file, { start, end });
+  stream.on('error', () => res.destroy());
+  req.on('close', () => stream.destroy());
+  return stream.pipe(res);
+}
+
+async function apkHandler(req, res) {
   const source = apkSource();
   if (!source) {
-    return res.json({ configured: false, filename: APK_FILENAME, url: APK_PATH, size: null });
+    return res.status(503).json({
+      error: 'The Android APK has not been uploaded yet. An administrator can add it in Admin -> Settings -> Android APK.',
+      code: 'apk_not_configured',
+    });
   }
-  let size = null;
-  try {
-    const head = await fetch(source, { method: 'HEAD', redirect: 'follow', signal: AbortSignal.timeout(4000) });
-    const length = head.headers.get('content-length');
-    if (length) size = Number(length) || null;
-  } catch {
-    /* size is a nicety; the download itself still works */
+  return source.kind === 'file' ? streamLocal(req, res, source) : streamRemote(req, res, source);
+}
+
+async function apkInfoHandler(_req, res) {
+  const snapshot = apkInfoSnapshot();
+  if (snapshot.source === 'url') {
+    const source = apkSource();
+    try {
+      const head = await fetch(source.url, { method: 'HEAD', redirect: 'follow', signal: AbortSignal.timeout(4000) });
+      const length = head.headers.get('content-length');
+      if (length) snapshot.size = Number(length) || null;
+    } catch {
+      /* size is a nicety; the download itself still works */
+    }
   }
-  res.json({ configured: true, filename: APK_FILENAME, url: APK_PATH, size });
+  res.json(snapshot);
 }
 
 export const downloadRouter = express.Router();
 downloadRouter.get(APK_PATH, apkHandler);
 downloadRouter.head(APK_PATH, apkHandler);
-downloadRouter.get('/api/download/info', apkInfo);
+downloadRouter.get('/api/download/info', apkInfoHandler);

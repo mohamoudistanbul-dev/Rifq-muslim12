@@ -2,8 +2,8 @@ name: Build RIFQ Muslim Android APK
 
 # Builds the native Android shell in android/ on a GitHub-hosted Ubuntu runner.
 # Toolchain pinned to the versions documented in docs/ANDROID_BUILD.md:
-#   JDK 17, Android SDK Platform 35, Build-Tools 35.0.0, Gradle 8.9 (wrapper),
-#   AGP 8.7.3, Kotlin 2.0.21.
+#   JDK 17, Android SDK Platform 35, Build-Tools 35.0.0, Gradle 8.13 (wrapper),
+#   AGP 8.13.2, Kotlin 2.4.21.
 #
 # Default path needs NO paid services and NO signing secrets: it produces a
 # debug APK signed with the standard Android debug key, which installs on any

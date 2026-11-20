@@ -5,8 +5,9 @@
  * or a different design:
  *
  *  1. every required file exists at the exact pixel size Android/PWA expect;
- *  2. the "exact" variants still match public/logo-source.png pixel for pixel
- *     (within resampling error), i.e. they were generated from that file;
+ *  2. the "exact" variants still match public/logo-source.png at their own
+ *     pixel size (within resampling error), i.e. they were generated from that
+ *     file;
  *  3. the manifest, index.html, the adaptive-icon XML and the splash theme all
  *     point at those files, and the manifest's declared sizes are real;
  *  4. the transparent/opaque expectations hold (maskable + apple-touch are
@@ -159,25 +160,52 @@ check('public/favicon.ico exists (browsers request it by default)', () => {
 });
 
 /* --------------------------- fidelity to the upload ------------------------ */
+// Each entry: [file, pixel size, options]. Every icon must be the master artwork
+// re-derived at its own size — a placeholder or a different design scores far
+// above the threshold.
 const fidelityTargets = [
-  'public/icons/icon-1024.png',
-  'public/icons/icon-512.png',
-  'public/icons/icon-192.png',
-  'public/icons/favicon-48.png',
-  'public/icons/favicon-32.png',
-  'android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png',
-  'android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png',
-  'android/app/src/main/res/mipmap-xhdpi/ic_launcher.png',
-  'android/app/src/main/res/mipmap-hdpi/ic_launcher.png',
-  'android/app/src/main/res/mipmap-mdpi/ic_launcher.png',
+  ['public/icons/icon-1024.png', 1024, {}],
+  ['public/icons/icon-512.png', 512, {}],
+  ['public/icons/icon-192.png', 192, {}],
+  ['public/favicon.png', 96, {}],
+  ['public/icons/favicon-48.png', 48, {}],
+  ['public/icons/favicon-32.png', 32, {}],
+  ['android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png', 192, {}],
+  ['android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png', 144, {}],
+  ['android/app/src/main/res/mipmap-xhdpi/ic_launcher.png', 96, {}],
+  ['android/app/src/main/res/mipmap-hdpi/ic_launcher.png', 72, {}],
+  ['android/app/src/main/res/mipmap-mdpi/ic_launcher.png', 48, {}],
+  ['public/icons/icon-maskable-512.png', 512, { trim: true, ratio: 0.78, flatten: true }],
+  ['public/icons/icon-maskable-192.png', 192, { trim: true, ratio: 0.78, flatten: true }],
+  ['public/icons/apple-touch-icon-180.png', 180, { trim: true, ratio: 0.82, flatten: true }],
+  ['android/app/src/main/res/drawable-nodpi/ic_splash_logo.png', 512, { trim: true, ratio: 0.7 }],
+  ['android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png', 432, { trim: true, ratio: 66 / 108 }],
 ];
 
-for (const rel of fidelityTargets) {
+for (const [rel, size, opts] of fidelityTargets) {
   check(`${rel} matches the uploaded artwork`, () => {
-    const score = rmseAgainstMaster(path.join(root, rel));
+    const score = rmseVsMaster(path.join(root, rel), size, opts);
     if (!Number.isFinite(score)) throw new Error('could not compare images');
-    if (score > 0.06) throw new Error(`differs from the master image (RMSE ${score.toFixed(3)})`);
+    if (score > 0.03) throw new Error(`differs from the master image (RMSE ${score.toFixed(3)})`);
     return `RMSE ${score.toFixed(3)}`;
+  });
+}
+
+// The round launcher icons are the artwork clipped to a circle: transparent at
+// the corners, still the uploaded emblem in the middle.
+for (const [rel, size] of [
+  ['android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png', 48],
+  ['android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png', 192],
+]) {
+  check(`${rel} is the uploaded artwork clipped to a circle`, () => {
+    const file = path.join(root, rel);
+    const corner = Number(alphaAt(file, 0, 0));
+    if (corner > 8) throw new Error(`corner is not transparent (alpha ${corner})`);
+    const score = rmseVsMaster(file, size, { crop: 0.5 });
+    if (!Number.isFinite(score) || score > 0.03) {
+      throw new Error(`centre does not match the artwork (RMSE ${score.toFixed(3)})`);
+    }
+    return `alpha 0 corner, RMSE ${score.toFixed(3)} centre`;
   });
 }
 

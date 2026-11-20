@@ -49,7 +49,49 @@ plugins {
     id("org.jetbrains.kotlin.android") version "2.4.21" apply false
 }
 
-// This build script declares no dependencies of its own: the plugins above are applied in :app,
-// so the app's resolved dependency set is pinned in android/app/gradle.lockfile and AGP's plugin
-// classpath is audited by deps-audit/build.gradle. Gradle therefore emits no lockfile here, which
-// the dependency scanner reports as a coverage warning rather than as a finding.
+/*
+ * Scan coverage for this build script.
+ *
+ * Gradle stores the buildscript classpath lock in buildscript-gradle.lockfile (a fixed Gradle
+ * name), but the dependency scanner only credits a build script through a project-level
+ * gradle.lockfile. pluginAudit mirrors the exact plugin classpath this script loads — AGP and
+ * the Kotlin plugin, with the same security pins as the buildscript block above — into a normal
+ * resolvable configuration, so Gradle itself writes android/gradle.lockfile with the versions it
+ * actually resolves. The file is generated, never hand-written.
+ *
+ * Regenerate after changing plugin versions or the pins below:
+ *   ./gradlew -p android buildEnvironment --write-locks
+ *   ./gradlew -p android :dependencies --configuration pluginAudit --write-locks
+ */
+val pluginAudit: Configuration by configurations.creating {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+    description = "Plugin classpath mirror, locked into gradle.lockfile for the security scan."
+}
+
+dependencies {
+    pluginAudit("com.android.tools.build:gradle:8.13.2")
+    pluginAudit("org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.21")
+}
+
+pluginAudit.resolutionStrategy {
+    eachDependency {
+        when {
+            requested.group == "io.netty" -> useVersion("4.1.137.Final")
+            requested.group == "org.bouncycastle" -> useVersion("1.85")
+            requested.group == "com.google.guava" && requested.name == "guava" ->
+                useVersion("33.7.2-jre")
+            requested.group == "org.bitbucket.b_c" -> useVersion("0.9.6")
+            requested.group == "org.jdom" && requested.name == "jdom2" ->
+                useVersion("2.0.6.1")
+            requested.group == "org.apache.commons" && requested.name == "commons-compress" ->
+                useVersion("1.26.0")
+            requested.group == "org.apache.commons" && requested.name == "commons-lang3" ->
+                useVersion("3.18.0")
+        }
+    }
+}
+
+// Locks the root project's configurations, including pluginAudit, into gradle.lockfile.
+dependencyLocking { lockAllConfigurations() }
+

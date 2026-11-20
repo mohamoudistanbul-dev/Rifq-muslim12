@@ -36,6 +36,8 @@ const SETTING_DEFAULTS = {
   contact_phone: '+252612215593',
   whatsapp: '+252612215593',
   download_url: '',
+  paypal_donate_url: '',
+  paypal_currency: 'USD',
   community_enabled: 'true',
   app_name: 'RIFQ Muslim',
   tagline: 'Your Faith, Your Daily Companion',

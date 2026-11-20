@@ -187,6 +187,8 @@ const SETTING_FIELDS: { key: string; label: string; kind?: 'text' | 'email' | 'u
   { key: 'contact_phone', label: 'Contact phone' },
   { key: 'whatsapp', label: 'WhatsApp number' },
   { key: 'download_url', label: 'APK download URL (Cloudflare R2)', kind: 'url' },
+  { key: 'paypal_donate_url', label: 'PayPal donation link (paypal.me/handle or paypal.com/donate)', kind: 'url' },
+  { key: 'paypal_currency', label: 'PayPal donation currency (USD, EUR, GBP…)' },
   { key: 'announcement_text', label: 'Announcement banner', kind: 'textarea' },
   { key: 'announcement_active', label: 'Show announcement on Home', kind: 'bool' },
   { key: 'community_enabled', label: 'Community enabled', kind: 'bool' },

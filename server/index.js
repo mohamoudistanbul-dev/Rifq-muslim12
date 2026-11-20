@@ -25,6 +25,7 @@ import { geoRouter } from './geo.js';
 import { adminRouter, UPLOAD_DIR } from './admin.js';
 import { downloadRouter, apkSource, APK_PATH, APK_FILENAME } from './download.js';
 import { seedSuperAdmin, SUPER_ADMIN_EMAIL } from './seed.js';
+import { donateUrl, donateCurrency } from './donate.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -91,6 +92,11 @@ app.get('/api/config', (req, res) => {
     emailConfigured: mailConfigured(),
     assistantMode: process.env.OPENAI_API_KEY ? 'model' : 'knowledge-base',
     ownerEmail: OWNER_EMAIL,
+    // International donations: the owner's own PayPal link (environment variable
+    // or dashboard setting), validated server-side. Empty means "not configured
+    // yet" — the app never invents a donation address.
+    paypalDonateUrl: donateUrl(),
+    paypalCurrency: donateCurrency(),
   });
 });
 

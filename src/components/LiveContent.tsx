@@ -10,6 +10,9 @@ export interface SiteConfig {
   contactPhone: string;
   whatsapp: string;
   announcement: string;
+  /** The owner's own PayPal donation link; '' until they configure it. */
+  paypalDonateUrl: string;
+  paypalCurrency: string;
 }
 
 export interface PublicContent {

@@ -12,6 +12,9 @@
  * asserts transport behaviour.
  */
 import http from 'node:http';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 
@@ -150,6 +153,87 @@ try {
   console.log(`  FAIL ${error.message}`);
 } finally {
   cleanup();
+}
+
+/* -------- phase 2: the owner uploads the APK into the app itself ---------- */
+
+const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rifq-apk-'));
+const repoRoot = path.resolve(import.meta.dirname, '..');
+fs.mkdirSync(path.join(tmpRoot, 'data', 'apk'), { recursive: true });
+fs.writeFileSync(path.join(tmpRoot, 'data', 'apk', 'RIFQ-Muslim.apk'), APK_BYTES);
+
+const uploadPort = APP_PORT + 1;
+const uploaded = spawn(process.execPath, [path.join(repoRoot, 'server', 'index.js')], {
+  cwd: tmpRoot,
+  env: { ...process.env, PORT: String(uploadPort), APK_DOWNLOAD_URL: '' },
+  stdio: ['ignore', 'pipe', 'pipe'],
+});
+let uploadLog = '';
+uploaded.stdout.on('data', (d) => {
+  uploadLog += d;
+});
+uploaded.stderr.on('data', (d) => {
+  uploadLog += d;
+});
+
+const uploadBase = `http://127.0.0.1:${uploadPort}`;
+try {
+  let ready = false;
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    try {
+      const res = await fetch(`${uploadBase}/api/health`);
+      if (res.ok) {
+        ready = true;
+        break;
+      }
+    } catch {
+      /* still starting */
+    }
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  if (!ready) throw new Error(`upload-mode server did not start\n${uploadLog.slice(-1200)}`);
+
+  console.log('Uploaded APK, no external URL configured');
+  const res = await fetch(`${uploadBase}/download/RIFQ-Muslim.apk`);
+  const body = Buffer.from(await res.arrayBuffer());
+  check('upload mode serves 200', res.status === 200, `got ${res.status}`);
+  check(
+    'upload mode keeps the APK filename',
+    /filename="RIFQ-Muslim\.apk"/i.test(res.headers.get('content-disposition') || ''),
+    res.headers.get('content-disposition') || 'missing header'
+  );
+  check(
+    'upload mode Android MIME type',
+    res.headers.get('content-type') === 'application/vnd.android.package-archive',
+    res.headers.get('content-type') || 'missing'
+  );
+  check('upload mode bytes intact', body.equals(APK_BYTES), `${body.length} bytes`);
+
+  const info = await (await fetch(`${uploadBase}/api/download/info`)).json();
+  check('info reports the uploaded source', info.source === 'upload', String(info.source));
+  check('info reports the real file size', info.size === APK_BYTES.length, String(info.size));
+  check('configured without any URL', info.configured === true);
+
+  const partial = await fetch(`${uploadBase}/download/RIFQ-Muslim.apk`, {
+    headers: { Range: 'bytes=100-199' },
+  });
+  const slice = Buffer.from(await partial.arrayBuffer());
+  check('upload mode range returns 206', partial.status === 206, `got ${partial.status}`);
+  check('upload mode range bytes correct', slice.equals(APK_BYTES.subarray(100, 200)));
+  check(
+    'upload mode content-range correct',
+    (partial.headers.get('content-range') || '') === `bytes 100-199/${APK_BYTES.length}`,
+    partial.headers.get('content-range') || 'missing'
+  );
+
+  const guard = await fetch(`${uploadBase}/api/admin/apk`, { method: 'PUT', body: APK_BYTES });
+  check('upload endpoint refuses anonymous callers', guard.status === 401, `got ${guard.status}`);
+} catch (error) {
+  failures.push(error.message);
+  console.log(`  FAIL ${error.message}`);
+} finally {
+  uploaded.kill('SIGTERM');
+  fs.rmSync(tmpRoot, { recursive: true, force: true });
 }
 
 if (failures.length) {

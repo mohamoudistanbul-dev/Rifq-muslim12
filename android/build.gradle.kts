@@ -42,3 +42,11 @@ plugins {
     id("com.android.application") version "8.13.2" apply false
     id("org.jetbrains.kotlin.android") version "2.4.21" apply false
 }
+
+// Dependency locking for this build script. The root project declares no dependencies of its
+// own (plugins above are applied in :app and their classpath is audited by deps-audit), so this
+// lock file records that empty resolved state rather than leaving the build script unaccounted
+// for. The module's real dependency set lives in android/app/gradle.lockfile.
+dependencyLocking {
+    lockAllConfigurations()
+}

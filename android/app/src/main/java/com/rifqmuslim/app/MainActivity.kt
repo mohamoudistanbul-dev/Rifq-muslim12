@@ -111,16 +111,21 @@ class MainActivity : AppCompatActivity() {
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             cacheMode = WebSettings.LOAD_DEFAULT
             useWideViewPort = true
-            loadWithOverviewMode = true
-            // The page always renders at its normal, consistent size: the app
-            // exposes no magnification controls of its own and the shell shows
-            // no browser-style zoom buttons or pinch-zoom overlay.
+            // Never let the WebView scale the page to fit: the client's own
+            // viewport meta (initial-scale 1, user-scalable=no) sets the size,
+            // so the layout is identical on every device and density.
+            loadWithOverviewMode = false
+            // The whole screen keeps one fixed scale. No pinch zoom, no
+            // double-tap zoom and no browser-style zoom buttons or overlay:
+            // the app exposes no magnification controls of its own.
             setSupportZoom(false)
             builtInZoomControls = false
             displayZoomControls = false
+            setSupportMultipleWindows(false)
             userAgentString = "$userAgentString ${getString(R.string.webview_ua_suffix)}"
         }
         view.isVerticalScrollBarEnabled = false
+        view.isHorizontalScrollBarEnabled = false
         view.overScrollMode = View.OVER_SCROLL_NEVER
 
         // Long-press policy: a native app must not offer "Open in new tab",

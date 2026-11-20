@@ -2,6 +2,23 @@
    Native-feeling presses, no browser link menus on app controls,
    and reading text that stays selectable. */
 
+/* 0. The whole screen keeps one fixed scale.
+   Pinch-to-zoom and double-tap zoom are disabled for every page — Quran, audio,
+   settings, dashboard — so a tap or a two-finger gesture can never magnify the
+   app. `manipulation` keeps normal panning/scrolling and does not interfere with
+   range sliders, so audio seeking and lists still behave natively. Text keeps
+   its normal size (no Android font boosting) and the page never rubber-bands. */
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  touch-action: manipulation; /* panning only; no double-tap zoom */
+  -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overscroll-behavior: none; /* no pull-to-refresh / overscroll magnification */
+}
+
 /* 1. Controls behave like native widgets, not web links. */
 a[href],
 button,
@@ -23,7 +40,7 @@ label.switch,
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
-  touch-action: manipulation; /* no 300 ms double-tap delay; scrolling and pinch still work */
+  touch-action: manipulation; /* no 300 ms double-tap delay, no double-tap zoom */
 }
 
 /* 2. Reading content stays selectable and copyable. */

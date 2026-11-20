@@ -7,6 +7,12 @@
  * surfaces only, so reading content — Quran verses, translations, hadith and
  * duas — keeps normal text selection and copy.
  *
+ * It also keeps the whole screen at one fixed scale. The viewport meta and
+ * `touch-action: manipulation` already disable pinch and double-tap zoom in
+ * Chrome and Android WebView, but in-app browsers (WhatsApp, Facebook,
+ * Telegram) and an accessibility "force enable zoom" setting can ignore the
+ * meta. Cancelling a two-finger touch move holds the scale there as well.
+ *
  * Nothing here claims to remove Chrome's own browser interface (address bar,
  * tab strip, overflow menu). It only stops the in-page context menu that a
  * long press would otherwise raise over the app's own controls.
@@ -97,6 +103,24 @@ function onDragStart(event: Event): void {
   }
 }
 
+/**
+ * Two-finger gestures never magnify the app. A single finger is left completely
+ * alone, so scrolling, swiping, sliders and taps keep working; cancelling only
+ * a multi-touch move is what stops pinch-to-zoom everywhere the viewport meta
+ * is ignored.
+ */
+function onTouchMove(event: TouchEvent): void {
+  if (event.touches.length < 2) return;
+  if (event.cancelable) event.preventDefault();
+}
+
+/** Safari-style gesture events zoom the page as well (future iOS shell). */
+function onGesture(event: Event): void {
+  if (event.cancelable) event.preventDefault();
+}
+
+const GESTURE_EVENTS = ['gesturestart', 'gesturechange', 'gestureend'];
+
 let installed = false;
 
 /**
@@ -109,7 +133,12 @@ export function installTouchGuard(doc: Document = document): void {
   installed = true;
   doc.addEventListener('contextmenu', onContextMenu, { capture: true });
   doc.addEventListener('dragstart', onDragStart, { capture: true });
+  // passive: false is required: a passive listener cannot cancel the gesture.
+  doc.addEventListener('touchmove', onTouchMove, { passive: false, capture: true });
+  for (const gesture of GESTURE_EVENTS) {
+    doc.addEventListener(gesture, onGesture, { passive: false });
+  }
 }
 
 /** Exposed for tests. */
-export const __touchGuardInternals = { isInteractive, isSelectableReading };
+export const __touchGuardInternals = { isInteractive, isSelectableReading, onTouchMove };

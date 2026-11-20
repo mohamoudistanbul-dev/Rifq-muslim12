@@ -44,22 +44,64 @@ const dims = (file) =>
 const opaque = (file) =>
   execFileSync('identify', ['-format', '%[opaque]', file], { encoding: 'utf8' }).trim() === 'true';
 
-/** RMSE (0..1) between two images, after bringing `file` up to the master size. */
-function rmseAgainstMaster(file) {
-  const up = path.join(tmpdir(), `rifq-up-${process.pid}-${path.basename(file)}`);
-  execFileSync('convert', [file, '-filter', 'Lanczos', '-resize', '1254x1254!', up]);
-  let metric = '';
+const BG = '#041F17';
+
+const metricOf = (a, b) => {
+  let out = '';
   try {
-    metric = execFileSync('compare', ['-metric', 'RMSE', up, SRC, 'null:'], {
+    out = execFileSync('compare', ['-metric', 'RMSE', a, b, 'null:'], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     });
   } catch (err) {
-    metric = String((err && err.stderr) || '');
+    out = String((err && err.stderr) || '');
   }
-  const match = String(metric).match(/\(([\d.eE+-]+)\)/);
+  const match = String(out).match(/\(([\d.eE+-]+)\)/);
   return match ? Number(match[1]) : NaN;
+};
+
+/**
+ * RMSE (0..1) between a shipped icon and the master artwork re-derived at the
+ * icon's own pixel size with the same command the pipeline uses.
+ *
+ * Comparing at native size (rather than upscaling a 48px icon to 1254px) is what
+ * makes this a real fidelity test: the fine gold geometry cannot survive a 26x
+ * upscale, so an upscaled comparison flags genuine resampling loss as if the
+ * artwork had changed. A different design still scores far above the threshold.
+ */
+function rmseVsMaster(file, size, opts = {}) {
+  const { trim = false, ratio = 1, flatten = false, crop = 0 } = opts;
+  const ref = path.join(tmpdir(), `rifq-ref-${process.pid}-${path.basename(file)}`);
+  const inner = Math.max(1, Math.round(size * ratio));
+  const args = [SRC, '-filter', 'Lanczos'];
+  if (trim) args.push('-trim', '+repage');
+  args.push('-resize', `${inner}x${inner}`);
+  if (flatten) {
+    args.push('-background', BG, '-alpha', 'remove', '-alpha', 'off');
+    args.push('-gravity', 'center', '-background', BG, '-extent', `${size}x${size}`);
+  } else {
+    args.push('-gravity', 'center', '-background', 'none', '-extent', `${size}x${size}`);
+  }
+  args.push(`PNG32:${ref}`);
+  execFileSync('convert', args);
+
+  let target = file;
+  let reference = ref;
+  if (crop) {
+    const box = Math.round(size * crop);
+    const off = Math.round((size - box) / 2);
+    target = `${ref}.a.png`;
+    reference = `${ref}.b.png`;
+    execFileSync('convert', [file, '-crop', `${box}x${box}+${off}+${off}`, '+repage', target]);
+    execFileSync('convert', [ref, '-crop', `${box}x${box}+${off}+${off}`, '+repage', reference]);
+  }
+  return metricOf(target, reference);
 }
+
+const alphaAt = (file, x, y) =>
+  execFileSync('convert', [file, '-format', `%[fx:round(255*p{${x},${y}}.a)]`, 'info:'], {
+    encoding: 'utf8',
+  }).trim();
 
 console.log('\nicons from the uploaded master image');
 

@@ -52,9 +52,14 @@ on_bg() {
   local size=$1 ratio=$2 out=$3 inner
   inner=$(awk -v s="$size" -v r="$ratio" 'BEGIN{printf "%d", s*r}')
   mkdir -p "$(dirname "$out")"
+  # -alpha remove is what actually guarantees opacity: the artwork's own squircle
+  # corners are transparent, so compositing alone still leaves alpha in the file
+  # and Android renders a maskable icon like that as a black-cornered blob.
   convert -size "${size}x${size}" "xc:${BG}" \
     \( "$SRC" -filter Lanczos -trim +repage -resize "${inner}x${inner}" \) \
-    -gravity center -composite -strip "PNG32:$out"
+    -gravity center -composite \
+    -background "$BG" -alpha remove -alpha off \
+    -strip "PNG24:$out"
 }
 
 # Android legacy round launcher icon: the artwork, trimmed and clipped to a

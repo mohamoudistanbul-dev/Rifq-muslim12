@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Page, Loading } from '../components/Shell';
+import VerifiedBadge from '../components/VerifiedBadge';
 import { useStore } from '../lib/store';
 import { get, patch, post, put, del } from '../lib/api';
 import '../admin.css';
@@ -68,6 +69,10 @@ interface AdminUser {
   role: string;
   verified?: boolean;
   emailVerified?: boolean;
+  /** Blue tick — granted only by a Super Admin. */
+  badgeVerified?: boolean;
+  badgeVerifiedAt?: string | null;
+  badgeVerifiedBy?: string | null;
   banned: boolean;
   createdAt: string;
   lastLogin?: string | null;
@@ -816,10 +821,16 @@ export default function Admin() {
         users.map((u) => (
           <div className="admin-item" key={u.id}>
             <div className="admin-item-main">
-              <strong>{u.name || u.email}</strong>
+              <strong className="qa-author">
+                {u.name || u.email}
+                {u.badgeVerified && <VerifiedBadge />}
+              </strong>
               <p className="small muted" style={{ margin: '2px 0 0' }}>
                 {u.email} | {t('Joined')} {when(u.createdAt)}
                 {u.banned ? ` | ${t('Banned')}` : ''}
+                {u.badgeVerified && u.badgeVerifiedAt
+                  ? ` | ${t('Verified')} ${when(u.badgeVerifiedAt)}${u.badgeVerifiedBy ? ` · ${u.badgeVerifiedBy}` : ''}`
+                  : ''}
               </p>
             </div>
             <div className="admin-item-actions">
@@ -833,6 +844,18 @@ export default function Admin() {
                 <option value="admin">{t('Admin')}</option>
                 <option value="superadmin">{t('Super Admin')}</option>
               </select>
+              <button
+                className={`btn btn-sm ${u.badgeVerified ? 'btn-ghost' : 'btn-soft'}`}
+                title={t('Blue verified badge — Super Admin only')}
+                onClick={() =>
+                  void run(
+                    () => patch(`/admin/users/${u.id}/badge`, { verified: !u.badgeVerified }),
+                    u.badgeVerified ? t('Verification badge removed.') : t('Verification badge granted.')
+                  )
+                }
+              >
+                {u.badgeVerified ? t('Remove ✓') : t('Verify ✓')}
+              </button>
               <button
                 className="btn btn-soft btn-sm"
                 onClick={() => void run(() => patch(`/admin/users/${u.id}`, { banned: !u.banned }), t('User updated.'))}

@@ -1459,3 +1459,17 @@ html[dir='rtl'] .rtl-flip {
     padding: 10px;
   }
 }
+
+/* ---------------------------- verified blue tick ---------------------------- */
+.verified-badge {
+  display: inline-block;
+  vertical-align: -2px;
+  margin-left: 5px;
+  flex: 0 0 auto;
+}
+
+.qa-author {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}

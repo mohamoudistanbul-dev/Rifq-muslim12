@@ -641,6 +641,197 @@ export function usePlayer(): PlayerApi {
   return context;
 }
 
+/** Headphone glyph used by the full-screen player. */
+function Headphones({ size = 18 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M4 14v-2a8 8 0 0 1 16 0v2" />
+      <path d="M4 13h2a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" />
+      <path d="M20 13h-2a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1z" />
+    </svg>
+  );
+}
+
+/**
+ * Dedicated full-screen "Now Playing" view for the existing audio player.
+ *
+ * It reads and drives exactly the same PlayerProvider state as the compact bar,
+ * so reciter, surah, position and the Android media notification always agree.
+ * Downloads go through the same DownloadManager as the rest of the page.
+ */
+export function NowPlayingSheet() {
+  const { state, toggle, next, prev, seek, setSpeed, cycleRepeat, close, closeNowPlaying } = usePlayer();
+  const manager = useDownloads();
+  const open = state.nowPlaying && state.surah > 0;
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeNowPlaying();
+    };
+    document.addEventListener('keydown', onKey);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open, closeNowPlaying]);
+
+  if (!open) return null;
+
+  const stored = manager.isStored(state.reciterId, state.surah);
+  const entry = manager.entry(state.reciterId, state.surah);
+  const total = entry.total || 0;
+  const percent = total > 0 ? Math.min(100, Math.round((entry.received / total) * 100)) : 0;
+  const busy = entry.status === 'queued' || entry.status === 'verifying' || entry.status === 'downloading';
+  const max = state.duration > 0 ? state.duration : 0;
+
+  const onDownload = () => {
+    if (stored) {
+      void manager.remove(state.reciterId, state.surah);
+      return;
+    }
+    manager.start(state.reciterId, state.surah);
+  };
+
+  return (
+    <div className="np-overlay" role="dialog" aria-modal="true" aria-label="Now playing Quran audio">
+      <div className="np-sheet">
+        <div className="np-top">
+          <button
+            className="icon-btn np-minimize"
+            onClick={closeNowPlaying}
+            aria-label="Minimize player"
+            title="Minimize"
+          >
+            <AppIcon name="chevron" size={18} />
+          </button>
+          <span className="np-label">
+            <Headphones size={15} /> Now Listening
+          </span>
+          <span className="np-mode">{state.offline ? 'Offline' : 'Streaming'}</span>
+        </div>
+
+        <div className="np-art-wrap">
+          <img
+            className="np-art"
+            src={state.artwork || reciterArtwork(state.reciterId)}
+            alt={`${state.reciterName} — ${state.surahName}`}
+          />
+          <span className="np-headphones" aria-hidden="true">
+            <Headphones size={20} />
+          </span>
+        </div>
+
+        <p className="np-reciter-arabic" dir="rtl" lang="ar">
+          {state.reciterArabic || state.reciterName}
+        </p>
+        <h2 className="np-reciter">{state.reciterName}</h2>
+
+        <p className="np-surah-arabic" dir="rtl" lang="ar">
+          {state.surahArabic}
+        </p>
+        <p className="np-surah">
+          {state.surahName} · Surah {state.surah}
+        </p>
+
+        <input
+          className="np-seek"
+          type="range"
+          min={0}
+          max={max}
+          step={1}
+          value={Math.min(state.position, max)}
+          onChange={(event) => seek(Number(event.target.value))}
+          aria-label="Seek within the surah"
+        />
+        <div className="np-times tiny muted">
+          <span>{formatTime(state.position)}</span>
+          <span>{state.loading ? 'Loading…' : formatTime(state.duration)}</span>
+        </div>
+
+        <div className="np-controls">
+          <button className="np-skip" onClick={prev} aria-label="Previous surah">
+            <AppIcon name="back" size={22} />
+          </button>
+          <button className="np-play" onClick={toggle} aria-label={state.playing ? 'Pause' : 'Play'}>
+            <AppIcon name={state.playing ? 'pause' : 'play'} size={30} />
+          </button>
+          <button className="np-skip" onClick={next} aria-label="Next surah">
+            <AppIcon name="chevron" size={22} />
+          </button>
+        </div>
+
+        <div className="np-extras">
+          <button
+            className={`btn btn-ghost btn-sm np-repeat${state.repeat !== 'off' ? ' is-active' : ''}`}
+            onClick={cycleRepeat}
+            aria-label={`Repeat: ${state.repeat}`}
+          >
+            {state.repeat === 'one' ? 'Repeat 1' : state.repeat === 'all' ? 'Repeat all' : 'Repeat off'}
+          </button>
+          <label className="np-speed">
+            Speed
+            <select
+              className="select"
+              value={state.speed}
+              onChange={(event) => setSpeed(Number(event.target.value))}
+              aria-label="Playback speed"
+            >
+              {SPEEDS.map((speed) => (
+                <option key={speed} value={speed}>
+                  {speed}×
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="btn btn-ghost btn-sm np-download"
+            onClick={onDownload}
+            aria-label={stored ? 'Delete downloaded audio' : 'Download this surah'}
+          >
+            <AppIcon name={stored ? 'trash' : 'download'} size={16} />
+            {stored ? 'Saved' : busy ? `${percent}%` : 'Download'}
+          </button>
+        </div>
+
+        {busy && (
+          <div className="np-progress" aria-label={`Downloading ${percent}%`}>
+            <div className="np-progress-fill" style={{ width: `${percent}%` }} />
+          </div>
+        )}
+        {busy && total > 0 && (
+          <p className="tiny muted np-note">
+            {formatBytes(entry.received)} of {formatBytes(total)}
+          </p>
+        )}
+        {stored && <p className="tiny muted np-note">Saved on this device — plays without internet.</p>}
+        {entry.status === 'error' && <p className="tiny np-error">{entry.error}</p>}
+        {state.error && <p className="tiny np-error">{state.error}</p>}
+
+        <div className="np-footer">
+          <button className="btn btn-ghost btn-sm" onClick={close}>
+            Stop playback
+          </button>
+          <span className="tiny muted">RIFQ Muslim · Made by Eng Mohamud Yusuf</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Compact player that stays available on every screen while audio is loaded. */
 export function PlayerBar() {
   const { state, toggle, next, prev, seek, setSpeed, cycleRepeat, close, openNowPlaying } = usePlayer();

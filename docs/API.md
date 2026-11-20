@@ -86,7 +86,7 @@ Every route requires `requireAdmin`; routes marked **super** require
 | PATCH/DELETE | `/content/:id`, `/content/:id/publish` | admin |
 | GET/POST | `/media`, `/media/:id` | admin |
 | GET | `/users` | admin |
-| PATCH/DELETE | `/users/:id` | **super** (delete) |
+| PATCH/DELETE | `/users/:id` | **super** — role, ban and delete (verified at `server/admin.js:371` and `:522`) |
 | PATCH | `/users/:id/badge` | **super** — grant/revoke the blue tick; self-grant `403`; writes audit `admin.badge.grant` / `admin.badge.revoke` |
 | GET | `/verifications` | admin — badge audit history |
 | GET | `/badge-requests?status=pending\|all` | admin |

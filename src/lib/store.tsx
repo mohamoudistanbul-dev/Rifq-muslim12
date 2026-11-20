@@ -60,6 +60,9 @@ export interface User {
   theme: 'light' | 'dark';
   role: string;
   emailVerified: boolean;
+  /** Blue verified tick. Server-controlled: only a Super Admin can grant it. */
+  badgeVerified?: boolean;
+  badgeVerifiedAt?: string | null;
   prefs: Partial<Prefs>;
   createdAt: string;
 }

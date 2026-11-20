@@ -9,7 +9,9 @@
  *   - the layout still fits the screen width (no zoom-out of a wide page)
  *   - a two-finger touch move is cancelled, while a one-finger move is not
  *     (so scrolling, sliders and taps keep working)
- *   - reading text is still selectable (accessibility is not sacrificed)
+ *   - reading text is not selectable by default, so no Android selection
+ *     toolbar appears (see scripts/verify-text-selection.mjs), while form
+ *     fields stay selectable
  *
  * Usage:
  *   node scripts/verify-no-screen-zoom.mjs --preview        # builds are served by vite preview
@@ -191,11 +193,27 @@ async function main() {
       }
 
       if (route === '/quran/1') {
-        const selectable = await page.evaluate(() => {
-          const el = document.querySelector('.ayah-text') ?? document.querySelector('[data-selectable]');
-          return el ? getComputedStyle(el).userSelect : null;
+        const selection = await page.evaluate(() => {
+          const verse =
+            document.querySelector('#ayah-1 [data-selectable]') ?? document.querySelector('[data-selectable]');
+          const field = document.querySelector('input:not([type="button"]):not([type="submit"]), textarea');
+          return {
+            verse: verse ? getComputedStyle(verse).userSelect : null,
+            field: field ? getComputedStyle(field).userSelect : null,
+          };
         });
-        check('reading text stays selectable', selectable === null || /text|auto/.test(selectable), String(selectable));
+        // Selection is no longer offered on reading text by default, so the
+        // Android selection toolbar cannot be raised over the Quran.
+        check(
+          'reading text is not selectable by default',
+          selection.verse === null || selection.verse === 'none',
+          String(selection.verse)
+        );
+        check(
+          'form fields stay selectable',
+          selection.field === null || /text|auto/.test(String(selection.field)),
+          String(selection.field)
+        );
       }
 
       // Double tap last: it may activate a control and navigate away.

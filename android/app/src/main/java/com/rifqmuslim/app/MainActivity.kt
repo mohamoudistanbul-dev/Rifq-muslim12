@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.ActionMode
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.GeolocationPermissions
@@ -34,7 +35,7 @@ import java.io.IOException
  */
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var webView: WebView
+    private lateinit var webView: RifqWebView
     private lateinit var offlineView: TextView
     private var pendingGeoOrigin: String? = null
     private var pendingGeoCallback: GeolocationPermissions.Callback? = null
@@ -98,8 +99,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun buildWebView(): WebView {
-        val view = WebView(this)
+    private fun buildWebView(): RifqWebView {
+        val view = RifqWebView(this)
         view.setBackgroundColor(ContextCompat.getColor(this, R.color.rifq_bg))
 
         view.settings.apply {
@@ -130,17 +131,21 @@ class MainActivity : AppCompatActivity() {
 
         // Long-press policy: a native app must not offer "Open in new tab",
         // "Copy link address", "Download link" or "Download image" over its own
-        // controls. Links and images are consumed here; a long press on ordinary
-        // text is left to the WebView so Quran verses, translations and hadith
-        // stay selectable and copyable.
+        // controls. Links and images are always consumed. Ordinary text is
+        // consumed too, so Android never raises the Copy / Select all / Web
+        // search / Google lookup toolbar over Quran verses, translations or
+        // hadith. The web layer unlocks it only deliberately — a focused form
+        // field, or the reader's "Select text" mode — through
+        // RifqNative.setTextSelectionAllowed(true).
         view.isLongClickable = true
         view.setOnLongClickListener { target ->
-            val hit = (target as WebView).hitTestResult
+            val web = target as RifqWebView
+            val hit = web.hitTestResult
             when (hit.type) {
                 WebView.HitTestResult.SRC_ANCHOR_TYPE,
                 WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE,
                 WebView.HitTestResult.IMAGE_TYPE -> true
-                else -> false
+                else -> !web.textSelectionAllowed
             }
         }
 
@@ -236,6 +241,15 @@ class MainActivity : AppCompatActivity() {
 
     /* --------------------------- bridge entry points --------------------------- */
 
+    /**
+     * Opens or closes the native text-selection path. The web layer calls this
+     * when a form field gains focus or when the Quran reader's "Select text"
+     * mode is switched on, and closes it again on blur or mode exit.
+     */
+    fun setTextSelectionAllowed(allowed: Boolean) {
+        if (::webView.isInitialized) webView.textSelectionAllowed = allowed
+    }
+
     fun hasLocationPermission(): Boolean {
         val fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
         val coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
@@ -277,5 +291,24 @@ class MainActivity : AppCompatActivity() {
         webView.removeJavascriptInterface("RifqNative")
         webView.destroy()
         super.onDestroy()
+    }
+
+    /**
+     * WebView that never raises Android's text-selection action mode unless the
+     * app asks for it. Android builds the Copy / Select all / Web search /
+     * Google lookup toolbar from that action mode, so suppressing it here means
+     * the popup cannot appear over Quran text even when a device or an in-app
+     * browser ignores the CSS `user-select` rules.
+     */
+    private class RifqWebView(context: android.content.Context) : WebView(context) {
+
+        @Volatile
+        var textSelectionAllowed: Boolean = false
+
+        override fun startActionMode(callback: ActionMode.Callback?): ActionMode? =
+            if (textSelectionAllowed) super.startActionMode(callback) else null
+
+        override fun startActionMode(callback: ActionMode.Callback?, type: Int): ActionMode? =
+            if (textSelectionAllowed) super.startActionMode(callback, type) else null
     }
 }

@@ -15,7 +15,8 @@
     "verify:world": "node scripts/verify-world-geo.mjs && tsx scripts/verify-world-prayer.ts && tsx scripts/verify-prayer-times.ts",
     "verify:admin": "node scripts/verify-admin.mjs",
     "verify:download": "node scripts/verify-download.mjs",
-    "geo:build": "node scripts/build-geo-data.mjs"
+    "geo:build": "node scripts/build-geo-data.mjs",
+    "verify:touch": "node scripts/verify-text-selection.mjs"
   },
   "dependencies": {
     "adhan": "^4.4.3",

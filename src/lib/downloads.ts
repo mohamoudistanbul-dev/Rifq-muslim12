@@ -232,7 +232,7 @@ class DownloadManager {
 
       if (total && received < total) {
         /* Incomplete transfer: keep what arrived so the next tap resumes. */
-        await savePartial(key, reciter, surah, new Blob(chunks, { type: 'audio/mpeg' }));
+        await savePartial(reciter, surah, new Blob(chunks, { type: 'audio/mpeg' }));
         this.set(key, {
           status: 'error',
           received,

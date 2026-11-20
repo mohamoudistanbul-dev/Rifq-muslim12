@@ -80,6 +80,13 @@ the "no resolved dependency file" warning.
 Either route covers the same 444 packages already resolved here; neither changes the
 application, its dependencies or its build.
 
+**Already configured in this repository:** `.github/dependabot.yml` declares the `gradle`
+ecosystem for `/android` (which reads both `android/app/gradle.lockfile` and
+`android/buildscript-gradle.lockfile`), plus `npm` and `github-actions`. The one step that
+remains is a repository setting only the owner can change — **Settings → Code security →
+Dependabot alerts** on GitHub. Until that is switched on, the automated scan below stays
+`incomplete`, and this document does not claim otherwise.
+
 Reconciliation against the report itself (`packages_checked: 444`,
 `ecosystems: ["Maven", "npm"]`, `unmatched_packages: 0`):
 

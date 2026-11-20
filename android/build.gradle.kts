@@ -10,6 +10,7 @@
 //   com.google.guava:guava -> 33.7.2-jre (GHSA-xxph-c9ww-hj94)
 //   org.bitbucket.b_c:jose4j -> 0.9.6     (JWT/JOSE parsing fixes)
 //   org.jdom:jdom2     -> 2.0.6.1         (XXE fix)
+//   commons-compress   -> 1.26.0          (GHSA-4265-ccf5-phj5, GHSA-4g9r-vxhx-9pgx)
 buildscript {
     repositories {
         google()
@@ -26,6 +27,8 @@ buildscript {
                     requested.group == "org.bitbucket.b_c" -> useVersion("0.9.6")
                     requested.group == "org.jdom" && requested.name == "jdom2" ->
                         useVersion("2.0.6.1")
+                    requested.group == "org.apache.commons" && requested.name == "commons-compress" ->
+                        useVersion("1.26.0")
                 }
             }
         }
@@ -34,5 +37,5 @@ buildscript {
 
 plugins {
     id("com.android.application") version "8.13.2" apply false
-    id("org.jetbrains.kotlin.android") version "2.0.21" apply false
+    id("org.jetbrains.kotlin.android") version "2.4.21" apply false
 }

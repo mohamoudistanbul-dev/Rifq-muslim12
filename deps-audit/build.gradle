@@ -37,11 +37,15 @@ configurations {
         //   guava 33.7.2        (GHSA-xxph-c9ww-hj94)
         //   jose4j 0.9.6        (JWT/JOSE parsing fixes)
         //   jdom2 2.0.6.1       (XXE fix)
+        //   commons-compress 1.26.0 (GHSA-4265-ccf5-phj5, GHSA-4g9r-vxhx-9pgx)
         resolutionStrategy {
             eachDependency { details ->
                 if (details.requested.group == 'io.netty') details.useVersion('4.1.137.Final')
                 if (details.requested.group == 'org.bouncycastle') details.useVersion('1.85')
                 if (details.requested.group == 'org.bitbucket.b_c') details.useVersion('0.9.6')
+                if (details.requested.group == 'org.apache.commons' && details.requested.name == 'commons-compress') {
+                    details.useVersion('1.26.0')
+                }
                 if (details.requested.group == 'org.jdom' && details.requested.name == 'jdom2') {
                     details.useVersion('2.0.6.1')
                 }
@@ -60,7 +64,7 @@ dependencies {
     audit 'androidx.webkit:webkit:1.11.0'
     audit 'com.google.android.material:material:1.12.0'
     audit 'com.android.tools.build:gradle:8.13.2'
-    audit 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21'
+    audit 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.21'
 }
 
 dependencyLocking { lockAllConfigurations() }

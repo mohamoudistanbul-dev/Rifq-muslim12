@@ -37,7 +37,6 @@ const INTERACTIVE = [
   '.btn',
   '.qa-reciter-chip',
   '.tasbih-tap',
-  '.zoom-btn',
   '.card',
 ].join(',');
 

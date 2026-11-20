@@ -442,6 +442,83 @@ adminRouter.get('/verifications', requireAdmin, (_req, res) => {
   res.json({ verified, history });
 });
 
+/**
+ * Verification requests. A signed-in user asks for the blue tick; only a Super
+ * Admin can decide, and approving writes exactly the same badge state and audit
+ * entry as a direct grant. A Super Admin can never decide their own request.
+ */
+adminRouter.get('/badge-requests', requireAdmin, (req, res) => {
+  const status = String(req.query.status || 'pending');
+  const rows = db
+    .prepare(
+      `SELECT r.*, u.name, u.email, u.role, u.badge_verified
+         FROM badge_requests r JOIN users u ON u.id = r.user_id
+        WHERE (? = 'all' OR r.status = ?)
+        ORDER BY r.created_at DESC LIMIT 200`
+    )
+    .all(status, status);
+  res.json({
+    requests: rows.map((r) => ({
+      id: r.id,
+      userId: r.user_id,
+      name: r.name,
+      email: r.email,
+      role: r.role,
+      note: r.note,
+      status: r.status,
+      createdAt: r.created_at,
+      decidedAt: r.decided_at,
+      decidedBy: r.decided_by,
+      badgeVerified: !!r.badge_verified,
+    })),
+  });
+});
+
+adminRouter.patch('/badge-requests/:id', requireSuperAdmin, (req, res) => {
+  const request = db.prepare('SELECT * FROM badge_requests WHERE id = ?').get(req.params.id);
+  if (!request) return res.status(404).json({ error: 'Request not found.' });
+  if (request.status !== 'pending') {
+    return res.status(409).json({ error: 'This request has already been decided.' });
+  }
+  const action = String(req.body?.action || '');
+  if (action !== 'approve' && action !== 'reject') {
+    return res.status(400).json({ error: "Send action: 'approve' or 'reject'." });
+  }
+  if (request.user_id === req.user.id) {
+    return res.status(403).json({ error: 'You cannot decide your own verification request.' });
+  }
+  const target = db.prepare('SELECT * FROM users WHERE id = ?').get(request.user_id);
+  if (!target) return res.status(404).json({ error: 'User not found.' });
+
+  const approve = action === 'approve';
+  const at = nowIso();
+  if (approve) {
+    db.prepare('UPDATE users SET badge_verified = 1, badge_verified_at = ?, badge_verified_by = ? WHERE id = ?').run(
+      at,
+      req.user.email,
+      target.id
+    );
+  }
+  db.prepare('UPDATE badge_requests SET status = ?, decided_at = ?, decided_by = ? WHERE id = ?').run(
+    approve ? 'approved' : 'rejected',
+    at,
+    req.user.email,
+    request.id
+  );
+  auditLog(req.user, approve ? 'admin.badge.grant' : 'admin.badge.request.reject', {
+    userId: target.id,
+    email: target.email,
+    by: req.user.email,
+    requestId: request.id,
+    source: 'request',
+  });
+  res.json({
+    ok: true,
+    status: approve ? 'approved' : 'rejected',
+    user: publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(target.id)),
+  });
+});
+
 adminRouter.delete('/users/:id', requireSuperAdmin, (req, res) => {
   const target = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!target) return res.status(404).json({ error: 'User not found.' });

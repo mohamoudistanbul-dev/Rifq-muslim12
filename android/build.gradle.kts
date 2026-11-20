@@ -54,6 +54,7 @@ plugins {
 // classpath is audited by deps-audit/build.gradle. Gradle therefore emits no lockfile here, which
 // the dependency scanner reports as a coverage warning rather than as a finding.
 //
-// Closing that warning needs Gradle itself to resolve this script's plugin classpath, which needs
-// an Android SDK. See docs/SECURITY_COVERAGE.md for the exact procedure and snippet.
+// Closing that warning needs Gradle to resolve this script's plugin classpath, which the AppJet
+// runner refuses (native Gradle execution is outside its supported scope). See
+// docs/SECURITY_COVERAGE.md §3.3 for the exact command to run on a machine that has the SDK.
 

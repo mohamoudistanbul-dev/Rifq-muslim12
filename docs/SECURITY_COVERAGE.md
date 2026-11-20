@@ -7,7 +7,9 @@ reports, what it **cannot** cover in this environment, and how to close the rest
 It is **not** a statement that the application is secure.
 
 Last updated: 2026-11-20 — scan re-run on the current application revision
-(AGP 8.13.2 / Gradle 8.14.4 / Kotlin 2.4.21).
+(AGP 8.13.2 / Gradle 8.14.4 / Kotlin 2.4.21). The remaining coverage warning was
+re-investigated for this revision and confirmed to be unclosable from inside AppJet
+(§3.3); the resolved dependency set itself is unchanged.
 
 ---
 
@@ -173,6 +175,38 @@ and native Android is source-only in AppJet. Kotlin/Java compilation, APK/AAB ou
 and device behaviour are therefore **not** verified locally; your GitHub Actions
 workflow (`.github/workflows/android-apk.yml`) is the first real compile. See
 `docs/ANDROID_BUILD.md`.
+
+### 3.3 The platform refuses native Gradle execution outright
+
+Generating the missing lockfile from inside AppJet is not possible: the request is
+rejected before Gradle starts.
+
+```
+native_build_unsupported — AppJet builds web applications only.
+native Gradle build is outside the supported execution scope.
+(policy web-builds-only-v1)
+```
+
+The response also instructs that the refusal must not be worked around by retrying,
+installing an SDK, or wrapping the build in a shell script. So the situation for this
+revision is settled: the only tool that can write `android/gradle.lockfile` is Gradle,
+Gradle cannot be executed here, and hand-writing the file would be fabrication.
+
+The dependency graph is unchanged and fully locked by the three committed files in §2;
+what is missing is one scanner association, not evidence about any package.
+
+**Who can close it, and how.** On any machine with the Android SDK (or on the
+GitHub Actions runner that already builds the APK), run:
+
+```
+./gradlew -p android buildEnvironment --write-locks
+./gradlew -p android :dependencies --write-locks
+```
+
+and commit the `android/gradle.lockfile` Gradle produces. Never hand-edit it. The
+alternative that needs no SDK at all is already configured here: enable Dependabot
+alerts (Settings → Code security), which reads the committed buildscript lockfile
+directly (§2.2).
 
 ## 4. How the AAR graph is resolved without the SDK
 

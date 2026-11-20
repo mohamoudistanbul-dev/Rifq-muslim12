@@ -13,6 +13,12 @@
 //   commons-compress   -> 1.26.0          (GHSA-4265-ccf5-phj5, GHSA-4g9r-vxhx-9pgx)
 //   commons-lang3      -> 3.18.0          (GHSA-j288-q9x7-2f5v)
 buildscript {
+    // Dependency locking for the buildscript (plugin) classpath. AGP and its transitive tooling
+    // libraries resolve here, so buildscript-gradle.lockfile pins exactly what this build uses
+    // and gives the repository security scan a resolved dependency file for this script.
+    // Regenerate after changing plugin versions or the pins below:
+    //   ./gradlew -p android buildEnvironment --write-locks
+    dependencyLocking { lockAllConfigurations() }
     repositories {
         google()
         mavenCentral()

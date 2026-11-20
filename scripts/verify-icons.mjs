@@ -15,7 +15,7 @@
  *
  * Run with: node scripts/verify-icons.mjs
  */
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -43,21 +43,19 @@ const check = (label, fn) => {
 const dims = (file) =>
   execFileSync('identify', ['-format', '%w %h', file], { encoding: 'utf8' }).trim();
 const opaque = (file) =>
-  execFileSync('identify', ['-format', '%[opaque]', file], { encoding: 'utf8' }).trim() === 'true';
+  execFileSync('identify', ['-format', '%[opaque]', file], { encoding: 'utf8' })
+    .trim()
+    .toLowerCase() === 'true';
 
 const BG = '#041F17';
 
 const metricOf = (a, b) => {
-  let out = '';
-  try {
-    out = execFileSync('compare', ['-metric', 'RMSE', a, b, 'null:'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-  } catch (err) {
-    out = String((err && err.stderr) || '');
-  }
-  const match = String(out).match(/\(([\d.eE+-]+)\)/);
+  // spawnSync, not execFileSync: compare writes its metric to stderr and exits 0
+  // when the images are identical, so execFileSync discards the value exactly in
+  // the case we care about most.
+  const res = spawnSync('compare', ['-metric', 'RMSE', a, b, 'null:'], { encoding: 'utf8' });
+  const out = `${res.stdout || ''} ${res.stderr || ''}`;
+  const match = out.match(/\(([\d.eE+-]+)\)/);
   return match ? Number(match[1]) : NaN;
 };
 
@@ -201,7 +199,7 @@ for (const [rel, size] of [
     const file = path.join(root, rel);
     const corner = Number(alphaAt(file, 0, 0));
     if (corner > 8) throw new Error(`corner is not transparent (alpha ${corner})`);
-    const score = rmseVsMaster(file, size, { crop: 0.5 });
+    const score = rmseVsMaster(file, size, { trim: true, crop: 0.5 });
     if (!Number.isFinite(score) || score > 0.03) {
       throw new Error(`centre does not match the artwork (RMSE ${score.toFixed(3)})`);
     }

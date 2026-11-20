@@ -50,7 +50,7 @@ exact() {
 # permitted: a transparent maskable icon renders as a black blob on Android.
 on_bg() {
   local size=$1 ratio=$2 out=$3 inner
-  inner=$(awk -v s="$size" -v r="$ratio" 'BEGIN{printf "%d", s*r}')
+  inner=$(awk -v s="$size" -v r="$ratio" 'BEGIN{printf "%.0f", s*r}')
   mkdir -p "$(dirname "$out")"
   # -alpha remove is what actually guarantees opacity: the artwork's own squircle
   # corners are transparent, so compositing alone still leaves alpha in the file
@@ -83,7 +83,7 @@ round_icon() {
 # artwork, so no launcher mask can cut off the gold border or the emblem.
 adaptive_fg() {
   local size=$1 out=$2 inner
-  inner=$(awk -v s="$size" 'BEGIN{printf "%d", s*66/108}')
+  inner=$(awk -v s="$size" 'BEGIN{printf "%.0f", s*66/108}')
   mkdir -p "$(dirname "$out")"
   convert -size "${size}x${size}" xc:none \
     \( "$SRC" -filter Lanczos -trim +repage -resize "${inner}x${inner}" \) \
@@ -93,7 +93,7 @@ adaptive_fg() {
 # Splash logo: artwork inside the circle Android 12+ masks the splash icon with.
 splash_logo() {
   local size=$1 out=$2 inner
-  inner=$(awk -v s="$size" 'BEGIN{printf "%d", s*0.70}')
+  inner=$(awk -v s="$size" 'BEGIN{printf "%.0f", s*0.70}')
   mkdir -p "$(dirname "$out")"
   convert -size "${size}x${size}" xc:none \
     \( "$SRC" -filter Lanczos -trim +repage -resize "${inner}x${inner}" \) \

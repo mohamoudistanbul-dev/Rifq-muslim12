@@ -1,0 +1,800 @@
+[
+  {
+    "number": 1,
+    "name": "Al-Faatiha",
+    "arabic": "سُورَةُ ٱلْفَاتِحَةِ",
+    "ayahs": 7,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 2,
+    "name": "Al-Baqara",
+    "arabic": "سُورَةُ البَقَرَةِ",
+    "ayahs": 286,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 3,
+    "name": "Aal-i-Imraan",
+    "arabic": "سُورَةُ آلِ عِمۡرَانَ",
+    "ayahs": 200,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 4,
+    "name": "An-Nisaa",
+    "arabic": "سُورَةُ النِّسَاءِ",
+    "ayahs": 176,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 5,
+    "name": "Al-Maaida",
+    "arabic": "سُورَةُ المَائـِدَةِ",
+    "ayahs": 120,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 6,
+    "name": "Al-An'aam",
+    "arabic": "سُورَةُ الأَنۡعَامِ",
+    "ayahs": 165,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 7,
+    "name": "Al-A'raaf",
+    "arabic": "سُورَةُ الأَعۡرَافِ",
+    "ayahs": 206,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 8,
+    "name": "Al-Anfaal",
+    "arabic": "سُورَةُ الأَنفَالِ",
+    "ayahs": 75,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 9,
+    "name": "At-Tawba",
+    "arabic": "سُورَةُ التَّوۡبَةِ",
+    "ayahs": 129,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 10,
+    "name": "Yunus",
+    "arabic": "سُورَةُ يُونُسَ",
+    "ayahs": 109,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 11,
+    "name": "Hud",
+    "arabic": "سُورَةُ هُودٍ",
+    "ayahs": 123,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 12,
+    "name": "Yusuf",
+    "arabic": "سُورَةُ يُوسُفَ",
+    "ayahs": 111,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 13,
+    "name": "Ar-Ra'd",
+    "arabic": "سُورَةُ الرَّعۡدِ",
+    "ayahs": 43,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 14,
+    "name": "Ibrahim",
+    "arabic": "سُورَةُ إِبۡرَاهِيمَ",
+    "ayahs": 52,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 15,
+    "name": "Al-Hijr",
+    "arabic": "سُورَةُ الحِجۡرِ",
+    "ayahs": 99,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 16,
+    "name": "An-Nahl",
+    "arabic": "سُورَةُ النَّحۡلِ",
+    "ayahs": 128,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 17,
+    "name": "Al-Israa",
+    "arabic": "سُورَةُ الإِسۡرَاءِ",
+    "ayahs": 111,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 18,
+    "name": "Al-Kahf",
+    "arabic": "سُورَةُ الكَهۡفِ",
+    "ayahs": 110,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 19,
+    "name": "Maryam",
+    "arabic": "سُورَةُ مَرۡيَمَ",
+    "ayahs": 98,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 20,
+    "name": "Taa-Haa",
+    "arabic": "سُورَةُ طه",
+    "ayahs": 135,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 21,
+    "name": "Al-Anbiyaa",
+    "arabic": "سُورَةُ الأَنبِيَاءِ",
+    "ayahs": 112,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 22,
+    "name": "Al-Hajj",
+    "arabic": "سُورَةُ الحَجِّ",
+    "ayahs": 78,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 23,
+    "name": "Al-Muminoon",
+    "arabic": "سُورَةُ المُؤۡمِنُونَ",
+    "ayahs": 118,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 24,
+    "name": "An-Noor",
+    "arabic": "سُورَةُ النُّورِ",
+    "ayahs": 64,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 25,
+    "name": "Al-Furqaan",
+    "arabic": "سُورَةُ الفُرۡقَانِ",
+    "ayahs": 77,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 26,
+    "name": "Ash-Shu'araa",
+    "arabic": "سُورَةُ الشُّعَرَاءِ",
+    "ayahs": 227,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 27,
+    "name": "An-Naml",
+    "arabic": "سُورَةُ النَّمۡلِ",
+    "ayahs": 93,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 28,
+    "name": "Al-Qasas",
+    "arabic": "سُورَةُ القَصَصِ",
+    "ayahs": 88,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 29,
+    "name": "Al-Ankaboot",
+    "arabic": "سُورَةُ العَنكَبُوتِ",
+    "ayahs": 69,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 30,
+    "name": "Ar-Room",
+    "arabic": "سُورَةُ الرُّومِ",
+    "ayahs": 60,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 31,
+    "name": "Luqman",
+    "arabic": "سُورَةُ لُقۡمَانَ",
+    "ayahs": 34,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 32,
+    "name": "As-Sajda",
+    "arabic": "سُورَةُ السَّجۡدَةِ",
+    "ayahs": 30,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 33,
+    "name": "Al-Ahzaab",
+    "arabic": "سُورَةُ الأَحۡزَابِ",
+    "ayahs": 73,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 34,
+    "name": "Saba",
+    "arabic": "سُورَةُ سَبَإٍ",
+    "ayahs": 54,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 35,
+    "name": "Faatir",
+    "arabic": "سُورَةُ فَاطِرٍ",
+    "ayahs": 45,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 36,
+    "name": "Yaseen",
+    "arabic": "سُورَةُ يسٓ",
+    "ayahs": 83,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 37,
+    "name": "As-Saaffaat",
+    "arabic": "سُورَةُ الصَّافَّاتِ",
+    "ayahs": 182,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 38,
+    "name": "Saad",
+    "arabic": "سُورَةُ صٓ",
+    "ayahs": 88,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 39,
+    "name": "Az-Zumar",
+    "arabic": "سُورَةُ الزُّمَرِ",
+    "ayahs": 75,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 40,
+    "name": "Ghafir",
+    "arabic": "سُورَةُ غَافِرٍ",
+    "ayahs": 85,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 41,
+    "name": "Fussilat",
+    "arabic": "سُورَةُ فُصِّلَتۡ",
+    "ayahs": 54,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 42,
+    "name": "Ash-Shura",
+    "arabic": "سُورَةُ الشُّورَىٰ",
+    "ayahs": 53,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 43,
+    "name": "Az-Zukhruf",
+    "arabic": "سُورَةُ الزُّخۡرُفِ",
+    "ayahs": 89,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 44,
+    "name": "Ad-Dukhaan",
+    "arabic": "سُورَةُ الدُّخَانِ",
+    "ayahs": 59,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 45,
+    "name": "Al-Jaathiya",
+    "arabic": "سُورَةُ الجَاثِيَةِ",
+    "ayahs": 37,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 46,
+    "name": "Al-Ahqaf",
+    "arabic": "سُورَةُ الأَحۡقَافِ",
+    "ayahs": 35,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 47,
+    "name": "Muhammad",
+    "arabic": "سُورَةُ مُحَمَّدٍ",
+    "ayahs": 38,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 48,
+    "name": "Al-Fath",
+    "arabic": "سُورَةُ الفَتۡحِ",
+    "ayahs": 29,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 49,
+    "name": "Al-Hujuraat",
+    "arabic": "سُورَةُ الحُجُرَاتِ",
+    "ayahs": 18,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 50,
+    "name": "Qaaf",
+    "arabic": "سُورَةُ قٓ",
+    "ayahs": 45,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 51,
+    "name": "Adh-Dhaariyat",
+    "arabic": "سُورَةُ الذَّارِيَاتِ",
+    "ayahs": 60,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 52,
+    "name": "At-Tur",
+    "arabic": "سُورَةُ الطُّورِ",
+    "ayahs": 49,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 53,
+    "name": "An-Najm",
+    "arabic": "سُورَةُ النَّجۡمِ",
+    "ayahs": 62,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 54,
+    "name": "Al-Qamar",
+    "arabic": "سُورَةُ القَمَرِ",
+    "ayahs": 55,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 55,
+    "name": "Ar-Rahmaan",
+    "arabic": "سُورَةُ الرَّحۡمَٰن",
+    "ayahs": 78,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 56,
+    "name": "Al-Waaqia",
+    "arabic": "سُورَةُ الوَاقِعَةِ",
+    "ayahs": 96,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 57,
+    "name": "Al-Hadid",
+    "arabic": "سُورَةُ الحَدِيدِ",
+    "ayahs": 29,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 58,
+    "name": "Al-Mujaadila",
+    "arabic": "سُورَةُ المُجَادلَةِ",
+    "ayahs": 22,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 59,
+    "name": "Al-Hashr",
+    "arabic": "سُورَةُ الحَشۡرِ",
+    "ayahs": 24,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 60,
+    "name": "Al-Mumtahana",
+    "arabic": "سُورَةُ المُمۡتَحنَةِ",
+    "ayahs": 13,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 61,
+    "name": "As-Saff",
+    "arabic": "سُورَةُ الصَّفِّ",
+    "ayahs": 14,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 62,
+    "name": "Al-Jumu'a",
+    "arabic": "سُورَةُ الجُمُعَةِ",
+    "ayahs": 11,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 63,
+    "name": "Al-Munaafiqoon",
+    "arabic": "سُورَةُ المُنَافِقُونَ",
+    "ayahs": 11,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 64,
+    "name": "At-Taghaabun",
+    "arabic": "سُورَةُ التَّغَابُنِ",
+    "ayahs": 18,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 65,
+    "name": "At-Talaaq",
+    "arabic": "سُورَةُ الطَّلَاقِ",
+    "ayahs": 12,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 66,
+    "name": "At-Tahrim",
+    "arabic": "سُورَةُ التَّحۡرِيمِ",
+    "ayahs": 12,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 67,
+    "name": "Al-Mulk",
+    "arabic": "سُورَةُ المُلۡكِ",
+    "ayahs": 30,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 68,
+    "name": "Al-Qalam",
+    "arabic": "سُورَةُ القَلَمِ",
+    "ayahs": 52,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 69,
+    "name": "Al-Haaqqa",
+    "arabic": "سُورَةُ الحَاقَّةِ",
+    "ayahs": 52,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 70,
+    "name": "Al-Ma'aarij",
+    "arabic": "سُورَةُ المَعَارِجِ",
+    "ayahs": 44,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 71,
+    "name": "Nooh",
+    "arabic": "سُورَةُ نُوحٍ",
+    "ayahs": 28,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 72,
+    "name": "Al-Jinn",
+    "arabic": "سُورَةُ الجِنِّ",
+    "ayahs": 28,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 73,
+    "name": "Al-Muzzammil",
+    "arabic": "سُورَةُ المُزَّمِّلِ",
+    "ayahs": 20,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 74,
+    "name": "Al-Muddaththir",
+    "arabic": "سُورَةُ المُدَّثِّرِ",
+    "ayahs": 56,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 75,
+    "name": "Al-Qiyaama",
+    "arabic": "سُورَةُ القِيَامَةِ",
+    "ayahs": 40,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 76,
+    "name": "Al-Insaan",
+    "arabic": "سُورَةُ الإِنسَانِ",
+    "ayahs": 31,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 77,
+    "name": "Al-Mursalaat",
+    "arabic": "سُورَةُ المُرۡسَلَاتِ",
+    "ayahs": 50,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 78,
+    "name": "An-Naba",
+    "arabic": "سُورَةُ النَّبَإِ",
+    "ayahs": 40,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 79,
+    "name": "An-Naazi'aat",
+    "arabic": "سُورَةُ النَّازِعَاتِ",
+    "ayahs": 46,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 80,
+    "name": "Abasa",
+    "arabic": "سُورَةُ عَبَسَ",
+    "ayahs": 42,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 81,
+    "name": "At-Takwir",
+    "arabic": "سُورَةُ التَّكۡوِيرِ",
+    "ayahs": 29,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 82,
+    "name": "Al-Infitaar",
+    "arabic": "سُورَةُ الانفِطَارِ",
+    "ayahs": 19,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 83,
+    "name": "Al-Mutaffifin",
+    "arabic": "سُورَةُ المُطَفِّفِينَ",
+    "ayahs": 36,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 84,
+    "name": "Al-Inshiqaaq",
+    "arabic": "سُورَةُ الانشِقَاقِ",
+    "ayahs": 25,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 85,
+    "name": "Al-Burooj",
+    "arabic": "سُورَةُ البُرُوجِ",
+    "ayahs": 22,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 86,
+    "name": "At-Taariq",
+    "arabic": "سُورَةُ الطَّارِقِ",
+    "ayahs": 17,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 87,
+    "name": "Al-A'laa",
+    "arabic": "سُورَةُ الأَعۡلَىٰ",
+    "ayahs": 19,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 88,
+    "name": "Al-Ghaashiya",
+    "arabic": "سُورَةُ الغَاشِيَةِ",
+    "ayahs": 26,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 89,
+    "name": "Al-Fajr",
+    "arabic": "سُورَةُ الفَجۡرِ",
+    "ayahs": 30,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 90,
+    "name": "Al-Balad",
+    "arabic": "سُورَةُ البَلَدِ",
+    "ayahs": 20,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 91,
+    "name": "Ash-Shams",
+    "arabic": "سُورَةُ الشَّمۡسِ",
+    "ayahs": 15,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 92,
+    "name": "Al-Lail",
+    "arabic": "سُورَةُ اللَّيۡلِ",
+    "ayahs": 21,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 93,
+    "name": "Ad-Dhuhaa",
+    "arabic": "سُورَةُ الضُّحَىٰ",
+    "ayahs": 11,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 94,
+    "name": "Ash-Sharh",
+    "arabic": "سُورَةُ الشَّرۡحِ",
+    "ayahs": 8,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 95,
+    "name": "At-Tin",
+    "arabic": "سُورَةُ التِّينِ",
+    "ayahs": 8,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 96,
+    "name": "Al-Alaq",
+    "arabic": "سُورَةُ العَلَقِ",
+    "ayahs": 19,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 97,
+    "name": "Al-Qadr",
+    "arabic": "سُورَةُ القَدۡرِ",
+    "ayahs": 5,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 98,
+    "name": "Al-Bayyina",
+    "arabic": "سُورَةُ البَيِّنَةِ",
+    "ayahs": 8,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 99,
+    "name": "Az-Zalzala",
+    "arabic": "سُورَةُ الزَّلۡزَلَةِ",
+    "ayahs": 8,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 100,
+    "name": "Al-Aadiyaat",
+    "arabic": "سُورَةُ العَادِيَاتِ",
+    "ayahs": 11,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 101,
+    "name": "Al-Qaari'a",
+    "arabic": "سُورَةُ القَارِعَةِ",
+    "ayahs": 11,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 102,
+    "name": "At-Takaathur",
+    "arabic": "سُورَةُ التَّكَاثُرِ",
+    "ayahs": 8,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 103,
+    "name": "Al-Asr",
+    "arabic": "سُورَةُ العَصۡرِ",
+    "ayahs": 3,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 104,
+    "name": "Al-Humaza",
+    "arabic": "سُورَةُ الهُمَزَةِ",
+    "ayahs": 9,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 105,
+    "name": "Al-Fil",
+    "arabic": "سُورَةُ الفِيلِ",
+    "ayahs": 5,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 106,
+    "name": "Quraish",
+    "arabic": "سُورَةُ قُرَيۡشٍ",
+    "ayahs": 4,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 107,
+    "name": "Al-Maa'un",
+    "arabic": "سُورَةُ المَاعُونِ",
+    "ayahs": 7,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 108,
+    "name": "Al-Kawthar",
+    "arabic": "سُورَةُ الكَوۡثَرِ",
+    "ayahs": 3,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 109,
+    "name": "Al-Kaafiroon",
+    "arabic": "سُورَةُ الكَافِرُونَ",
+    "ayahs": 6,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 110,
+    "name": "An-Nasr",
+    "arabic": "سُورَةُ النَّصۡرِ",
+    "ayahs": 3,
+    "revelation": "Medinan"
+  },
+  {
+    "number": 111,
+    "name": "Al-Masad",
+    "arabic": "سُورَةُ المَسَدِ",
+    "ayahs": 5,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 112,
+    "name": "Al-Ikhlaas",
+    "arabic": "سُورَةُ الإِخۡلَاصِ",
+    "ayahs": 4,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 113,
+    "name": "Al-Falaq",
+    "arabic": "سُورَةُ الفَلَقِ",
+    "ayahs": 5,
+    "revelation": "Meccan"
+  },
+  {
+    "number": 114,
+    "name": "An-Naas",
+    "arabic": "سُورَةُ النَّاسِ",
+    "ayahs": 6,
+    "revelation": "Meccan"
+  }
+]

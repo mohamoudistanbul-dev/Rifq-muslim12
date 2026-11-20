@@ -23,6 +23,7 @@ import { contentRouter, warmContent } from './content.js';
 import { publicBaseUrl, renderIndex } from './publicUrl.js';
 import { geoRouter } from './geo.js';
 import { adminRouter, UPLOAD_DIR } from './admin.js';
+import { downloadRouter, apkSource, APK_PATH, APK_FILENAME } from './download.js';
 import { seedSuperAdmin, SUPER_ADMIN_EMAIL } from './seed.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -73,8 +74,15 @@ app.get('/api/config', (req, res) => {
     contactEmail: getSetting('contact_email', 'rifqmuslim@gmail.com'),
     contactPhone: getSetting('contact_phone', '+252612215593'),
     whatsapp: getSetting('whatsapp', '+252612215593'),
-    downloadUrl: getSetting('download_url', '') || publicBaseUrl(req),
+    // Official website link: the QR code and every share button use this.
+    downloadUrl: publicBaseUrl(req),
     publicUrl: publicBaseUrl(req),
+    siteUrl: publicBaseUrl(req),
+    // The APK is streamed by our own route so the saved file is always named
+    // RIFQ-Muslim.apk, even though the file itself lives in Cloudflare R2.
+    apkUrl: APK_PATH,
+    apkFilename: APK_FILENAME,
+    apkConfigured: Boolean(apkSource()),
     communityEnabled: getSetting('community_enabled', 'true') === 'true',
     announcement:
       getSetting('announcement_active', 'false') === 'true'
@@ -561,6 +569,10 @@ app.use('/api', contentRouter);
 /* ---------------------------------- admin ---------------------------------- */
 
 app.use('/api/admin', adminRouter);
+
+/* -------------------------------- downloads -------------------------------- */
+
+app.use(downloadRouter);
 
 /* --------------------------------- static --------------------------------- */
 

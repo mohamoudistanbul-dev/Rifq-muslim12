@@ -9,6 +9,7 @@ import LocationPanel from '../components/LocationPanel';
 import { gregorianDate } from '../lib/hijri';
 import { REMINDERS, dayIndex } from '../lib/data';
 import LiveContent from '../components/LiveContent';
+import DownloadApp from '../components/DownloadApp';
 
 const VERSE_OF_DAY: { surah: number; ayah: number }[] = [
   { surah: 2, ayah: 286 },
@@ -259,6 +260,8 @@ export default function Home() {
         </section>
 
         <LiveContent />
+
+        <DownloadApp />
 
         <h3 className="section-title">{t('Quick access')}</h3>
         <div className="grid grid-3">

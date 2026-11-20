@@ -46,6 +46,24 @@ protobuf-java 3.25.5;
 
 All four are committed and reproducible; none were hand-written.
 
+### 2.2 Manifest inventory — nothing else is silently uncovered
+
+Enumerating every dependency manifest in the repository (excluding `node_modules/`,
+`dist/` and `.git/`) returns exactly these files and no others:
+
+```
+package.json / package-lock.json                       npm (web + server bundle)
+android/app/build.gradle.kts / gradle.lockfile          :app library graph
+android/build.gradle.kts / buildscript-gradle.lockfile  plugin classpath
+deps-audit/build.gradle / gradle.lockfile               audit-only AAR resolution
+```
+
+There is no `requirements.txt`, `pyproject.toml`, `pom.xml`, `go.mod`, `Cargo.toml`,
+`Gemfile` or `composer.json` anywhere in the repository, so no other ecosystem sits
+outside the scan. Every manifest that declares dependencies has a committed resolved
+lockfile beside it; the single exception is `android/build.gradle.kts`, which declares
+none of its own (§3).
+
 ### 2.1 Upgrades that produced this result
 
 The earlier scan reported 27 high/critical advisories, all in AGP 8.7.3's transitive

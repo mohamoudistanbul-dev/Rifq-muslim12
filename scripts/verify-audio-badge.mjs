@@ -165,7 +165,7 @@ try {
   check('range request reports Content-Range', /^bytes 0-2047\//.test(contentRange), contentRange);
   check('range request body is 2048 bytes', bytes.length === 2048, `got ${bytes.length}`);
   check('stream is labelled with its real source', stream.headers.get('x-audio-source') === 'mp3quran.net', String(stream.headers.get('x-audio-source')));
-  check('MP3 frames present (real audio, not text)', bytes.slice(0, 2).toString('latin1') === 'ID3' || (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0), bytes.slice(0, 4).toString('hex'));
+  check('MP3 frames present (real audio, not text)', bytes.slice(0, 3).toString('latin1') === 'ID3' || (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0), bytes.slice(0, 4).toString('hex'));
 
   const dl = await fetch(`${BASE}/api/quran/audio/alafasy/1?download=1`, { headers: { Range: 'bytes=0-1023' } });
   const disposition = dl.headers.get('content-disposition') || '';
@@ -185,7 +185,8 @@ try {
 
   const a = await signup('Verify User A', 'verify-a@rifq.test');
   const b = await signup('Verify User B', 'verify-b@rifq.test');
-  check('two ordinary accounts registered', a.status === 200 && b.status === 200, `${a.status}/${b.status} ${a.text.slice(0, 120)}`);
+  const ok2 = (r) => r.status === 200 || r.status === 201;
+  check('two ordinary accounts registered', ok2(a) && ok2(b), `${a.status}/${b.status} ${a.text.slice(0, 120)}`);
 
   const userBCookie = b.cookie || a.cookie;
   const userAId = a.json?.user?.id;

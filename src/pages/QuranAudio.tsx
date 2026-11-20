@@ -4,8 +4,10 @@ import { AppIcon } from '../components/Icons';
 import { usePlayer, SPEEDS, formatTime } from '../lib/quranPlayer';
 import { useDownloads, formatBytes } from '../lib/downloads';
 import { trackKey } from '../lib/audioStore';
+import { reciterArtwork } from '../lib/quranAudio';
 import type { AudioSurah } from '../lib/quranAudio';
 import '../audio.css';
+import '../quranAudioUi.css';
 
 /**
  * Quran audio — listening and offline downloads only.
@@ -37,8 +39,24 @@ function readBookmarks(): Bookmark[] {
 }
 
 export default function QuranAudio() {
-  const { state, surahs, reciters, catalogLoading, catalogError, lastPlayed, play, resumeLast, toggle, next, prev, seek, setSpeed, cycleRepeat } =
-    usePlayer();
+  const {
+    state,
+    surahs,
+    reciters,
+    catalogLoading,
+    catalogError,
+    lastPlayed,
+    play,
+    resumeLast,
+    toggle,
+    next,
+    prev,
+    seek,
+    setSpeed,
+    cycleRepeat,
+    setReciter,
+    openNowPlaying,
+  } = usePlayer();
   const manager = useDownloads();
 
   const [reciterId, setReciterId] = useState('');
@@ -60,6 +78,12 @@ export default function QuranAudio() {
     if (preferred) setReciterId(preferred.id);
   }, [reciters, reciterId]);
 
+  /* Keep the highlighted reciter identical to the one actually playing. */
+  useEffect(() => {
+    if (!state.surah || !state.reciterId) return;
+    setReciterId((current) => (current === state.reciterId ? current : state.reciterId));
+  }, [state.surah, state.reciterId]);
+
   const selectReciter = (id: string) => {
     setReciterId(id);
     try {
@@ -67,6 +91,8 @@ export default function QuranAudio() {
     } catch {
       /* storage may be blocked */
     }
+    /* Switch the audio straight away when a surah is already loaded. */
+    if (state.surah > 0 && state.reciterId !== id) void setReciter(id);
   };
 
   const selected = reciters.find((r) => r.id === reciterId);
@@ -165,6 +191,42 @@ export default function QuranAudio() {
             ))}
           </select>
         </div>
+        <div className="qa-reciter-strip" role="list" aria-label="Choose a reciter">
+          {reciters.map((reciter) => {
+            const active = reciter.id === reciterId;
+            return (
+              <button
+                key={reciter.id}
+                type="button"
+                role="listitem"
+                className={`qa-reciter-chip${active ? ' is-active' : ''}${reciter.available ? '' : ' is-unavailable'}`}
+                onClick={() => selectReciter(reciter.id)}
+                disabled={!reciter.available}
+                aria-pressed={active}
+                aria-label={`${reciter.name}${reciter.available ? '' : ' (unavailable)'}`}
+                title={reciter.name}
+              >
+                <img
+                  className="qa-reciter-avatar"
+                  src={reciter.artwork || reciterArtwork(reciter.id)}
+                  alt=""
+                  loading="lazy"
+                />
+                <span className="qa-reciter-meta">
+                  <strong>{reciter.name}</strong>
+                  <span dir="rtl" lang="ar">
+                    {reciter.arabic}
+                  </span>
+                </span>
+                {active && (
+                  <span className="qa-reciter-check" aria-hidden="true">
+                    ✓
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
         <p className="tiny muted qa-source">
           {catalogLoading
             ? 'Checking the recitation source…'
@@ -179,10 +241,17 @@ export default function QuranAudio() {
       {state.surah > 0 ? (
         <div className="card qa-now">
           <div className="qa-now-head">
-            <div>
-              <p className="tiny qa-eyebrow">Now playing{state.offline ? ' · offline' : ''}</p>
-              <strong className="qa-now-title">{state.surahName}</strong>
-              <p className="tiny muted">{state.reciterName}</p>
+            <div className="qa-now-id">
+              <img
+                className="qa-now-art"
+                src={state.artwork || reciterArtwork(state.reciterId)}
+                alt={`${state.reciterName} — ${state.surahName}`}
+              />
+              <div>
+                <p className="tiny qa-eyebrow">Now playing{state.offline ? ' · offline' : ''}</p>
+                <strong className="qa-now-title">{state.surahName}</strong>
+                <p className="tiny muted">{state.reciterName}</p>
+              </div>
             </div>
             <span className="qa-repeat-chip">
               {state.repeat === 'one' ? 'Repeat 1' : state.repeat === 'all' ? 'Repeat all' : 'Repeat off'}
@@ -231,6 +300,9 @@ export default function QuranAudio() {
               {state.repeat === 'off' ? 'Repeat off' : state.repeat === 'all' ? 'Repeat all' : 'Repeat one'}
             </button>
           </div>
+          <button className="btn btn-primary btn-sm qa-open-full" onClick={openNowPlaying}>
+            <AppIcon name="play" size={16} /> Open full player
+          </button>
           {state.error && <p className="tiny qa-warn-text">{state.error}</p>}
         </div>
       ) : (

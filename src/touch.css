@@ -1,6 +1,8 @@
 /* RIFQ Muslim — mobile touch behaviour.
-   Native-feeling presses, no browser link menus on app controls,
-   and reading text that stays selectable. */
+   Native-feeling presses, no browser link menus on app controls, and no
+   Android/Chrome text-selection toolbar (Copy, Select all, Web search,
+   Google lookup) over reading content. Selection survives only where it is
+   deliberate: form fields and the reader's "Select text" mode. */
 
 /* 0. The whole screen keeps one fixed scale.
    Pinch-to-zoom and double-tap zoom are disabled for every page — Quran, audio,
@@ -17,6 +19,19 @@ body {
   -moz-text-size-adjust: 100%;
   text-size-adjust: 100%;
   overscroll-behavior: none; /* no pull-to-refresh / overscroll magnification */
+}
+
+/* 0b. Nothing on the page is selectable by default.
+   A long press on a Quran verse, translation, hadith, dua, heading or card can
+   no longer start a selection, so Chrome and the Android WebView never raise
+   the Copy / Select all / Web search / Google lookup toolbar over the app, and
+   nothing is handed to a Google search. Reading text the user deliberately
+   unlocks, and form fields, are re-enabled in section 2. */
+html,
+body {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* 1. Controls behave like native widgets, not web links. */
@@ -43,24 +58,37 @@ label.switch,
   touch-action: manipulation; /* no 300 ms double-tap delay, no double-tap zoom */
 }
 
-/* 2. Reading content stays selectable and copyable. */
-[data-selectable],
-.arabic,
-.arabic-lg,
-.quran-text,
-.ayah-text,
-.translation {
+/* 2. Selection only where it is deliberate.
+   2a. Form fields keep native copy, paste and autofill. */
+input:not([type='button']):not([type='submit']):not([type='reset']):not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+textarea,
+[contenteditable='true'] {
   -webkit-touch-callout: default;
   -webkit-user-select: text;
   user-select: text;
 }
 
-/* Arabic inside a navigation control is a label, not reading content. */
+/* 2b. Reading text, but only inside the reader's opt-in selection mode.
+   Copying a verse normally goes through the share/copy button on the card,
+   which needs no native toolbar at all. */
+.selection-enabled [data-selectable],
+.selection-enabled .arabic,
+.selection-enabled .arabic-lg,
+.selection-enabled .quran-text,
+.selection-enabled .ayah-text,
+.selection-enabled .translation {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Navigation labels are never reading content, even in selection mode. */
 a[href] .arabic,
 .nav-item .arabic,
 .chip .arabic,
 .surah-item .arabic,
 button .arabic {
+  -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
 }

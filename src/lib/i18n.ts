@@ -125,6 +125,12 @@ const D: Record<string, Entry> = {
   Phone: { ar: 'الهاتف', so: 'Telefoon' },
   'Copy': { ar: 'نسخ', so: 'Nuqul' },
   'Copied': { ar: 'تم النسخ', so: 'La nuqulay' },
+  'Select text': { ar: 'تحديد النص', so: 'Xulashada qoraalka' },
+  'Text selection on — long-press to copy': {
+    ar: 'تحديد النص مفعّل — اضغط مطولاً للنسخ',
+    so: 'Xulashada qoraalka waa furan — riix si aad u nuqulato',
+  },
+  'Text selection off': { ar: 'تحديد النص متوقف', so: 'Xulashada qoraalka waa xiran' },
   'Reset': { ar: 'إعادة ضبط', so: 'Dib u dhig' },
   'Share': { ar: 'مشاركة', so: 'La wadaag' },
   'Invite link': { ar: 'رابط الدعوة', so: 'Xiriirka casuunta' },

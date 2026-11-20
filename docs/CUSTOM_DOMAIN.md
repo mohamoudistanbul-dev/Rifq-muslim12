@@ -1,88 +1,97 @@
 # Custom domain for RIFQ Muslim
 
-The app currently answers on the platform URL
-`https://pqjm8aoyzd.dev.onappjet.com`. Serving it on your own domain is a
-two-part job: **you** add the domain and its DNS records, then the app is
-already prepared to follow it — no code change is needed when the domain
-changes.
+The app runs on the platform URL `https://pqjm8aoyzd.dev.onappjet.com`.
+This document describes how the chosen custom domain
+**`https://rifqmuslim.dev.ap-jt.com`** is attached and how to verify it.
 
-## 1. Which hostname to use
+## 1. The record (from Settings → Domains)
 
-| Requested form              | Status                                                                 |
-| --------------------------- | ---------------------------------------------------------------------- |
-| `com.rifqmuslim.app`        | This is the Android **package id** written in reverse. As a hostname it would be a *subdomain* of `rifqmuslim.app`, not a registrable domain. |
-| `rifqmuslim.app`            | Valid, if you own that `.app` domain. `.app` is HTTPS-only, which suits this app. |
-| `www.rifq-muslim.com`       | Valid, if you own `rifq-muslim.com`. Recommended primary host.         |
+| Field  | Value |
+| ------ | ----- |
+| Type   | `CNAME` |
+| Name   | `rifqmuslim.dev.ap-jt.com` |
+| Target | `ebceba978ee5ff0914a913cd4.edge.onappjet.com` |
+| TTL    | 300 seconds (or automatic) |
 
-Pick **one** primary host, for example `www.rifq-muslim.com`, and (optionally)
-redirect the bare domain (`rifq-muslim.com`) to it.
+Create exactly this record at the DNS provider that hosts the `dev.ap-jt.com`
+zone. Use a `CNAME` only — never an `A` record, and do not proxy it through a
+CDN (the orange-cloud "proxy" toggle in Cloudflare must stay off) because the
+target is already a TLS-terminating edge host.
 
-## 2. Add the domain in AppJet
+TLS is issued automatically by the platform once the name resolves and the
+domain shows **Verified** in Settings → Domains.
 
-1. Open **Settings → Domains** (custom domains are included on the Starter plan).
-2. Add the hostname exactly as you will type it, e.g. `www.rifq-muslim.com`.
-3. Settings shows the DNS records to create — typically a `CNAME` for `www`
-   (or an `A` record for an apex domain) plus a `TXT` record that proves
-   ownership. **Use the values shown there**; they are tied to this deployment.
-4. Create those records at your registrar / DNS provider.
-5. Wait for propagation (usually minutes, up to a few hours) and press
-   **Verify** in Settings.
+## 2. What the application does on its own
 
-TLS is issued automatically once DNS resolves to the deployment.
+Nothing has to be edited when a domain is attached:
 
-## 3. Tell the app its public address
+- `server/publicUrl.js` resolves the public origin as
+  `PUBLIC_APP_URL` → `PUBLIC_URL` → the request host (forced to `https` for
+  anything that is not loopback). Invitation links, QR codes, email
+  verification and password-reset links all use it.
+- The HTML shell is rendered per request with `canonical`, `og:` and `twitter:`
+  tags for the host that served it, so WhatsApp/Facebook/Telegram shares show
+  the custom domain.
+- `GET /api/config` returns the same origin as `publicUrl`.
 
-Set one environment variable in **Settings → Environment variables**:
+### Pinning the canonical domain
 
-```
-PUBLIC_APP_URL=https://www.rifq-muslim.com
-```
+Setting the environment variable `PUBLIC_APP_URL` makes every share and email
+link use the custom domain even when a visitor arrives on the platform URL:
 
-That single value drives:
+    PUBLIC_APP_URL=https://rifqmuslim.dev.ap-jt.com
 
-- invitation links and the QR code on **Invite Friends**,
-- the canonical and Open Graph/Twitter tags in the page head (so WhatsApp,
-  Facebook and Telegram previews show the official domain),
-- email verification and password-reset links sent by the backend.
+Set it in **Settings → Environment variables**, then redeploy.
 
-Without it, the app falls back to the hostname each visitor used, so both the
-custom domain and the platform URL keep working during the transition.
+> Do this only after the CNAME resolves. Pointing `PUBLIC_APP_URL` at a name
+> that does not resolve breaks invitation and password-reset links.
 
-Redeploy after changing it (any deployment picks the value up at start).
+## 3. Android
 
-## 4. Point the Android shell at the domain
-
-`android/gradle.properties`:
+The native app talks to the domain in `android/gradle.properties`:
 
 ```properties
-rifq.appUrl=https://www.rifq-muslim.com
+rifq.appUrl=https://rifqmuslim.dev.ap-jt.com
 ```
 
-It is compiled into `BuildConfig.RIFQ_APP_URL` and must stay HTTPS — cleartext
-HTTP is disabled in `android/app/src/main/res/xml/network_security_config.xml`,
-which lists the official domains. Override per build without editing files:
+Override per build without editing the file:
 
 ```bash
-./gradlew assembleRelease -Prifq.appUrl=https://your.domain
+./gradlew assembleDebug -Prifq.appUrl=https://staging.example.com
 ```
 
-The GitHub Actions workflow exposes the same value as the `app_url` input.
+`android/app/src/main/res/xml/network_security_config.xml` whitelists
+`ap-jt.com` (plus `rifq-muslim.com`, `rifqmuslim.app` and the platform preview
+host) with cleartext HTTP disabled, so every request travels over HTTPS.
 
-## 5. Verify
+The Android **package id stays `com.rifqmuslim.app`** — it identifies the app in
+Google Play and must not follow a web domain change.
+
+## 4. Verification
 
 ```bash
-# DNS points at the deployment
-dig +short www.rifq-muslim.com
+# DNS: must print the edge hostname
+getent hosts rifqmuslim.dev.ap-jt.com
 
-# HTTPS + certificate
-curl -sI https://www.rifq-muslim.com | head -1
+# HTTPS + metadata: must show the custom host in canonical/og:url
+curl -sS -o /dev/null -w '%{http_code}\n' https://rifqmuslim.dev.ap-jt.com/
+curl -sS https://rifqmuslim.dev.ap-jt.com/ | grep -o '<link rel="canonical"[^>]*>'
 
-# canonical tag follows the domain
-curl -s https://www.rifq-muslim.com | grep -o '<link rel="canonical"[^>]*>'
-
-# invite link uses the domain
-curl -s https://www.rifq-muslim.com/api/config | jq -r .publicUrl
+# The API must report the same origin once PUBLIC_APP_URL is set
+curl -sS https://rifqmuslim.dev.ap-jt.com/api/config | jq -r .publicUrl
 ```
 
-All four should mention your domain, not the platform host. Then open
-**Invite Friends** and confirm the printed link and QR code use it too.
+Expected: `200`, a canonical link containing `https://rifqmuslim.dev.ap-jt.com`,
+and the same value from `/api/config`.
+
+## 5. Troubleshooting
+
+- **Still "No DNS record" after creating the CNAME** — the `dev.ap-jt.com` zone
+  must exist at the same provider as `ap-jt.com`; a record added to the parent
+  zone is not enough. Wait one TTL (300 s) and re-check.
+- **Domain verified but HTTPS fails** — remove any CDN proxy on the record and
+  wait a few minutes for certificate issuance.
+- **Links still show the platform URL** — `PUBLIC_APP_URL` is unset or the app
+  was not redeployed after setting it.
+- **Android app cannot reach the API** — confirm the host is listed in
+  `network_security_config.xml` and that `rifq.appUrl` matches the live domain.

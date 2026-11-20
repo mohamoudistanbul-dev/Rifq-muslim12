@@ -21,7 +21,8 @@ interface TrackRecord extends StoredTrack {
 
 const DB_NAME = 'rifq-quran-audio';
 const STORE = 'tracks';
-const VERSION = 1;
+const PARTIALS = 'partials';
+const VERSION = 2;
 
 export const trackKey = (reciter: string, surah: number) => `${reciter}:${surah}`;
 
@@ -37,17 +38,24 @@ function openDb(): Promise<IDBDatabase> {
       if (!database.objectStoreNames.contains(STORE)) {
         database.createObjectStore(STORE, { keyPath: 'key' });
       }
+      if (!database.objectStoreNames.contains(PARTIALS)) {
+        database.createObjectStore(PARTIALS, { keyPath: 'key' });
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error || new Error('Offline storage could not be opened.'));
   });
 }
 
-async function withStore<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+async function withStore<T>(
+  mode: IDBTransactionMode,
+  run: (store: IDBObjectStore) => IDBRequest<T>,
+  name: string = STORE
+): Promise<T> {
   const database = await openDb();
   return new Promise<T>((resolve, reject) => {
-    const transaction = database.transaction(STORE, mode);
-    const request = run(transaction.objectStore(STORE));
+    const transaction = database.transaction(name, mode);
+    const request = run(transaction.objectStore(name));
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error || new Error('Offline storage request failed.'));
     transaction.oncomplete = () => database.close();
@@ -96,6 +104,38 @@ export async function deleteTrack(key: string): Promise<void> {
 
 export async function clearTracks(): Promise<void> {
   await withStore('readwrite', (store) => store.clear());
+}
+
+/**
+ * Partial downloads are kept separately so an interrupted transfer can be
+ * resumed from the byte offset already on disk instead of starting over.
+ */
+export async function savePartial(reciter: string, surah: number, blob: Blob): Promise<void> {
+  await withStore(
+    'readwrite',
+    (store) =>
+      store.put({
+        key: trackKey(reciter, surah),
+        reciter,
+        surah,
+        size: blob.size,
+        blob,
+      }),
+    PARTIALS
+  );
+}
+
+export async function getPartial(key: string): Promise<{ key: string; size: number; blob: Blob } | null> {
+  const record = await withStore<{ key: string; size: number; blob: Blob } | undefined>(
+    'readonly',
+    (store) => store.get(key),
+    PARTIALS
+  );
+  return record || null;
+}
+
+export async function deletePartial(key: string): Promise<void> {
+  await withStore('readwrite', (store) => store.delete(key), PARTIALS);
 }
 
 export async function storageUsage(): Promise<{ count: number; bytes: number }> {

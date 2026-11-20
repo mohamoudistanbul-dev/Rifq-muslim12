@@ -46,7 +46,7 @@ protobuf-java 3.25.5;
 
 All four are committed and reproducible; none were hand-written.
 
-### 2.2 Manifest inventory — nothing else is silently uncovered
+### 2.1 Manifest inventory — nothing else is silently uncovered
 
 Enumerating every dependency manifest in the repository (excluding `node_modules/`,
 `dist/` and `.git/`) returns exactly these files and no others:
@@ -64,7 +64,7 @@ outside the scan. Every manifest that declares dependencies has a committed reso
 lockfile beside it; the single exception is `android/build.gradle.kts`, which declares
 none of its own (§3).
 
-### 3.2 If you need a fully attributed scan
+### 2.2 External routes to a fully attributed scan
 
 Nothing in this repository can close the gap, but two external routes can, without touching
 the application or its build:
@@ -97,7 +97,7 @@ warning, the expected one:
 > No resolved dependency file for android/build.gradle.kts. Generate the normal project
 > lockfile when appropriate; do not invent versions or install a test framework.
 
-### 2.1 Upgrades that produced this result
+### 2.3 Upgrades that produced this result
 
 The earlier scan reported 27 high/critical advisories, all in AGP 8.7.3's transitive
 toolchain. They were cleared by upgrading and pinning, not by suppressing:
@@ -199,7 +199,7 @@ plugin-free root project. No lockfile was fabricated and no finding was suppress
 Unknown: anything the advisory database has not yet published, the Gradle
 distribution and SDK components themselves, and everything in §5.
 
-## 4. Runtime external resources (outside dependency scanning)
+## 7. Runtime external resources (outside dependency scanning)
 
 The scanner's own coverage note states that "unlocked, vendored and CDN dependencies may be
 outside coverage". Build-time packages are covered by §2. This section enumerates the

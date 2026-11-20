@@ -598,6 +598,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       catalogError,
       lastPlayed,
       play,
+      setReciter,
+      openNowPlaying,
+      closeNowPlaying,
       resumeLast,
       toggle,
       next,
@@ -607,7 +610,26 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       cycleRepeat,
       close,
     }),
-    [state, surahs, reciters, catalogLoading, catalogError, lastPlayed, play, resumeLast, toggle, next, prev, seek, setSpeed, cycleRepeat, close]
+    [
+      state,
+      surahs,
+      reciters,
+      catalogLoading,
+      catalogError,
+      lastPlayed,
+      play,
+      setReciter,
+      openNowPlaying,
+      closeNowPlaying,
+      resumeLast,
+      toggle,
+      next,
+      prev,
+      seek,
+      setSpeed,
+      cycleRepeat,
+      close,
+    ]
   );
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;
@@ -621,7 +643,7 @@ export function usePlayer(): PlayerApi {
 
 /** Compact player that stays available on every screen while audio is loaded. */
 export function PlayerBar() {
-  const { state, toggle, next, prev, seek, setSpeed, cycleRepeat, close } = usePlayer();
+  const { state, toggle, next, prev, seek, setSpeed, cycleRepeat, close, openNowPlaying } = usePlayer();
   if (!state.surah) return null;
   const max = state.duration > 0 ? state.duration : 0;
 

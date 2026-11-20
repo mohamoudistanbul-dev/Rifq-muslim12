@@ -305,4 +305,4 @@ describes the patched graph. Because the pins only touch AGP tooling classpaths,
 runtime stays AndroidX/Material only.
 
 `android/build.gradle.kts` declares no dependencies of its own (the plugins there are applied in
-`:app`), so it has no lockfile; the AGP plugin classpath is covered by `daps-audit/gradle.lockfile`.
+`:app`), so it has no lockfile; the AGP plugin classpath is covered by `deps-audit/gradle.lockfile`.

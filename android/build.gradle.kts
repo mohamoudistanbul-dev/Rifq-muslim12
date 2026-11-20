@@ -43,10 +43,7 @@ plugins {
     id("org.jetbrains.kotlin.android") version "2.4.21" apply false
 }
 
-// Dependency locking for this build script. The root project declares no dependencies of its
-// own (plugins above are applied in :app and their classpath is audited by deps-audit), so this
-// lock file records that empty resolved state rather than leaving the build script unaccounted
-// for. The module's real dependency set lives in android/app/gradle.lockfile.
-dependencyLocking {
-    lockAllConfigurations()
-}
+// This build script declares no dependencies of its own: the plugins above are applied in :app,
+// so the app's resolved dependency set is pinned in android/app/gradle.lockfile and AGP's plugin
+// classpath is audited by deps-audit/build.gradle. Gradle therefore emits no lockfile here, which
+// the dependency scanner reports as a coverage warning rather than as a finding.

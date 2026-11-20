@@ -112,10 +112,9 @@ class MainActivity : AppCompatActivity() {
             cacheMode = WebSettings.LOAD_DEFAULT
             useWideViewPort = true
             loadWithOverviewMode = true
-            // Page-level zoom stays with the app: the reader exposes its own
-            // Zoom In / Zoom Out / Reset controls plus two-finger pinch on
-            // reading content. The shell therefore never gets stuck in a
-            // zoomed layout and shows no browser-style zoom buttons.
+            // The page always renders at its normal, consistent size: the app
+            // exposes no magnification controls of its own and the shell shows
+            // no browser-style zoom buttons or pinch-zoom overlay.
             setSupportZoom(false)
             builtInZoomControls = false
             displayZoomControls = false

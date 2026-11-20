@@ -3,19 +3,38 @@ import { AppIcon } from './Icons';
 import { useStore } from '../lib/store';
 import { APK_PATH, fetchApkInfo, formatBytes, startApkDownload, type ApkInfo } from '../lib/download';
 
-type Status = 'idle' | 'preparing' | 'started' | 'unavailable';
+type Status = 'idle' | 'preparing' | 'started' | 'unavailable' | 'inapp';
+
+/**
+ * WhatsApp, Facebook, Instagram and Telegram open links in their own built-in
+ * browser, which blocks APK downloads on many Android phones. Detect it so we
+ * can hand the user a working route (Chrome, or a copied link) instead of
+ * leaving them with a button that silently does nothing.
+ */
+function inAppBrowser(): string | null {
+  const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent || '';
+  if (/FBAN|FBAV|FB_IAB/i.test(ua)) return 'Facebook';
+  if (/Instagram/i.test(ua)) return 'Instagram';
+  if (/WhatsApp/i.test(ua)) return 'WhatsApp';
+  if (/Telegram/i.test(ua)) return 'Telegram';
+  if (/Line\//i.test(ua)) return 'Line';
+  return null;
+}
 
 /**
  * The official Android download card.
  *
- * Tapping the button navigates to /download/RIFQ-Muslim.apk, which streams the
- * owner's Cloudflare R2 file with `Content-Disposition: attachment`, so Android
- * hands it to the Download Manager and saves it as RIFQ-Muslim.apk.
+ * Tapping the button navigates to /download/RIFQ-Muslim.apk. The server streams
+ * the APK the owner uploaded (or the configured URL) with
+ * `Content-Disposition: attachment`, so Android hands it to the Download
+ * Manager and saves it as RIFQ-Muslim.apk.
  */
 export default function DownloadApp({ compact = false }: { compact?: boolean }) {
   const { t } = useStore();
   const [info, setInfo] = useState<ApkInfo | null>(null);
   const [status, setStatus] = useState<Status>('idle');
+  const [copied, setCopied] = useState(false);
+  const host = inAppBrowser();
 
   useEffect(() => {
     let alive = true;
@@ -32,14 +51,52 @@ export default function DownloadApp({ compact = false }: { compact?: boolean }) 
       setStatus('unavailable');
       return;
     }
+    // Inside a social app's browser a navigation would replace the page with a
+    // blank view, so show the working alternative instead.
+    if (host) {
+      setStatus('inapp');
+      return;
+    }
     setStatus('preparing');
     startApkDownload(info?.url || APK_PATH);
     // The browser owns the actual progress (Download Manager notification).
     window.setTimeout(() => setStatus('started'), 800);
   };
 
+  const openInChrome = () => {
+    const { host: h, origin } = window.location;
+    const fallback = `${origin}${APK_PATH}`;
+    window.location.href =
+      `intent://${h}${APK_PATH}#Intent;scheme=${window.location.protocol.replace(':', '')};` +
+      `package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(fallback)};end`;
+  };
+
+  const copyLink = async () => {
+    const link = `${window.location.origin}${APK_PATH}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2500);
+    } catch {
+      window.prompt(t('Copy this link'), link);
+    }
+  };
+
   const size = formatBytes(info?.size ?? null);
   const notPublished = !!info && !info.configured;
+
+  const smallButton: React.CSSProperties = {
+    flex: 1,
+    minWidth: 130,
+    padding: '9px 12px',
+    borderRadius: 12,
+    border: '1px solid rgba(212,175,55,.55)',
+    background: 'rgba(212,175,55,.10)',
+    color: 'inherit',
+    fontWeight: 600,
+    fontSize: 13,
+    cursor: 'pointer',
+  };
 
   return (
     <section className="card gold-edge">
@@ -70,6 +127,22 @@ export default function DownloadApp({ compact = false }: { compact?: boolean }) 
         <AppIcon name="download" size={17} /> {t('DOWNLOAD RIFQ MUSLIM')}
       </button>
 
+      {status === 'inapp' && (
+        <div style={{ marginTop: 10 }}>
+          <p className="small" style={{ margin: '0 0 8px', lineHeight: 1.55 }}>
+            {t('You opened this page inside')} {host}. {t('Its browser blocks APK downloads. Open the page in Chrome and the download starts normally.')}
+          </p>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <button style={smallButton} onClick={openInChrome}>
+              {t('Open in Chrome')}
+            </button>
+            <button style={smallButton} onClick={() => void copyLink()}>
+              {copied ? t('Link copied') : t('Copy download link')}
+            </button>
+          </div>
+        </div>
+      )}
+
       <p
         id="rifq-download-status"
         role="status"
@@ -78,12 +151,12 @@ export default function DownloadApp({ compact = false }: { compact?: boolean }) 
         style={{ margin: '8px 0 0', minHeight: 16 }}
       >
         {status === 'idle' &&
-          (notPublished ? t('The APK link is not published yet.') : `RIFQ-Muslim.apk${size ? ` · ${size}` : ''}`)}
+          (notPublished ? t('The Android file is not available yet.') : `RIFQ-Muslim.apk${size ? ` · ${size}` : ''}`)}
         {status === 'preparing' && t('Starting your download…')}
         {status === 'started' &&
           t('Download started. Open your notifications or Downloads to install RIFQ-Muslim.apk.')}
         {status === 'unavailable' &&
-          t('The APK link is not published yet. Please try again soon or contact support.')}
+          t('The Android file is not available yet. Please try again soon.')}
       </p>
     </section>
   );

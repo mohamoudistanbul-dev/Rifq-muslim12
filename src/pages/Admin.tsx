@@ -25,6 +25,15 @@ interface AuditRow {
   created_at: string;
 }
 
+interface ApkStatus {
+  configured: boolean;
+  filename: string;
+  url: string;
+  size: number | null;
+  source: string;
+  uploaded?: boolean;
+}
+
 interface ContentItem {
   id: string;
   type: string;
@@ -293,6 +302,10 @@ export default function Admin() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [settings, setSettings] = useState<Record<string, string>>({});
+  const [apk, setApk] = useState<ApkStatus | null>(null);
+  const [apkBusy, setApkBusy] = useState(false);
+  const [apkProgress, setApkProgress] = useState(0);
+  const [apkMsg, setApkMsg] = useState('');
   const [logs, setLogs] = useState<AuditRow[]>([]);
   const [security, setSecurity] = useState<Security | null>(null);
 
@@ -393,6 +406,15 @@ export default function Admin() {
             if (alive) setSettings(r.settings);
           })
           .catch(fail(t('Settings could not be loaded.')))
+      );
+      jobs.push(
+        get<ApkStatus>('/admin/apk')
+          .then((r) => {
+            if (alive) setApk(r);
+          })
+          .catch(() => {
+            /* the APK panel simply stays empty */
+          })
       );
     }
     if (tab === 'activity') {
@@ -1023,7 +1045,135 @@ export default function Admin() {
     </>
   );
 
+  /** Uploads the APK straight from the dashboard, with real byte progress. */
+  const uploadApk = (file: File) => {
+    setApkBusy(true);
+    setApkProgress(0);
+    setApkMsg('');
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', '/api/admin/apk');
+    xhr.withCredentials = true;
+    xhr.setRequestHeader('Content-Type', 'application/vnd.android.package-archive');
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) setApkProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      setApkBusy(false);
+      let data: any = {};
+      try {
+        data = JSON.parse(xhr.responseText || '{}');
+      } catch {
+        data = {};
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        setApk(data as ApkStatus);
+        setApkProgress(100);
+        setApkMsg(t('APK uploaded. The Download button on the website works now.'));
+      } else {
+        setApkMsg(data.error || t('The APK could not be uploaded.'));
+      }
+    };
+    xhr.onerror = () => {
+      setApkBusy(false);
+      setApkMsg(t('The upload failed. Check your connection and try again.'));
+    };
+    xhr.send(file);
+  };
+
+  const removeApk = () => {
+    if (!window.confirm(t('Remove the uploaded APK? The download button stops working until you upload a new one.'))) return;
+    setApkBusy(true);
+    setApkMsg('');
+    del<ApkStatus>('/admin/apk')
+      .then((r) => {
+        setApk(r);
+        setApkMsg(t('APK removed.'));
+      })
+      .catch((e: any) => setApkMsg(e?.message || t('The APK could not be removed.')))
+      .finally(() => setApkBusy(false));
+  };
+
+  const renderApkPanel = () => (
+    <div className="card">
+      <h3 className="admin-card-title">{t('Android APK download')}</h3>
+      <p className="admin-note" style={{ marginTop: 0 }}>
+        {t('Upload the RIFQ Muslim APK here once. The website then serves it as RIFQ-Muslim.apk, so no external link is needed.')}
+      </p>
+
+      <div className="row between" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '8px 0' }}>
+        <span className="small">{t('Current file')}</span>
+        <strong className="small">
+          {apk?.configured
+            ? `${apk.filename}${apk.size ? ` · ${(apk.size / (1024 * 1024)).toFixed(1)} MB` : ''}`
+            : t('Not uploaded yet')}
+        </strong>
+      </div>
+      <p className="tiny muted" style={{ margin: '0 0 10px' }}>
+        {apk?.source === 'upload'
+          ? t('Served by this app from the uploaded file.')
+          : apk?.source === 'url'
+            ? t('Served from the download URL saved above.')
+            : t('Until a file is uploaded the download button reports that the Android file is not available yet.')}
+      </p>
+
+      <label className="btn btn-primary btn-sm" style={{ cursor: apkBusy ? 'progress' : 'pointer' }}>
+        {apkBusy ? t('Uploading…') : t('Choose APK file')}
+        <input
+          type="file"
+          accept=".apk,application/vnd.android.package-archive"
+          style={{ display: 'none' }}
+          disabled={apkBusy}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (file) uploadApk(file);
+          }}
+        />
+      </label>
+
+      {apkBusy && (
+        <div style={{ marginTop: 10 }} aria-live="polite">
+          <div style={{ height: 8, borderRadius: 999, background: 'rgba(255,255,255,.12)', overflow: 'hidden' }}>
+            <div
+              style={{
+                width: `${apkProgress}%`,
+                height: '100%',
+                background: 'var(--gold, #d4af37)',
+                transition: 'width .2s ease',
+              }}
+            />
+          </div>
+          <p className="tiny muted" style={{ margin: '6px 0 0' }}>
+            {apkProgress}% {t('uploaded')}
+          </p>
+        </div>
+      )}
+
+      {apkMsg && (
+        <p className="admin-note" style={{ marginTop: 8 }} role="status">
+          {apkMsg}
+        </p>
+      )}
+
+      <div className="row" style={{ gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+        <a className="btn btn-ghost btn-sm" href="/download/RIFQ-Muslim.apk" target="_blank" rel="noreferrer">
+          {t('Test download')}
+        </a>
+        {apk?.uploaded && (
+          <button className="btn btn-ghost btn-sm" onClick={removeApk} disabled={apkBusy}>
+            {t('Remove uploaded APK')}
+          </button>
+        )}
+      </div>
+
+      <p className="admin-note" style={{ marginTop: 10 }}>
+        {t('Where to get the file: GitHub → Actions → "Build Android APK" → latest successful run → Artifacts → download app-debug.apk, then upload that .apk here.')}
+      </p>
+    </div>
+  );
+
   const renderSettings = () => (
+    <>
     <div className="card">
       <h3 className="admin-card-title">{t('Website settings')}</h3>
       {SETTING_FIELDS.map((f) => {
@@ -1072,6 +1222,8 @@ export default function Admin() {
         {t('Saved settings update the live application immediately.')}
       </p>
     </div>
+    {renderApkPanel()}
+    </>
   );
 
   const renderActivity = () => (

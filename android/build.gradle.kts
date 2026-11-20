@@ -11,6 +11,7 @@
 //   org.bitbucket.b_c:jose4j -> 0.9.6     (JWT/JOSE parsing fixes)
 //   org.jdom:jdom2     -> 2.0.6.1         (XXE fix)
 //   commons-compress   -> 1.26.0          (GHSA-4265-ccf5-phj5, GHSA-4g9r-vxhx-9pgx)
+//   commons-lang3      -> 3.18.0          (GHSA-j288-q9x7-2f5v)
 buildscript {
     repositories {
         google()
@@ -29,6 +30,8 @@ buildscript {
                         useVersion("2.0.6.1")
                     requested.group == "org.apache.commons" && requested.name == "commons-compress" ->
                         useVersion("1.26.0")
+                    requested.group == "org.apache.commons" && requested.name == "commons-lang3" ->
+                        useVersion("3.18.0")
                 }
             }
         }

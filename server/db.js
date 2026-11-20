@@ -335,6 +335,25 @@ export function auditLog(actor, action, detail = '') {
   );
 }
 
+/* ---------------------- blue verified badge (server-side) -------------------- */
+
+/**
+ * The badge is a separate column from `verified` (which means "email
+ * confirmed"). It defaults to 0 for every existing and new account, so no
+ * ordinary account or premium subscriber is ever marked verified by accident.
+ * A guarded ALTER keeps existing databases working.
+ */
+function ensureColumn(table, column, definition) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!columns.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+ensureColumn('users', 'badge_verified', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('users', 'badge_verified_at', 'TEXT');
+ensureColumn('users', 'badge_verified_by', 'TEXT');
+
 export function publicUser(row) {
   if (!row) return null;
   let prefs = {};
@@ -349,6 +368,10 @@ export function publicUser(row) {
     name: row.name,
     role: row.role,
     verified: !!row.verified,
+    /* Blue verified tick: granted only by a Super Admin, stored server-side. */
+    badgeVerified: !!row.badge_verified,
+    badgeVerifiedAt: row.badge_verified_at || null,
+    badgeVerifiedBy: row.badge_verified_by || null,
     lang: row.lang,
     theme: row.theme,
     prefs,

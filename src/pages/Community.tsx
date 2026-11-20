@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Page, Loading, ErrorBox, Modal } from '../components/Shell';
 import { AppIcon } from '../components/Icons';
+import VerifiedBadge from '../components/VerifiedBadge';
 import { useStore } from '../lib/store';
 import { get, post } from '../lib/api';
 
@@ -12,6 +13,8 @@ interface Post {
   body: string;
   likes: number;
   created_at: string;
+  /** Set by the server from the author's stored badge flag. */
+  author_verified?: boolean;
 }
 
 export default function Community() {
@@ -134,7 +137,10 @@ export default function Community() {
         {(posts || []).map((p) => (
           <article key={p.id} className="card">
             <div className="row" style={{ justifyContent: 'space-between' }}>
-              <span className="small"><strong>{p.author}</strong></span>
+              <span className="small qa-author">
+                <strong>{p.author}</strong>
+                {p.author_verified && <VerifiedBadge />}
+              </span>
               <span className="tiny muted">{new Date(p.created_at).toLocaleString()}</span>
             </div>
             <p className="small" style={{ margin: '8px 0', whiteSpace: 'pre-wrap' }}>{p.body}</p>

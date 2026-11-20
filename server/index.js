@@ -456,10 +456,17 @@ app.get('/api/community/posts', (req, res) => {
   const blocked = req.user
     ? db.prepare('SELECT blocked_user_id FROM blocks WHERE user_id = ?').all(req.user.id).map((r) => r.blocked_user_id)
     : [];
+  /* The blue tick comes from the author's stored badge flag, joined on the
+   * server. The client never decides who is verified. */
   const rows = db
-    .prepare("SELECT * FROM posts WHERE status = 'published' ORDER BY created_at DESC LIMIT 60")
+    .prepare(
+      `SELECT p.*, u.badge_verified AS author_badge FROM posts p
+       LEFT JOIN users u ON u.id = p.user_id
+       WHERE p.status = 'published' ORDER BY p.created_at DESC LIMIT 60`
+    )
     .all()
-    .filter((p) => !blocked.includes(p.user_id));
+    .filter((p) => !blocked.includes(p.user_id))
+    .map(({ author_badge, ...post }) => ({ ...post, author_verified: !!author_badge }));
   res.json({ posts: rows, disabled: false });
 });
 
@@ -569,8 +576,13 @@ app.post('/api/assistant', rateLimit({ windowMs: 60_000, max: 12 }), async (req,
 
 /* ------------------------- Quran / hadith / places -------------------------- */
 
+/* ESM imports are hoisted, so binding the audio router here keeps it next to
+ * the mount that uses it. Audio-only: surah metadata plus the recitation stream. */
+import { quranAudioRouter } from './quran-audio.js';
+
 app.use('/api', geoRouter);
 app.use('/api', contentRouter);
+app.use('/api', quranAudioRouter);
 
 /* ---------------------------------- admin ---------------------------------- */
 

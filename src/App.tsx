@@ -33,16 +33,20 @@ import Support from './pages/Support';
 import Articles, { ArticleDetail } from './pages/Articles';
 import SiteFooter from './components/SiteFooter';
 import { Login, Register, Forgot, Reset, Verify } from './pages/Auth';
+import QuranAudio from './pages/QuranAudio';
+import { PlayerProvider, PlayerBar } from './lib/quranPlayer';
 
 export default function App() {
   return (
     <BrowserRouter>
       <StoreProvider>
+        <PlayerProvider>
         <div className="app-shell">
           <main className="app-main">
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/quran" element={<QuranList />} />
+              <Route path="/quran/audio" element={<QuranAudio />} />
               <Route path="/quran/:number" element={<QuranReader />} />
               <Route path="/prayer" element={<Prayer />} />
               <Route path="/tasbih" element={<Tasbih />} />
@@ -81,9 +85,11 @@ export default function App() {
             </Routes>
             <SiteFooter />
           </main>
+          <PlayerBar />
           <BottomNav />
         </div>
         <Toasts />
+        </PlayerProvider>
       </StoreProvider>
     </BrowserRouter>
   );

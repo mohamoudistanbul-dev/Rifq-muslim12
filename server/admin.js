@@ -390,6 +390,58 @@ adminRouter.patch('/users/:id', requireSuperAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+/* ------------------------------ verified badge ----------------------------- */
+
+/**
+ * Granting the blue tick is a Super Admin action only. The permission check is
+ * server-side (requireSuperAdmin), an account can never verify itself, and every
+ * change is written to the audit log with the acting administrator.
+ */
+adminRouter.patch('/users/:id/badge', requireSuperAdmin, (req, res) => {
+  const target = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!target) return res.status(404).json({ error: 'User not found.' });
+  if (target.id === req.user.id) {
+    return res.status(403).json({ error: 'You cannot change your own verification badge.' });
+  }
+  if (req.body?.verified === undefined) {
+    return res.status(400).json({ error: 'Send verified: true or verified: false.' });
+  }
+  const grant = req.body.verified === true;
+  const at = grant ? nowIso() : null;
+  const by = grant ? req.user.email : null;
+  db.prepare('UPDATE users SET badge_verified = ?, badge_verified_at = ?, badge_verified_by = ? WHERE id = ?').run(
+    grant ? 1 : 0,
+    at,
+    by,
+    target.id
+  );
+  auditLog(req.user, grant ? 'admin.badge.grant' : 'admin.badge.revoke', {
+    userId: target.id,
+    email: target.email,
+    by: req.user.email,
+  });
+  res.json({ ok: true, user: publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(target.id)) });
+});
+
+/** Verified accounts plus the badge audit trail, for the admin dashboard. */
+adminRouter.get('/verifications', requireAdmin, (_req, res) => {
+  const verified = db
+    .prepare('SELECT * FROM users WHERE badge_verified = 1 ORDER BY badge_verified_at DESC LIMIT 200')
+    .all()
+    .map((u) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      verifiedAt: u.badge_verified_at,
+      verifiedBy: u.badge_verified_by,
+    }));
+  const history = db
+    .prepare("SELECT * FROM audit WHERE action IN ('admin.badge.grant','admin.badge.revoke') ORDER BY created_at DESC LIMIT 100")
+    .all();
+  res.json({ verified, history });
+});
+
 adminRouter.delete('/users/:id', requireSuperAdmin, (req, res) => {
   const target = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!target) return res.status(404).json({ error: 'User not found.' });

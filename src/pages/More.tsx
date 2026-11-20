@@ -26,6 +26,7 @@ const GROUPS: Group[] = [
   {
     title: 'Worship',
     items: [
+      { to: '/quran/audio', icon: 'play', label: 'Quran Audio', desc: 'Listen and download surahs' },
       { to: '/qibla', icon: 'compass', label: 'Qibla', desc: 'Direction to the Kaaba' },
       { to: '/duas', icon: 'heart', label: 'Duas', desc: 'Adhkar for every moment' },
       { to: '/hadith', icon: 'book', label: 'Hadith', desc: 'Six authentic collections' },

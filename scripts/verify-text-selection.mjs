@@ -17,8 +17,12 @@
  *     typing, paste and autofill are untouched
  *
  * Usage:
- *   node scripts/verify-text-selection.mjs --preview        # after npm run build
- *   node scripts/verify-text-selection.mjs https://host/    # a live deployment
+ *   node scripts/verify-text-selection.mjs            # builds nothing: starts server/index.js
+ *   node scripts/verify-text-selection.mjs --preview   # static dist only (no API)
+ *   node scripts/verify-text-selection.mjs https://host/   # a live deployment
+ *
+ * The default mode starts the real app server, which serves dist AND /api, so
+ * the Quran verses actually render and the verse assertions run.
  *
  * Exits non-zero if any assertion fails.
  */
@@ -73,13 +77,17 @@ async function waitForServer(url, timeoutMs = 25000) {
 
 let server = null;
 
-async function startPreview() {
-  server = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort', '--host', '127.0.0.1'], {
+async function startApp({ preview = false } = {}) {
+  const args = preview
+    ? ['vite', 'preview', '--port', String(PORT), '--strictPort', '--host', '127.0.0.1']
+    : ['server/index.js'];
+  server = spawn(preview ? 'npx' : 'node', args, {
     stdio: 'ignore',
     detached: false,
+    env: { ...process.env, PORT: String(PORT) },
   });
   const url = `http://127.0.0.1:${PORT}`;
-  if (!(await waitForServer(url))) throw new Error('vite preview did not become ready');
+  if (!(await waitForServer(url))) throw new Error(`${args.join(' ')} did not become ready`);
   return url;
 }
 
@@ -115,12 +123,8 @@ async function cancelled(page, selector, type) {
 async function main() {
   const argUrl = process.argv.slice(2).find((a) => a.startsWith('http'));
   const wantsPreview = process.argv.includes('--preview');
-  if (!argUrl && !wantsPreview) {
-    console.error('Pass --preview or a live URL, e.g. node scripts/verify-text-selection.mjs https://host/');
-    process.exit(2);
-  }
 
-  const base = argUrl ?? (await startPreview());
+  const base = argUrl ?? (await startApp({ preview: wantsPreview }));
   const pw = await loadPlaywright();
   const browser = await pw.chromium.launch({ args: ['--no-sandbox'] });
 

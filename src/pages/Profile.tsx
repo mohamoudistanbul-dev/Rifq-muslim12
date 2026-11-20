@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Page, Loading } from '../components/Shell';
 import { AppIcon } from '../components/Icons';
+import VerifiedBadge from '../components/VerifiedBadge';
 import { useStore } from '../lib/store';
 import { patch, post, del } from '../lib/api';
 import { LANGS, type Lang } from '../lib/i18n';
@@ -69,7 +70,16 @@ export default function Profile() {
         <div className="tile-icon" style={{ margin: '0 auto 8px', width: 64, height: 64, fontSize: 26 }}>
           {user.name.slice(0, 1).toUpperCase()}
         </div>
-        <h3 className="section-title" style={{ marginBottom: 2 }}>{user.name}</h3>
+        <h3 className="section-title qa-author" style={{ marginBottom: 2, justifyContent: 'center' }}>
+          {user.name}
+          {user.badgeVerified && <VerifiedBadge size={16} />}
+        </h3>
+        {user.badgeVerified && (
+          <p className="tiny" style={{ margin: '0 0 2px', color: '#1d9bf0' }}>
+            {t('Verified Account')}
+            {user.badgeVerifiedAt ? ` · ${new Date(user.badgeVerifiedAt).toLocaleDateString()}` : ''}
+          </p>
+        )}
         <p className="tiny muted" style={{ margin: 0 }}>
           {user.emailVerified ? t('Email verified') : t('Email not verified yet')}
           {user.role === 'admin' ? ` · ${t('Administrator')}` : ''}

@@ -305,4 +305,4 @@ describes the patched graph. Because the pins only touch AGP tooling classpaths,
 runtime stays AndroidX/Material only.
 
 `android/build.gradle.kts` declares no dependencies of its own (the plugins there are applied in
-`:app`), so it has no lockfile; the AGP plugin classpath is covered by `deps-audit/gradle.lockfile`.
+`android/build.gradle.kts` locks its **buildscript (plugin) classpath** in `android/buildscript-gradle.lockfile`. That is where AGP and its transitive tooling libraries actually resolve, so this file pins them (Netty, Guava, protobuf, BouncyCastle and the rest). Regenerate it with `./gradlew -p android buildEnvironment --write-locks`. The two `settings.gradle(.kts)` scripts only configure plugin repositories and declare no dependencies, so they have no lockfile; AGP's plugin classpath is also audited by `deps-audit/gradle.lockfile`.

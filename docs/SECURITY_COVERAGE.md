@@ -64,6 +64,22 @@ outside the scan. Every manifest that declares dependencies has a committed reso
 lockfile beside it; the single exception is `android/build.gradle.kts`, which declares
 none of its own (§3).
 
+### 3.1 If you need a fully attributed scan
+
+Nothing in this repository can close the gap, but two external routes can, without touching
+the application or its build:
+
+- **GitHub Dependency Graph / Dependabot** parses Gradle lockfiles directly, so it reports
+the plugin classpath from `android/buildscript-gradle.lockfile` without requiring a
+project-level file. Enabling Dependabot alerts on the repository gives continuous advisory
+coverage for the same packages.
+- **OSV-Scanner in CI** can be given the lockfiles themselves as scan targets (rather than
+relying on build-script discovery), which attributes every package to a manifest and avoids
+the "no resolved dependency file" warning.
+
+Either route covers the same 444 packages already resolved here; neither changes the
+application, its dependencies or its build.
+
 Reconciliation against the report itself (`packages_checked: 444`,
 `ecosystems: ["Maven", "npm"]`, `unmatched_packages: 0`):
 

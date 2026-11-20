@@ -1,5 +1,217 @@
 name: Build RIFQ Muslim Android APK
+name: Build RIFQ Muslim Android APK
 
+# Builds the native Android shell in android/ on a GitHub-hosted Ubuntu runner.
+# Toolchain pinned to the versions documented in docs/ANDROID_BUILD.md:
+#   JDK 17, Android SDK Platform 35, Build-Tools 35.0.0, Gradle 8.9 (wrapper),
+#   AGP 8.7.3, Kotlin 2.0.21.
+#
+# Default path needs NO paid services and NO signing secrets: it produces a
+# debug APK signed with the standard Android debug key, which installs on any
+# phone for testing but cannot be uploaded to Google Play.
+#
+# Optional signed release builds are described in docs/GITHUB_ACTIONS_APK.md
+# and are gated behind the repository variable ENABLE_RELEASE_SIGNING.
+#
+# --no-build-cache is deliberate: CVE-2026-53914 (GHSA-r937-wjx7-w2jp) is an
+# unsafe-deserialization issue in Kotlin build-cache metadata that affects
+# org.jetbrains.kotlin:kotlin-gradle-plugin before 2.4.20-Beta1 (this project
+# uses 2.0.21, and the only fixed release is a beta). Disabling the build cache
+# for CI removes that metadata path entirely; see docs/GITHUB_ACTIONS_APK.md §5.
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_url:
+        description: "HTTPS URL the native shell loads (BuildConfig.RIFQ_APP_URL)"
+        required: false
+        default: "https://pqjm8aoyzd.dev.onappjet.com"
+        type: string
+  push:
+    branches:
+      - main
+    paths:
+      - "android/**"
+      - ".github/workflows/android-apk.yml"
+
+# Least privilege: this workflow only reads the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  debug-apk:
+    name: Debug APK (installable test build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install SDK platform 35 and build-tools 35.0.0
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Point Gradle at the SDK
+        run: echo "sdk.dir=${ANDROID_HOME}" > android/local.properties
+
+      - name: Build debug APK
+        working-directory: android
+        env:
+          APP_URL_INPUT: ${{ github.event.inputs.app_url }}
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ARGS=""
+          if [ -n "${APP_URL_INPUT}" ]; then
+            ARGS="-Prifq.appUrl=${APP_URL_INPUT}"
+          fi
+          ./gradlew --no-daemon --no-build-cache --stacktrace assembleDebug ${ARGS}
+
+      - name: Verify APK output
+        run: |
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          test -f "${APK}"
+          ls -lh "${APK}"
+          sha256sum "${APK}"
+
+      - name: Resolved dependency graph (audit aid)
+        # The Gradle modules have no lockfile, so automated dependency scanners
+        # cannot resolve this graph outside a real build. Emitting it here makes
+        # the transitive Android dependency set auditable. Non-blocking.
+        working-directory: android
+        continue-on-error: true
+        run: |
+          ./gradlew --no-daemon --no-build-cache :app:dependencies \
+            --configuration releaseRuntimeClasspath > gradle-dependencies.txt 2>&1 || true
+          wc -l gradle-dependencies.txt
+
+      - name: Upload dependency graph
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gradle-dependency-graph
+          path: android/gradle-dependencies.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload debug APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rifq-muslim-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+  release-apk:
+    name: Signed release APK + AAB (optional, needs secrets)
+    # 'secrets' cannot be used in a job-level if, so the switch is a repository
+    # variable. Leave it unset/false to skip this job entirely.
+    if: ${{ vars.ENABLE_RELEASE_SIGNING == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install SDK platform 35 and build-tools 35.0.0
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Point Gradle at the SDK
+        run: echo "sdk.dir=${ANDROID_HOME}" > android/local.properties
+
+      # Secrets are written to files the runner needs, never echoed, and are
+      # removed again in the always() cleanup step below. The runner is
+      # ephemeral, and nothing is committed back to the repository.
+      - name: Write signing config from repository secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.KEYSTORE_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEYSTORE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEYSTORE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in KEYSTORE_BASE64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing signing secret ${name}. See docs/GITHUB_ACTIONS_APK.md."
+              exit 1
+            fi
+          done
+          umask 077
+          printf '%s' "${KEYSTORE_BASE64}" | base64 --decode > android/rifq-release.jks
+          {
+            echo "storeFile=rifq-release.jks"
+            echo "storePassword=${STORE_PASSWORD}"
+            echo "keyAlias=${KEY_ALIAS}"
+            echo "keyPassword=${KEY_PASSWORD}"
+          } > android/keystore.properties
+          chmod 600 android/rifq-release.jks android/keystore.properties
+
+      - name: Build signed release APK and AAB
+        working-directory: android
+        env:
+          APP_URL_INPUT: ${{ github.event.inputs.app_url }}
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ARGS=""
+          if [ -n "${APP_URL_INPUT}" ]; then
+            ARGS="-Prifq.appUrl=${APP_URL_INPUT}"
+          fi
+          ./gradlew --no-daemon --no-build-cache --stacktrace assembleRelease bundleRelease ${ARGS}
+
+      - name: Verify signing certificate
+        run: |
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          test -f "${APK}"
+          "${ANDROID_HOME}/build-tools/35.0.0/apksigner" verify --print-certs "${APK}"
+
+      - name: Upload signed release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rifq-muslim-release-signed
+          path: |
+            android/app/build/outputs/apk/release/*.apk
+            android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Remove signing material from the runner
+        if: always()
+        run: rm -f android/keystore.properties android/rifq-release.jks
+        
 # Builds the native Android shell in android/ on a GitHub-hosted Ubuntu runner.
 # Toolchain pinned to the versions documented in docs/ANDROID_BUILD.md:
 #   JDK 17, Android SDK Platform 35, Build-Tools 35.0.0, Gradle 8.9 (wrapper),

@@ -88,6 +88,14 @@ kotlin {
     }
 }
 
+// Dependency locking: app/gradle.lockfile is the resolved dependency list for this module.
+// It is what the repository security scan reads for AndroidX + Material, and it pins what
+// CI resolves. Regenerate after changing dependencies below:
+//   ./gradlew -p android :app:dependencies --write-locks
+configurations.configureEach {
+    resolutionStrategy.activateDependencyLocking()
+}
+
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")

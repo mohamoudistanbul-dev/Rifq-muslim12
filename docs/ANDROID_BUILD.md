@@ -18,7 +18,7 @@ android/
 ├── settings.gradle.kts            Module + repository configuration
 ├── build.gradle.kts               AGP 8.13.2 + Kotlin 2.4.21 (declared once)
 ├── gradle.properties              Brand defaults, HTTPS app URL override
-├── gradlew / gradlew.bat          Official Gradle 8.13 wrapper
+├── gradlew / gradlew.bat          Official Gradle 8.14.4 wrapper
 ├── gradle/wrapper/                Wrapper jar + distribution config
 ├── keystore.properties.example    Release signing template (no secrets)
 └── app/
@@ -49,7 +49,7 @@ the emerald/gold design are preserved — nothing is replaced by placeholders.
 | Item | Status |
 | --- | --- |
 | Complete Android source project | ✅ Provided in `android/` |
-| Gradle wrapper (8.13) included and verified | ✅ Yes |
+| Gradle wrapper (8.14.4) included and verified | ✅ Yes |
 | Branded icon, adaptive icon, splash, theme | ✅ Provided |
 | Native notifications, permissions, back navigation, HTTPS-only | ✅ Implemented |
 | GitHub Actions workflow to build the APK | ✅ `.github/workflows/android-apk.yml` (see §4 note) |

@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive launcher icon (Android 8.0+).
+
+  Both layers come from the uploaded master image public/logo-source.png through
+  scripts/build-icons.sh: the foreground is the artwork bitmap at 108dp with the
+  whole emblem inside the 66dp safe zone, and the background is the app's deep
+  emerald so no launcher mask can reveal a transparent corner.
+-->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@drawable/ic_launcher_background" />
-    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
     <monochrome android:drawable="@drawable/ic_stat_rifq" />
 </adaptive-icon>

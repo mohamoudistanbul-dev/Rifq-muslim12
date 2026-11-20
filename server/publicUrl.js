@@ -49,7 +49,8 @@ const escapeAttr = (value) =>
  */
 export function metaBlock(base) {
   const url = `${base}/`;
-  const image = `${base}/logo.svg`;
+  // The official app icon, generated from the uploaded master image.
+  const image = `${base}/icons/icon-512.png`;
   return [
     `<link rel="canonical" href="${escapeAttr(url)}" />`,
     '<meta property="og:type" content="website" />',
@@ -58,6 +59,10 @@ export function metaBlock(base) {
     `<meta property="og:description" content="${escapeAttr(APP_DESCRIPTION)}" />`,
     `<meta property="og:url" content="${escapeAttr(url)}" />`,
     `<meta property="og:image" content="${escapeAttr(image)}" />`,
+    '<meta property="og:image:type" content="image/png" />',
+    '<meta property="og:image:width" content="512" />',
+    '<meta property="og:image:height" content="512" />',
+    `<meta property="og:image:alt" content="${escapeAttr(APP_NAME)} app icon" />`,
     '<meta name="twitter:card" content="summary_large_image" />',
     `<meta name="twitter:title" content="${escapeAttr(APP_TITLE)}" />`,
     `<meta name="twitter:description" content="${escapeAttr(APP_DESCRIPTION)}" />`,

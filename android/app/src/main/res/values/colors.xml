@@ -15,4 +15,11 @@
 
     <!-- Window background: deep emerald, never white -->
     <color name="rifq_bg">#041F17</color>
+
+    <!--
+      Adaptive launcher icon background. The uploaded icon artwork is transparent
+      outside its gold border, so the launcher supplies this deep emerald behind
+      it. The artwork itself is the bitmap foreground in res/mipmap-*/.
+    -->
+    <color name="ic_launcher_background">#041F17</color>
 </resources>

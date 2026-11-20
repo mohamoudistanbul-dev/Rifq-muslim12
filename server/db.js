@@ -307,6 +307,22 @@ CREATE TABLE IF NOT EXISTS media (
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_content_slug ON content(slug);
 CREATE INDEX IF NOT EXISTS idx_content_type ON content(type, status);
+/*
+ * Verification requests: a user asks for the blue tick, a Super Admin decides.
+ * The badge itself is never granted here — approving writes users.badge_verified
+ * through the same server-side path as a direct grant, with an audit entry.
+ */
+CREATE TABLE IF NOT EXISTS badge_requests (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  note TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TEXT NOT NULL,
+  decided_at TEXT,
+  decided_by TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_badge_requests_status ON badge_requests(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_media_created ON media(created_at);
 `);
 

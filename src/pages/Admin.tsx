@@ -304,6 +304,9 @@ export default function Admin() {
   const [content, setContent] = useState<ContentItem[]>([]);
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [badgeReqs, setBadgeReqs] = useState<
+    { id: string; userId: string; name: string; email: string; note: string; status: string; createdAt: string }[]
+  >([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -370,6 +373,13 @@ export default function Admin() {
             if (alive) setUsers(r.users);
           })
           .catch(fail(t('Users could not be loaded.')))
+      );
+      jobs.push(
+        get<{ requests: typeof badgeReqs }>('/admin/badge-requests')
+          .then((r) => {
+            if (alive) setBadgeReqs(r.requests);
+          })
+          .catch(fail(t('Verification requests could not be loaded.')))
       );
     }
     if (tab === 'messages') {
@@ -815,6 +825,45 @@ export default function Admin() {
           aria-label={t('Search users')}
         />
       </div>
+      {badgeReqs.length > 0 && (
+        <div className="card">
+          <h3 className="h3">{t('Verification requests')}</h3>
+          <p className="small muted">
+            {t('Only the Super Admin can approve or reject a blue badge request.')}
+          </p>
+          {badgeReqs.map((r) => (
+            <div className="admin-item" key={r.id}>
+              <div className="admin-item-main">
+                <strong className="qa-author">{r.name || r.email}</strong>
+                <p className="small muted" style={{ margin: '2px 0 0' }}>
+                  {r.email} | {when(r.createdAt)}
+                  {r.note ? ` | ${r.note}` : ''}
+                </p>
+              </div>
+              <div className="admin-item-actions">
+                <button
+                  className="btn btn-soft btn-sm"
+                  disabled={!isSuper}
+                  onClick={() =>
+                    void run(() => patch(`/admin/badge-requests/${r.id}`, { action: 'approve' }), t('Verification badge granted.'))
+                  }
+                >
+                  {t('Approve ✓')}
+                </button>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  disabled={!isSuper}
+                  onClick={() =>
+                    void run(() => patch(`/admin/badge-requests/${r.id}`, { action: 'reject' }), t('Verification request rejected.'))
+                  }
+                >
+                  {t('Reject')}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       {users.length === 0 ? (
         <p className="small muted">{t('No users found.')}</p>
       ) : (

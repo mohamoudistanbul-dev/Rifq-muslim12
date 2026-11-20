@@ -12,7 +12,8 @@
     </base-config>
 
     <domain-config cleartextTrafficPermitted="false">
-        <!-- Official RIFQ Muslim domains (see docs/CUSTOM_DOMAIN.md). -->
+        <!-- Official RIFQ Muslim domain (see docs/CUSTOM_DOMAIN.md). -->
+        <domain includeSubdomains="true">ap-jt.com</domain>
         <domain includeSubdomains="true">rifq-muslim.com</domain>
         <domain includeSubdomains="true">rifqmuslim.app</domain>
         <!-- Platform preview URL, kept so test builds still reach the backend. -->

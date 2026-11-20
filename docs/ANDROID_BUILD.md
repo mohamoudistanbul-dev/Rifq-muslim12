@@ -167,7 +167,7 @@ The shell loads its content over HTTPS from one URL, set in
 `android/gradle.properties`:
 
 ```properties
-rifq.appUrl=https://www.rifq-muslim.com
+rifq.appUrl=https://rifqmuslim.dev.ap-jt.com
 ```
 
 It is compiled into `BuildConfig.RIFQ_APP_URL`. Override it for a single build

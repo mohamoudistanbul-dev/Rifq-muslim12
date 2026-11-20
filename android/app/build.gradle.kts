@@ -17,7 +17,7 @@ val hasReleaseKeystore = keystorePropertiesFile.exists()
 
 // HTTPS origin of the RIFQ Muslim backend. Override with -Prifq.appUrl=...
 val appUrl = (project.findProperty("rifq.appUrl") as String?)
-    ?: "https://www.rifq-muslim.com"
+    ?: "https://rifqmuslim.dev.ap-jt.com"
 
 android {
     namespace = "com.rifqmuslim.app"

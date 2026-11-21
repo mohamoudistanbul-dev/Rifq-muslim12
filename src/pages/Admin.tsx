@@ -1276,6 +1276,10 @@ export default function Admin() {
     </div>
   );
 
+  // The real published address of this app, shown to the admin next to the
+  // store links so it is obvious what Invite Friends will share.
+  const liveUrl = typeof window === 'undefined' ? '' : window.location.origin;
+
   const renderSettings = () => (
     <>
     <div className="card">

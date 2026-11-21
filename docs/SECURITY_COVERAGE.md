@@ -6,10 +6,10 @@ This document records exactly what the automated dependency scan covers, what it
 reports, what it **cannot** cover in this environment, and how to close the rest.
 It is **not** a statement that the application is secure.
 
-Last updated: 2026-11-21 (revision 20) — the repository scan was re-run on this revision and
+Last updated: 2026-11-21 (revision 24) — the repository scan was re-run on this revision and
 returned the same result: 444 packages, 0 advisories, status `incomplete`. The build scripts
 were re-audited and the remaining warning is still an **attribution** gap, not an unscanned
-package (§3):
+package (§3). The CI route's shape is now machine-checked by `npm run verify:workflow` (§3.4):
 `android/build.gradle.kts` owns a buildscript classpath configuration but no dependencies
 of its own, so Gradle emits `android/buildscript-gradle.lockfile` and never a
 project-level `android/gradle.lockfile`. A CI scan that targets each lockfile explicitly
@@ -226,7 +226,7 @@ alternative that needs no SDK at all is already configured here: enable Dependab
 alerts (Settings → Code security), which reads the committed buildscript lockfile
 directly (§2.2).
 
-### 3.4 Status of the CI route at revision 20
+### 3.4 Status of the CI route at revision 24
 
 `.github/workflows/dependency-scan.yml` is committed but **has not been executed**. AppJet
 cannot run GitHub Actions, and this environment has neither Gradle nor the Android SDK, so no
@@ -245,6 +245,14 @@ When the owner triggers it from the repository's **Actions** tab:
 
 A failing `Scan …` job means advisories were found in that lockfile — the intended gate. It
 does not mean the build is broken.
+
+The workflow's shape is machine-checked rather than merely inspected. `npm run verify:workflow`
+(`scripts/validate-android-workflow.mjs`, dependency-free) asserts 12 structural rules against
+this file, including that all four lockfiles remain explicit `-L` matrix targets, that exactly
+one job is non-gating, and that no step references a repository secret. This guards against
+coverage shrinking silently — a dropped lockfile now fails a local check instead of quietly
+narrowing the scan. It still does not execute the workflow, so a green run in the Actions tab
+remains the outstanding item.
 
 ## 4. How the AAR graph is resolved without the SDK
 

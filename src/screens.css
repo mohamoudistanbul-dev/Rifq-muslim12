@@ -72,6 +72,11 @@ html[data-theme='dark'] .hadith-grade {
   color: #d6f4e6;
 }
 
+/* Gold badges sit on a gold tint, so the dark theme needs the softer gold. */
+html[data-theme='dark'] .badge-gold {
+  color: var(--gold-soft);
+}
+
 .hadith-missing {
   font-size: 0.8rem;
   line-height: 1.5;

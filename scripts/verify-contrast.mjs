@@ -2,22 +2,24 @@
 /**
  * Contrast regression check for the Hadith and Athan screens.
  *
- * Both screens once rendered white cards with inherited (near-white) text in
- * the dark theme: the text was present in the DOM, so a visibility assertion
- * passed while the user saw a blank white panel. This check therefore measures
- * real computed colours in a browser, in both themes, and fails when a text
- * colour does not contrast with the surface it is actually painted on.
+ * Why this exists: both screens once painted cards with `var(--card, #fff)` —
+ * a token the design system never defines — while body text inherited
+ * var(--text). In dark mode that is near-white text on a white card. The text
+ * was present in the DOM, so text/visibility assertions passed while the user
+ * saw a blank white panel.
  *
- * Surfaces are composited, not read raw: the emerald/gold design system paints
- * cards with gradients and translucent tints such as rgba(212,175,55,0.22), so
- * the effective colour behind a glyph is the tint composited over its ancestor
- * surface. Each gradient stop is composited and the worst case for the text is
- * reported, which keeps the check conservative.
+ * How it measures: rather than reconstructing backgrounds from CSS (gradients,
+ * translucent tints and backdrop-filters make that guesswork), this check
+ * screenshots each text element and samples the ACTUAL painted pixels around
+ * its glyphs, then compares them with the computed text colour. Pixels that
+ * match the text colour are discarded so a glyph can't be mistaken for its
+ * backdrop, and the least favourable remaining sample is used.
  *
  * Usage: node scripts/verify-contrast.mjs
  */
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { inflateSync } from 'node:zlib';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('/opt/appjet/browser/node_modules/playwright');
@@ -71,10 +73,11 @@ function luminance({ r, g, b }) {
   return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
 }
 
-function ratio(fg, bg) {
-  const a = luminance(fg);
-  const b = luminance(bg);
-  const [hi, lo] = a > b ? [a, b] : [b, a];
+function ratio(a, b) {
+  const la = luminance(a);
+  const lb = luminance(b);
+  const hi = la > lb ? la : lb;
+  const lo = la > lb ? lb : la;
   return (hi + 0.05) / (lo + 0.05);
 }
 
@@ -82,32 +85,135 @@ function isLarge(fontSize, fontWeight) {
   return fontSize >= 24 || (Number(fontWeight) >= 700 && fontSize >= 18.66);
 }
 
+/** Minimal PNG reader for 8-bit RGB/RGBA screenshots. */
+function decodePng(buf) {
+  let pos = 8;
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  const idat = [];
+
+  while (pos + 8 <= buf.length) {
+    const len = buf.readUInt32BE(pos);
+    const type = buf.toString('ascii', pos + 4, pos + 8);
+    const data = buf.subarray(pos + 8, pos + 8 + len);
+    if (type === 'IHDR') {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      bitDepth = data[8];
+      colorType = data[9];
+    } else if (type === 'IDAT') {
+      idat.push(data);
+    } else if (type === 'IEND') {
+      break;
+    }
+    pos += 12 + len;
+  }
+
+  if (bitDepth !== 8 || (colorType !== 6 && colorType !== 2)) {
+    throw new Error(`unsupported PNG (bitDepth=${bitDepth}, colorType=${colorType})`);
+  }
+
+  const bpp = colorType === 6 ? 4 : 3;
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = width * bpp;
+  const out = Buffer.alloc(height * stride);
+
+  let rp = 0;
+  for (let y = 0; y < height; y++) {
+    const filter = raw[rp++];
+    const row = raw.subarray(rp, rp + stride);
+    rp += stride;
+    const prev = y > 0 ? out.subarray((y - 1) * stride, y * stride) : null;
+    const cur = out.subarray(y * stride, (y + 1) * stride);
+    for (let x = 0; x < stride; x++) {
+      const a = x >= bpp ? cur[x - bpp] : 0;
+      const b = prev ? prev[x] : 0;
+      const c = prev && x >= bpp ? prev[x - bpp] : 0;
+      let v = row[x];
+      switch (filter) {
+        case 0:
+          break;
+        case 1:
+          v = (v + a) & 255;
+          break;
+        case 2:
+          v = (v + b) & 255;
+          break;
+        case 3:
+          v = (v + ((a + b) >> 1)) & 255;
+          break;
+        case 4: {
+          const p = a + b - c;
+          const pa = Math.abs(p - a);
+          const pb = Math.abs(p - b);
+          const pc = Math.abs(p - c);
+          const pr = pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+          v = (v + pr) & 255;
+          break;
+        }
+        default:
+          throw new Error(`unsupported PNG filter ${filter}`);
+      }
+      cur[x] = v;
+    }
+  }
+  return { width, height, bpp, data: out };
+}
+
+function pixelAt(img, x, y) {
+  const px = Math.min(img.width - 1, Math.max(0, Math.round(x)));
+  const py = Math.min(img.height - 1, Math.max(0, Math.round(y)));
+  const i = py * img.width * img.bpp + px * img.bpp;
+  return { r: img.data[i], g: img.data[i + 1], b: img.data[i + 2] };
+}
+
+function distance(a, b) {
+  return Math.abs(a.r - b.r) + Math.abs(a.g - b.g) + Math.abs(a.b - b.b);
+}
+
 function record(page, theme, selector, data) {
   if (!data) return;
-  // Gradient-clipped text paints itself through background-image with a
-  // transparent colour; its contrast cannot be read from `color`.
   if (data.fgAlpha < 0.2) {
-    results.push({ page, theme, selector, skipped: true, bg: data.bg });
+    results.push({ page, theme, selector, skipped: true, fg: data.fg });
     return;
   }
   const fg = parseColor(data.fg);
-  const bg = parseColor(data.bg);
-  if (!fg || !bg) return;
-  const r = ratio(fg, bg);
+  if (!fg) return;
+
+  // Discard samples that are essentially the glyph colour, then judge the text
+  // by its least favourable remaining backdrop.
+  const backdrop = data.samples.filter((s) => distance(s, fg) > 24);
+  const pool = backdrop.length ? backdrop : data.samples;
+  let worst = null;
+  let worstRatio = Infinity;
+  for (const sample of pool) {
+    const r = ratio(fg, sample);
+    if (r < worstRatio) {
+      worstRatio = r;
+      worst = sample;
+    }
+  }
+  if (!worst) return;
+
   const large = isLarge(data.fontSize, data.fontWeight);
   const min = large ? 3 : 4.5;
-  const ok = r >= min;
+  const ok = worstRatio >= min;
   if (!ok) failures += 1;
+
+  const rgb = (c) => `rgb(${c.r},${c.g},${c.b})`;
   results.push({
     page,
     theme,
     selector,
-    ratio: Number(r.toFixed(2)),
+    ratio: Number(worstRatio.toFixed(2)),
     min,
     ok,
-    fg: data.fg,
-    bg: data.bg,
+    fg: rgb(fg),
+    bg: rgb(worst),
     text: data.text,
+    chain: data.chain,
   });
 }
 
@@ -125,89 +231,68 @@ async function waitForServer(url, timeoutMs = 60000) {
   return false;
 }
 
-/** Runs inside the page: composites the real surface behind a text node. */
-const measure = (selector) => {
-  const el = document.querySelector(selector);
-  if (!el) return null;
-  const cs = getComputedStyle(el);
-  if (cs.visibility === 'hidden' || cs.display === 'none' || Number(cs.opacity) < 0.1) return null;
+async function sampleElement(page, selector) {
+  const locator = page.locator(selector).first();
+  if ((await locator.count()) === 0) return null;
+  if (!(await locator.isVisible())) return null;
 
-  const parseAll = (value) => {
-    const out = [];
-    const re = /rgba?\(([^)]+)\)/g;
-    let m;
-    while ((m = re.exec(String(value)))) {
-      const p = m[1].split(/[\s,/]+/).filter(Boolean).map(Number);
-      if (p.length >= 3 && !p.slice(0, 3).some((n) => Number.isNaN(n))) {
-        out.push({ r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 });
+  await locator.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(60);
+
+  const info = await locator.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    const chain = [];
+    let cur = el;
+    while (cur && chain.length < 8) {
+      const style = getComputedStyle(cur);
+      const bg = style.backgroundColor;
+      const img = style.backgroundImage;
+      if ((bg && bg !== 'rgba(0, 0, 0, 0)') || (img && img !== 'none')) {
+        chain.push(
+          `${cur.tagName.toLowerCase()}${cur.className && typeof cur.className === 'string' ? '.' + cur.className.trim().split(/\s+/).join('.') : ''} bg=${bg} img=${img === 'none' ? '-' : img.slice(0, 60)}`
+        );
       }
+      cur = cur.parentElement;
     }
-    return out;
-  };
-
-  const lum = (c) => {
-    const ch = (v) => {
-      const s = v / 255;
-      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    return {
+      color: cs.color,
+      fontSize: parseFloat(cs.fontSize),
+      fontWeight: cs.fontWeight,
+      text: (el.textContent || '').trim().slice(0, 40),
+      rect: { x: rect.x, y: rect.y, w: rect.width, h: rect.height },
+      dpr: window.devicePixelRatio || 1,
+      chain,
     };
-    return 0.2126 * ch(c.r) + 0.7152 * ch(c.g) + 0.0722 * ch(c.b);
-  };
-
-  const over = (src, dst) => ({
-    r: src.a * src.r + (1 - src.a) * dst.r,
-    g: src.a * src.g + (1 - src.a) * dst.g,
-    b: src.a * src.b + (1 - src.a) * dst.b,
-    a: 1,
   });
 
-  // Background stops from the element up to the document root.
-  const chain = [];
-  let cur = el;
-  while (cur) {
-    const style = getComputedStyle(cur);
-    const stops = [];
-    const bg = parseAll(style.backgroundColor);
-    if (bg.length && bg[0].a > 0) stops.push(bg[0]);
-    if (style.backgroundImage && style.backgroundImage !== 'none') {
-      for (const s of parseAll(style.backgroundImage)) if (s.a > 0) stops.push(s);
-    }
-    if (stops.length) chain.push(stops);
-    cur = cur.parentElement;
-  }
+  const { rect, dpr } = info;
+  if (rect.w < 4 || rect.h < 4) return null;
 
-  // Paint from the root downwards; keep the extreme luminances per level so a
-  // gradient is judged by its least favourable stop for this text.
-  let candidates = [{ r: 255, g: 255, b: 255, a: 1 }];
-  for (let i = chain.length - 1; i >= 0; i--) {
-    const stops = chain[i];
-    const next = [];
-    for (const base of candidates) for (const stop of stops) next.push(over(stop, base));
-    if (!next.length) continue;
-    next.sort((a, b) => lum(a) - lum(b));
-    candidates = next.length > 2 ? [next[0], next[next.length - 1]] : next;
-  }
-
-  const fg = parseAll(cs.color)[0] || { r: 0, g: 0, b: 0, a: 1 };
-  const ratioTo = (bg) => {
-    const a = lum(fg);
-    const b = lum(bg);
-    const hi = a > b ? a : b;
-    const lo = a > b ? b : a;
-    return (hi + 0.05) / (lo + 0.05);
+  // Inset the clip so the element's own border doesn't dominate the samples.
+  const inset = 2;
+  const clip = {
+    x: Math.max(0, rect.x + inset),
+    y: Math.max(0, rect.y + inset),
+    width: Math.max(1, rect.w - inset * 2),
+    height: Math.max(1, rect.h - inset * 2),
   };
-  let worst = candidates[0];
-  for (const c of candidates) if (ratioTo(c) < ratioTo(worst)) worst = c;
 
-  const rgb = (c) => `rgb(${Math.round(c.r)},${Math.round(c.g)},${Math.round(c.b)})`;
-  return {
-    fg: rgb(fg),
-    bg: rgb(worst),
-    fgAlpha: fg.a,
-    fontSize: parseFloat(cs.fontSize),
-    fontWeight: cs.fontWeight,
-    text: (el.textContent || '').trim().slice(0, 40),
-  };
-};
+  const shot = await page.screenshot({ clip });
+  const img = decodePng(shot);
+  const w = img.width;
+  const h = img.height;
+  const points = [
+    [1, 1],
+    [w - 2, 1],
+    [1, h - 2],
+    [w - 2, h - 2],
+    [Math.floor(w / 2), 1],
+  ];
+
+  const samples = points.map(([x, y]) => pixelAt(img, x, y));
+  return { ...info, dpr, samples };
+}
 
 async function main() {
   const server = spawn(process.execPath, ['server/index.js'], {
@@ -217,8 +302,7 @@ async function main() {
 
   let browser;
   try {
-    const up = await waitForServer(`${BASE}/`);
-    if (!up) throw new Error(`server did not start on ${BASE}`);
+    if (!(await waitForServer(`${BASE}/`))) throw new Error(`server did not start on ${BASE}`);
 
     browser = await chromium.launch({ executablePath: CHROME });
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
@@ -226,8 +310,7 @@ async function main() {
     for (const [route, selectors] of Object.entries(TARGETS)) {
       await page.goto(`${BASE}${route}`, { waitUntil: 'domcontentloaded' });
       await page.waitForSelector('.page-title', { timeout: 20000 });
-      // Give the data-backed screens a moment to paint their cards.
-      await page.waitForTimeout(2500);
+      await page.waitForTimeout(2500); // let data-backed cards paint
 
       for (const theme of ['dark', 'light']) {
         await page.evaluate((t) => {
@@ -236,7 +319,7 @@ async function main() {
         await page.waitForTimeout(150);
 
         for (const selector of selectors) {
-          record(route, theme, selector, await page.evaluate(measure, selector));
+          record(route, theme, selector, await sampleElement(page, selector));
         }
       }
     }
@@ -253,7 +336,7 @@ async function main() {
   const width = Math.max(...results.map((r) => r.selector.length));
   for (const r of results) {
     if (r.skipped) {
-      console.log(`skip ${r.page.padEnd(8)} ${r.theme.padEnd(5)} ${r.selector.padEnd(width)} transparent text on ${r.bg}`);
+      console.log(`skip ${r.page.padEnd(8)} ${r.theme.padEnd(5)} ${r.selector.padEnd(width)} transparent text`);
       continue;
     }
     console.log(
@@ -261,6 +344,7 @@ async function main() {
         r.ratio
       ).padStart(6)}:1 (min ${r.min})  ${r.fg} on ${r.bg}  "${r.text}"`
     );
+    if (!r.ok) for (const line of r.chain || []) console.log(`       └ ${line}`);
   }
 
   const combos = new Set(results.map((r) => `${r.page}:${r.theme}`));
@@ -269,7 +353,7 @@ async function main() {
     console.error(`CONTRAST CHECK FAILED: ${failures} measurement(s) below the WCAG AA minimum.`);
     process.exit(1);
   }
-  console.log('CONTRAST CHECK PASSED: all measured text meets WCAG AA in both themes.');
+  console.log('CONTRAST CHECK PASSED: sampled text meets WCAG AA in both themes.');
 }
 
 main().catch((err) => {

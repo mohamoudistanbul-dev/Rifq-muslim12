@@ -60,6 +60,13 @@ const FREQUENCY_LABEL: Record<Frequency, string> = {
   once: 'Once',
 };
 
+/** Custom reminders use their own repeat set, which includes `weekly`. */
+const REMINDER_LABEL: Record<CustomReminder['frequency'], string> = {
+  daily: 'Every day',
+  weekly: 'Every week',
+  once: 'Once',
+};
+
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 function Toggle({
@@ -449,7 +456,7 @@ export default function Athan() {
               <div className="athan-row-main">
                 <div className="athan-label">{reminder.title}</div>
                 <div className="athan-meta">
-                  {FREQUENCY_LABEL[reminder.frequency]} at {reminder.time}
+                  {REMINDER_LABEL[reminder.frequency]} at {reminder.time}
                   {reminder.date ? ` · ${reminder.date}` : ''}
                 </div>
               </div>

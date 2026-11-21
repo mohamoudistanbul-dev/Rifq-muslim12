@@ -99,12 +99,18 @@ interface Props {
   startPage: number;
   /** The loaded surah ayahs: the offline source for pages already read. */
   ayahs: MushafAyah[];
-  translation: string;
+  /** A page requested from the URL (Continue reading) instead of the surah start. */
+  initialPage?: number;
   fontSize: number;
   selectMode: boolean;
   onFontSize: (delta: number) => void;
   onRemember: (ayahNo: number, page: number) => void;
-  onBookmarkAyah: (ayahNo: number) => void;
+  /** Verse numbers already saved, so each marker shows the real saved state. */
+  savedAyahs?: Record<number, boolean>;
+  /** Whether the page currently shown is saved. */
+  savedPage?: boolean;
+  onToggleAyah: (ayahNo: number) => void;
+  onTogglePage: (page: number) => void;
   jumpToAyah?: number;
   toast: (message: string, kind?: 'info' | 'success' | 'error') => void;
 }
@@ -115,16 +121,21 @@ export default function MushafReader({
   surahEnglishName,
   startPage,
   ayahs,
-  translation,
+  initialPage,
   fontSize,
   selectMode,
   onFontSize,
   onRemember,
-  onBookmarkAyah,
+  savedAyahs,
+  savedPage,
+  onToggleAyah,
+  onTogglePage,
   jumpToAyah,
   toast,
 }: Props) {
-  const [page, setPage] = useState(startPage);
+  const [page, setPage] = useState(
+    initialPage && initialPage > 0 ? Math.min(MUSHAF_TOTAL_PAGES, initialPage) : startPage
+  );
   const [data, setData] = useState<PageData | null>(null);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<'' | 'offline' | 'not-downloaded'>('');
@@ -160,11 +171,12 @@ export default function MushafReader({
 
   useEffect(() => {
     let alive = true;
-    const key = `mushaf.${page}.${translation}`;
+    // Arabic-only page: the reading screen never requests a translation.
+    const key = `mushaf.page.${page}`;
     setLoading(true);
     setNotice('');
 
-    get<PageData>(`/quran/page/${page}?translation=${translation}`)
+    get<PageData>(`/quran/page/${page}`)
       .then((res) => {
         if (!alive) return;
         setData(res);
@@ -193,7 +205,7 @@ export default function MushafReader({
     return () => {
       alive = false;
     };
-  }, [page, translation, surahPageAyahs]);
+  }, [page, surahPageAyahs]);
 
   const runs = useMemo(() => groupRuns(data?.ayahs || []), [data]);
 
@@ -317,15 +329,20 @@ export default function MushafReader({
               {run.ayahs.map((ayah) => (
                 <span key={ayah.number} id={`m-ayah-${ayah.number}`} className="mushaf-ayah">
                   {ayah.text}
-                  <span
-                    className="ayah-marker"
-                    aria-label={`${run.surah}:${ayah.number}`}
-                    title={`${run.surah}:${ayah.number}`}
+                  {/* The ayah-end symbol doubles as the verse bookmark control:
+                      tapping ۝ saves or removes that verse. */}
+                  <button
+                    type="button"
+                    className={`ayah-marker${savedAyahs?.[ayah.number] ? ' saved' : ''}`}
+                    aria-label={`Bookmark verse ${run.surah}:${ayah.number}`}
+                    aria-pressed={Boolean(savedAyahs?.[ayah.number])}
+                    title={`Bookmark ${run.surah}:${ayah.number}`}
+                    onClick={() => onToggleAyah(ayah.number)}
                   >
                     {' '}
                     <span aria-hidden="true">۝</span>
                     {toArabicDigits(ayah.number)}{' '}
-                  </span>
+                  </button>
                 </span>
               ))}
             </p>
@@ -406,19 +423,18 @@ export default function MushafReader({
         </button>
         <button
           type="button"
-          className="btn btn-soft btn-sm"
-          onClick={() => {
-            if (first) onBookmarkAyah(first.number);
-          }}
-          disabled={!first}
+          className={`btn btn-sm ${savedPage ? 'btn-primary' : 'btn-soft'}`}
+          aria-pressed={Boolean(savedPage)}
+          onClick={() => onTogglePage(page)}
         >
-          <AppIcon name="bookmark" size={15} /> Bookmark this page
+          <AppIcon name="bookmark" size={15} /> {savedPage ? 'Page saved' : 'Bookmark this page'}
         </button>
       </div>
 
       <p className="mushaf-note">
-        Continuous Uthmani text in printed Mushaf order. Switch to verse view for translation,
-        sharing and per-ayah bookmarks.
+        Arabic only — continuous Uthmani text in printed Mushaf order. Tap a verse's ۝ marker to
+        bookmark it, or use “Bookmark this page”. Translations live in the separate Translations
+        screen so this page stays a Mushaf.
       </p>
     </section>
   );

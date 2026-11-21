@@ -35,6 +35,7 @@ import SiteFooter from './components/SiteFooter';
 import { Login, Register, Forgot, Reset, Verify } from './pages/Auth';
 import QuranAudio from './pages/QuranAudio';
 import DownloadPortal from './pages/DownloadPortal';
+import Premium from './pages/Premium';
 import { PlayerProvider, PlayerBar, NowPlayingSheet } from './lib/quranPlayer';
 
 export default function App() {
@@ -93,6 +94,7 @@ function AppBody() {
               <Route path="/admin" element={<Admin />} />
               <Route path="/design" element={<Design />} />
               <Route path="/support" element={<Support />} />
+              <Route path="/premium" element={<Premium />} />
               <Route path="/articles" element={<Articles />} />
               <Route path="/articles/:slug" element={<ArticleDetail />} />
               <Route path="/login" element={<Login />} />

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Page } from '../components/Shell';
+import DeviceDelivery from '../components/DeviceDelivery';
 import { useStore } from '../lib/store';
 import { FIVE } from '../lib/prayer';
 import {
@@ -281,6 +282,8 @@ export default function Athan() {
           </>
         ) : null}
       </p>
+
+      <DeviceDelivery />
 
       <div className="card" style={{ marginBottom: 14 }}>
         <h2 className="athan-title">Permission</h2>

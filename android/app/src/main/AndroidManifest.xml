@@ -61,6 +61,12 @@
             android:name=".PrayerAlarmReceiver"
             android:exported="false" />
 
+        <!-- Runs the notification's action buttons: Already Prayed, Remind in
+             15 min and Open App. Not exported: only our own PendingIntents. -->
+        <receiver
+            android:name=".PrayerActionReceiver"
+            android:exported="false" />
+
         <receiver
             android:name=".BootReceiver"
             android:exported="false">

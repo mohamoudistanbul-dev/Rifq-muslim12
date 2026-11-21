@@ -1608,3 +1608,204 @@ html[dir='rtl'] .rtl-flip {
   color: var(--gold, #c9a227);
   margin: 8px 0;
 }
+
+/* ---------- Foreground alerts: floating banner + Adhan screen ---------- */
+.fg-banners {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 130;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 0;
+  pointer-events: none;
+}
+
+.fg-banner {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(201, 162, 39, 0.5);
+  background: linear-gradient(160deg, rgba(6, 46, 34, 0.98), rgba(3, 28, 21, 0.98));
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+  animation: fg-banner-in 0.26s ease-out;
+}
+
+@keyframes fg-banner-in {
+  from {
+    transform: translateY(-14px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.fg-banner-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(201, 162, 39, 0.4);
+  background: rgba(201, 162, 39, 0.14);
+}
+
+.fg-banner-icon img {
+  display: block;
+  border-radius: 6px;
+}
+
+.fg-banner-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fg-banner-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gold, #c9a227);
+}
+
+.fg-banner-body {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: rgba(247, 241, 225, 0.92);
+}
+
+.fg-banner-open {
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--gold, #c9a227);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.fg-banner-close {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(201, 162, 39, 0.3);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f7f1e1;
+  cursor: pointer;
+}
+
+.adhan-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(2, 18, 14, 0.82);
+  backdrop-filter: blur(6px);
+}
+
+.adhan-card {
+  width: 100%;
+  max-width: 380px;
+  padding: 24px 20px 20px;
+  border-radius: 24px;
+  border: 1px solid rgba(201, 162, 39, 0.55);
+  background: radial-gradient(120% 90% at 50% 0%, rgba(9, 62, 46, 0.98), rgba(3, 26, 20, 0.99));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  text-align: center;
+  color: #f7f1e1;
+}
+
+.adhan-kicker {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold, #c9a227);
+}
+
+.adhan-mosque {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin: 14px auto 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(201, 162, 39, 0.5);
+  background: rgba(201, 162, 39, 0.12);
+  color: var(--gold, #c9a227);
+}
+
+.adhan-prayer {
+  margin: 0;
+  font-size: 26px;
+  letter-spacing: 0.02em;
+}
+
+.adhan-clock {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--gold, #c9a227);
+  font-variant-numeric: tabular-nums;
+}
+
+.adhan-body {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(247, 241, 225, 0.9);
+}
+
+.adhan-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.adhan-actions .btn {
+  flex: 1 1 0;
+  justify-content: center;
+}
+
+.adhan-play {
+  border: 1px solid rgba(201, 162, 39, 0.8);
+  background: linear-gradient(160deg, #c9a227, #a8851c);
+  color: #10231c;
+  font-weight: 700;
+}
+
+.adhan-play:disabled {
+  opacity: 0.75;
+}
+
+.adhan-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.np-background.is-active {
+  border-color: rgba(201, 162, 39, 0.6);
+  color: var(--gold, #c9a227);
+}
+

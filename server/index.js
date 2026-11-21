@@ -44,6 +44,7 @@ import { seedSuperAdmin, SUPER_ADMIN_EMAIL } from './seed.js';
 import { premiumRouter, premiumAdminRouter } from './premium.js';
 import { quizRouter, quizAdminRouter } from './quiz.js';
 import kidsRouter from './kids.js';
+import { accessRouter, accessAdminRouter, ensureRegistry } from './access.js';
 import { mosquesRouter } from './mosques.js';
 import { donateUrl, donateCurrency } from './donate.js';
 
@@ -82,6 +83,8 @@ app.use(attachUser);
 
 // Create (or repair) the Super Admin account and official contact defaults.
 seedSuperAdmin();
+// Seed the Free/Premium registry from the real catalogues (idempotent).
+ensureRegistry();
 
 /* ---------------------------------- config --------------------------------- */
 
@@ -672,6 +675,8 @@ app.use('/api', quizRouter);
 app.use('/api', kidsRouter);
 app.use('/api', premiumRouter);
 app.use('/api', mosquesRouter);
+// Free/Premium control over existing content. Public reads, staff-only writes.
+app.use('/api', accessRouter);
 
 /* ---------------------------------- admin ---------------------------------- */
 
@@ -682,6 +687,7 @@ app.use('/api/analytics', visitRouter);
 app.use('/api/admin/analytics', analyticsRouter);
 // Mounted ahead of the generic admin router so these paths are matched first.
 app.use('/api/admin/premium', premiumAdminRouter);
+app.use('/api/admin/premium-content', accessAdminRouter);
 app.use('/api/admin/quiz', quizAdminRouter);
 app.use('/api/admin', adminRouter);
 

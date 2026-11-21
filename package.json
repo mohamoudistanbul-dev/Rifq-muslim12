@@ -26,7 +26,8 @@
     "verify:verification": "node scripts/verify-verification.mjs",
     "verify:notifications": "node scripts/verify-notifications.mjs",
     "verify:push": "node scripts/verify-push.mjs",
-    "verify:premium": "node scripts/verify-premium.mjs"
+    "verify:premium": "node scripts/verify-premium.mjs",
+    "verify:rich": "node scripts/verify-rich-notify.mjs"
   },
   "dependencies": {
     "adhan": "^4.4.3",

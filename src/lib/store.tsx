@@ -43,6 +43,10 @@ export interface Prefs {
   prayerAlerts: Record<string, boolean>;
   preReminder: number; // minutes before, 0 = off
   athanSound: string;
+  /** General notification sound for reminders: `beep` (chime) or `silent`. */
+  notifySound: string;
+  /** Per-prayer Adhan audio switches; the notification still shows when off. */
+  adhanAudio: Record<string, boolean>;
   vibration: boolean;
   dailyQuran: boolean;
   dailyDua: boolean;
@@ -60,6 +64,8 @@ export const DEFAULT_PREFS: Prefs = {
   prayerAlerts: { fajr: true, dhuhr: true, asr: true, maghrib: true, isha: true },
   preReminder: 0,
   athanSound: 'makkah',
+  notifySound: 'beep',
+  adhanAudio: { fajr: true, dhuhr: true, asr: true, maghrib: true, isha: true },
   vibration: true,
   dailyQuran: true,
   dailyDua: false,
@@ -106,6 +112,7 @@ export function normalizePrefs(raw: unknown): Prefs {
     ...DEFAULT_PREFS,
     ...saved,
     prayerAlerts: { ...DEFAULT_PREFS.prayerAlerts, ...(saved.prayerAlerts || {}) },
+    adhanAudio: { ...DEFAULT_PREFS.adhanAudio, ...(saved.adhanAudio || {}) },
     categories,
     customReminders: Array.isArray(saved.customReminders) ? saved.customReminders : [],
   };

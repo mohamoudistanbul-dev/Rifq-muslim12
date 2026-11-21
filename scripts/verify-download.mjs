@@ -165,7 +165,9 @@ fs.writeFileSync(path.join(tmpRoot, 'data', 'apk', 'RIFQ-Muslim.apk'), APK_BYTES
 const uploadPort = APP_PORT + 1;
 const uploaded = spawn(process.execPath, [path.join(repoRoot, 'server', 'index.js')], {
   cwd: tmpRoot,
-  env: { ...process.env, PORT: String(uploadPort), APK_DOWNLOAD_URL: '' },
+  // Pin the data directory: a writable /data (persistent disk) would otherwise
+  // win over the fixture folder this phase writes its APK into.
+  env: { ...process.env, PORT: String(uploadPort), APK_DOWNLOAD_URL: '', DATA_DIR: path.join(tmpRoot, 'data') },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 let uploadLog = '';

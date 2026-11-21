@@ -6,7 +6,11 @@ This document records exactly what the automated dependency scan covers, what it
 reports, what it **cannot** cover in this environment, and how to close the rest.
 It is **not** a statement that the application is secure.
 
-Last updated: 2026-11-21 (revision 24) — the repository scan was re-run on this revision and
+Last updated: 2026-11-21 (Analytics Dashboard revision) — this revision added **no
+dependency**: `package.json` still declares the same 8 runtime and 6 dev packages, and
+`package-lock.json` is unchanged, so the scan was deliberately **not** re-run (a repeat
+of an unchanged scan is not new evidence). The numbers below therefore still describe the
+previously scanned dependency set. Earlier on 2026-11-21 the repository scan was re-run and
 returned the same result: 444 packages, 0 advisories, status `incomplete`. The build scripts
 were re-audited and the remaining warning is still an **attribution** gap, not an unscanned
 package (§3). The CI route's shape is now machine-checked by `npm run verify:workflow` (§3.4):
@@ -267,6 +271,15 @@ real coordinates resolve and can be locked, with no SDK and no AGP.
   application enforces this in code (server-side `requireAuth`/`requireAdmin`/
   `requireSuperAdmin`, hashed passwords, session cookies, no secrets in the bundle)
   and in `scripts/verify-audio-badge.mjs`, which asserts the permission matrix.
+- **Analytics data handling** (added with the Analytics Dashboard) — the feature ships
+  **no new package**, so dependency scanning has nothing new to say about it. Its
+  privacy and authorization properties are therefore covered by
+  `scripts/verify-analytics.mjs` instead: events are stored in the existing SQLite
+  database under a per-day salted HMAC visitor key, the table carries **no** IP address,
+  user-agent or email column, the key is asserted to be a 24-character hex digest, and
+  `GET /api/admin/analytics` is asserted to answer **401** without a session and **403**
+  for a non-admin. Download events are asserted to be recorded only for a full transfer
+  from byte 0, never for a resumed range request.
 - **Deployed container OS patching** — the deploy builder scans the final image
   separately from this dependency scan.
 - **Remote assets** (recitation audio URLs, fonts) — availability and licensing, not

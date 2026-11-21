@@ -419,13 +419,12 @@ export default function Athan() {
                       onChange={(e) => updateCategory(id, { sound: e.target.value })}
                       aria-label={`${CATEGORY_LABELS[id]} sound`}
                     >
-                      <option value="default">Same as adhan setting</option>
-                      {ADHAN_SOUNDS.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.label}
-                        </option>
-                      ))}
+                      <option value="default">General notification sound</option>
+                      <option value="silent">Silent</option>
                     </select>
+                    <small className="athan-hint">
+                      The Adhan recording plays only when the prayer time arrives.
+                    </small>
                   </label>
                   <label className="athan-field athan-field-inline">
                     <span>Vibrate</span>

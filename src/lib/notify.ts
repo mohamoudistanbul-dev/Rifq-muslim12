@@ -236,7 +236,10 @@ export async function showAlert(payload: AlertPayload): Promise<boolean> {
   const reg = await registerServiceWorker();
   if (reg) {
     try {
-      await reg.showNotification(payload.title || 'RIFQ Muslim', {
+      // `image` and `actions` are part of the Notifications spec but are not
+      // declared in this TypeScript DOM lib, so the object is asserted to the
+      // spec shape instead of being narrowed to the local type.
+      const options = {
         body: payload.body,
         tag: payload.tag,
         icon: '/icons/icon-192.png',
@@ -255,7 +258,8 @@ export async function showAlert(payload: AlertPayload): Promise<boolean> {
             ]
           : undefined,
         requireInteraction: Boolean(payload.prayer),
-      });
+      } as NotificationOptions;
+      await reg.showNotification(payload.title || 'RIFQ Muslim', options);
       return true;
     } catch {
       /* fall through to the constructor */

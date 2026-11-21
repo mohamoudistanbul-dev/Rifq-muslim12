@@ -1,0 +1,230 @@
+/* ============================================================
+   RIFQ Muslim — Hadith and Athan screens
+   Both screens previously hardcoded `var(--card, #fff)` with
+   inherited text colour, which produced white cards and invisible
+   text in the dark theme. Everything here is token based so the
+   emerald/gold identity survives in light and dark mode.
+   Made by Eng Mohamud Yusuf
+   ============================================================ */
+
+/* ---------- Hadith ---------- */
+
+.hadith-card {
+  margin-bottom: 14px;
+}
+
+.hadith-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hadith-arabic {
+  font-family: var(--font-arabic);
+  direction: rtl;
+  text-align: right;
+  font-size: 1.4rem;
+  line-height: 2.2;
+  color: var(--text);
+  margin: 14px 0 12px;
+  word-spacing: 0.04em;
+}
+
+.hadith-text {
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--text-soft);
+  margin: 0 0 10px;
+}
+
+.hadith-somali {
+  font-size: 0.9rem;
+  line-height: 1.65;
+  color: var(--muted);
+  font-style: italic;
+  margin: 0 0 8px;
+}
+
+.hadith-ref {
+  margin: 8px 0 0;
+}
+
+.hadith-grades {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.hadith-grade {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(22, 162, 115, 0.14);
+  border: 1px solid var(--border-soft);
+  color: var(--text-soft);
+}
+
+html[data-theme='dark'] .hadith-grade {
+  background: rgba(22, 162, 115, 0.24);
+  color: #d6f4e6;
+}
+
+.hadith-missing {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--muted);
+  font-style: italic;
+  margin: 0 0 8px;
+}
+
+.chip.is-active {
+  background: var(--emerald);
+  border-color: var(--emerald);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+html[data-theme='dark'] .chip.is-active {
+  background: rgba(212, 175, 55, 0.22);
+  border-color: rgba(212, 175, 55, 0.55);
+  color: var(--gold-soft);
+}
+
+@media (max-width: 420px) {
+  .hadith-arabic {
+    font-size: 1.28rem;
+    line-height: 2.1;
+  }
+}
+
+@media (min-width: 900px) {
+  .hadith-arabic {
+    font-size: 1.62rem;
+  }
+}
+
+/* ---------- Athan & notifications ---------- */
+
+.athan-title {
+  font-family: var(--font-display);
+  font-size: 1.06rem;
+  letter-spacing: 0.3px;
+  margin: 0 0 10px;
+  color: var(--text);
+}
+
+.athan-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0 12px 10px;
+  border-bottom: 1px dashed var(--border-soft);
+  border-left: 3px solid var(--row-accent, transparent);
+}
+
+.athan-row.is-last,
+.athan-row:last-child {
+  border-bottom: none;
+}
+
+.athan-row[data-prayer='fajr'] {
+  --row-accent: #5b8dd9;
+}
+
+.athan-row[data-prayer='dhuhr'] {
+  --row-accent: #d4af37;
+}
+
+.athan-row[data-prayer='asr'] {
+  --row-accent: #16a273;
+}
+
+.athan-row[data-prayer='maghrib'] {
+  --row-accent: #d97742;
+}
+
+.athan-row[data-prayer='isha'] {
+  --row-accent: #7a6fd0;
+}
+
+.athan-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.athan-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.athan-ar {
+  font-family: var(--font-arabic);
+  font-size: 1.05rem;
+  color: var(--muted);
+}
+
+.athan-meta {
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.athan-time {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--gold-deep);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+html[data-theme='dark'] .athan-time {
+  color: var(--gold);
+}
+
+.athan-note {
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--muted);
+  margin: 10px 0 0;
+}
+
+.athan-status {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  margin: 10px 0 0;
+  color: var(--text-soft);
+}
+
+.athan-card-actions {
+  margin-top: 12px;
+}
+
+.athan-perm-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--border-soft);
+}
+
+/* The checkbox must stay visible in both themes. */
+.athan-row input[type='checkbox'],
+.athan-perm-row input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--emerald-bright);
+  cursor: pointer;
+}
+
+html[data-theme='light'] .athan-row input[type='checkbox'] {
+  accent-color: var(--emerald);
+}

@@ -693,6 +693,10 @@ export function shapeNotification(row) {
     readAt: row.read_at || null,
     createdAt: row.created_at,
     broadcastId: row.broadcast_id || null,
+    /* Delivery to this user's own devices, written by server/push.js. */
+    pushStatus: row.push_status || null,
+    pushError: row.push_error || null,
+    pushAt: row.push_at || null,
   };
 }
 

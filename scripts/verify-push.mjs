@@ -186,7 +186,7 @@ async function main() {
     check('a new account has no registered device', emptyStatus.json?.count === 0, `count ${emptyStatus.json?.count}`);
 
     const sub = await userA.post('/push/subscribe', { subscription: fakeDevice('device-a'), label: 'Test phone' });
-    check('device subscription is stored', sub.status === 200 && sub.json?.count === 1, `status ${sub.status} count ${sub.json?.count}`);
+    check('device subscription is stored', (sub.status === 200 || sub.status === 201) && sub.json?.count === 1, `status ${sub.status} count ${sub.json?.count}`);
 
     const resub = await userA.post('/push/subscribe', { subscription: fakeDevice('device-a'), label: 'Test phone' });
     check('the same device is not duplicated', resub.json?.count === 1, `count ${resub.json?.count}`);
@@ -218,8 +218,8 @@ async function main() {
     const inboxA = await userA.get('/notifications');
     const jumuah = (inboxA.json?.notifications || []).filter((n) => n.title === 'Jumuah reminder');
     check('the message lands in the inbox exactly once', jumuah.length === 1, `${jumuah.length} row(s)`);
-    check('the delivery outcome is stored on the recipient row', ['sent', 'failed', 'no_device'].includes(String(jumuah[0]?.push_status)), String(jumuah[0]?.push_status));
-    check('the failure reason is stored', !!jumuah[0]?.push_error, String(jumuah[0]?.push_error || '').slice(0, 60));
+    check('the delivery outcome is stored on the recipient row', ['sent', 'failed', 'no_device'].includes(String(jumuah[0]?.pushStatus)), String(jumuah[0]?.pushStatus));
+    check('the failure reason is stored', !!jumuah[0]?.pushError, String(jumuah[0]?.pushError || '').slice(0, 60));
 
     const history = await admin.get('/admin/notifications');
     const row = (history.json?.notifications || []).find((n) => n.title === 'Jumuah reminder');

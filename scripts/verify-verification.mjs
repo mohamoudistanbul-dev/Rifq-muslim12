@@ -364,7 +364,7 @@ async function main() {
       revokeNotice[0]?.title
     );
 
-    const trail = await admin.get('/verifications');
+    const trail = await admin.get('/admin/verifications');
     check('the badge history loads', trail.status === 200 && Array.isArray(trail.json?.decisions));
     const actions = (trail.json?.decisions || []).map((d) => d.action);
     check('the grant is in the decision history', actions.includes('grant'), actions.slice(0, 5).join(', '));
@@ -415,7 +415,10 @@ async function main() {
     const promoted = await admin.patch(`/admin/users/${staffId}`, { role: 'admin' });
     check('an administrator can promote a user', promoted.status === 200, `status ${promoted.status}`);
 
-    await admin.get('/verifications');
+    await admin.get('/admin/verifications');
+    /* A role change ends existing sessions, so the new administrator signs in again. */
+    const staffReauth = await staff.post('/auth/login', { email: staffEmail, password: applicantPassword });
+    check('the promoted administrator can sign in again', staffReauth.status === 200, `status ${staffReauth.status}`);
     const staffState = await staff.get('/badge/request');
     check('a promoted administrator carries the tick', staffState.json?.badgeVerified === true, String(staffState.json?.badgeVerified));
 

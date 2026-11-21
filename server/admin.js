@@ -14,7 +14,7 @@ import {
   cookieOptions,
 } from './auth.js';
 import { mailConfigured } from './mail.js';
-import { APK_DIR, APK_FILE, APK_MAX_BYTES, apkInfoSnapshot } from './download.js';
+import { APK_DIR, APK_FILE, APK_MAX_BYTES, apkInfoSnapshot, apkStatus } from './download.js';
 
 /**
  * Super Admin control surface.
@@ -732,8 +732,8 @@ adminRouter.get('/backup', requireSuperAdmin, (_req, res) => {
 /* ------------------------------ android APK -------------------------------- */
 
 /** Status of the Android download: source, size and whether it is ready. */
-adminRouter.get('/apk', requireAdmin, (_req, res) => {
-  res.json(apkInfoSnapshot());
+adminRouter.get('/apk', requireAdmin, async (_req, res) => {
+  res.json(await apkStatus());
 });
 
 /**

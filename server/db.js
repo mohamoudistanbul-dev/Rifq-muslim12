@@ -386,10 +386,10 @@ CREATE INDEX IF NOT EXISTS idx_media_created ON media(created_at);
 /*
  * Downloads and visitors analytics (Admin -> Analytics).
  *
- * One row per counted event. `visitor` is a salted HMAC of ip+ua+day, never an
- * IP address, and UNIQUE(kind, visitor, bucket) is what makes the counting
- * idempotent: a refresh, a double-fired beacon or a retried request collapses
- * onto the existing row instead of adding a second event.
+ * One row per counted event. The visitor column is a salted HMAC of
+ * ip+ua+day, never an IP address, and UNIQUE(kind, visitor, bucket) is what
+ * makes the counting idempotent: a refresh, a double-fired beacon or a retried
+ * request collapses onto the existing row instead of adding a second event.
  */
 CREATE TABLE IF NOT EXISTS analytics_events (
   id TEXT PRIMARY KEY,

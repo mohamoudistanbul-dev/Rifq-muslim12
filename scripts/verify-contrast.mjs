@@ -187,16 +187,19 @@ function record(page, theme, selector, data) {
   // nothing else was captured.
   const clean = data.samples.filter((s) => ratio(fg, s) > 1.6);
   const pool = clean.length ? clean : data.samples;
-  let worst = null;
-  let worstRatio = Infinity;
-  for (const sample of pool) {
-    const r = ratio(fg, sample);
-    if (r < worstRatio) {
-      worstRatio = r;
-      worst = sample;
-    }
-  }
-  if (!worst) return;
+  if (!pool.length) return;
+
+  const ranked = pool
+    .map((sample) => ({ sample, r: ratio(fg, sample) }))
+    .sort((a, b) => a.r - b.r);
+
+  // A neighbouring element bleeding into one sample point must not decide the
+  // result, so the median is used — except when the text colour matches the
+  // surface it sits on, which is precisely the defect this check exists for.
+  const pick =
+    !data.ownBg && ranked[0].r < 1.5 ? ranked[0] : ranked[Math.floor(ranked.length / 2)];
+  const worst = pick.sample;
+  const worstRatio = pick.r;
 
   const large = isLarge(data.fontSize, data.fontWeight);
   const min = large ? 3 : 4.5;

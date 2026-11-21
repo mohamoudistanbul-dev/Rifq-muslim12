@@ -22,7 +22,8 @@
     "verify:settings": "node scripts/verify-settings-persistence.mjs",
     "verify:workflow": "node scripts/validate-android-workflow.mjs",
     "verify:analytics": "node scripts/verify-analytics.mjs",
-    "verify:geo": "tsx scripts/verify-geo.ts"
+    "verify:geo": "tsx scripts/verify-geo.ts",
+    "verify:verification": "node scripts/verify-verification.mjs"
   },
   "dependencies": {
     "adhan": "^4.4.3",

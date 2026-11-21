@@ -452,7 +452,25 @@ adminRouter.patch('/users/:id/badge', requireAdmin, (req, res) => {
     by: req.user.email,
     reason,
   });
-  notifyVerificationDecision(target.id, { approved: grant, reason });
+  /* A direct revoke is not a rejected request, so it gets its own wording. */
+  notify(
+    target.id,
+    grant
+      ? {
+          kind: 'verification',
+          title: 'Your account is verified',
+          body: 'The blue verified tick is now shown next to your name across RIFQ Muslim.',
+          link: '/profile',
+        }
+      : {
+          kind: 'verification',
+          title: 'Your verified badge was removed',
+          body: reason
+            ? `An administrator removed the blue tick from your account. Reason: ${reason}`
+            : 'An administrator removed the blue tick from your account.',
+          link: '/profile',
+        }
+  );
   res.json({ ok: true, user: publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(target.id)) });
 });
 

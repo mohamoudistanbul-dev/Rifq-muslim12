@@ -24,7 +24,8 @@
     "verify:analytics": "node scripts/verify-analytics.mjs",
     "verify:geo": "tsx scripts/verify-geo.ts",
     "verify:verification": "node scripts/verify-verification.mjs",
-    "verify:notifications": "node scripts/verify-notifications.mjs"
+    "verify:notifications": "node scripts/verify-notifications.mjs",
+    "verify:push": "node scripts/verify-push.mjs"
   },
   "dependencies": {
     "adhan": "^4.4.3",

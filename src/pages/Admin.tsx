@@ -8,6 +8,7 @@ import '../admin.css';
 
 type Tab =
   | 'overview'
+  | 'analytics'
   | 'content'
   | 'media'
   | 'users'
@@ -33,6 +34,33 @@ interface ApkStatus {
   size: number | null;
   source: string;
   uploaded?: boolean;
+}
+
+interface StoreStats {
+  available: boolean;
+  value: number | null;
+  storeLinkConfigured: boolean;
+  reason: string;
+  howTo: string[];
+}
+
+interface AnalyticsReport {
+  generatedAt: string;
+  range: { from: string; to: string; days: number };
+  totals: { visitors: number; downloads: number; uniqueDownloaders: number };
+  periods: Record<string, { visitors: number; downloads: number }>;
+  series: { day: string; visitors: number; downloads: number }[];
+  devices: { visits: Record<string, number>; downloads: Record<string, number> };
+  registrations: {
+    total: number;
+    last7: number;
+    last30: number;
+    activeUsers7: number;
+    activeUsers30: number;
+    admins: number;
+  };
+  external: { playStore: StoreStats; appStore: StoreStats };
+  notes: string[];
 }
 
 interface ContentItem {
@@ -174,6 +202,7 @@ const EMPTY_DRAFT: Draft = {
 
 const TABS: { id: Tab; label: string; superOnly?: boolean }[] = [
   { id: 'overview', label: 'Overview' },
+  { id: 'analytics', label: 'Analytics' },
   { id: 'content', label: 'Content' },
   { id: 'media', label: 'Media library' },
   { id: 'users', label: 'Users', superOnly: true },
@@ -364,6 +393,8 @@ export default function Admin() {
   const [error, setError] = useState('');
 
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsReport | null>(null);
+  const [anRange, setAnRange] = useState({ from: '', to: '' });
   const [content, setContent] = useState<ContentItem[]>([]);
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -407,6 +438,19 @@ export default function Admin() {
             if (alive) setOverview(r);
           })
           .catch(fail(t('The overview could not be loaded.')))
+      );
+    }
+    if (tab === 'analytics') {
+      const params = new URLSearchParams();
+      if (anRange.from) params.set('from', anRange.from);
+      if (anRange.to) params.set('to', anRange.to);
+      const qs = params.toString();
+      jobs.push(
+        get<AnalyticsReport>(`/admin/analytics${qs ? `?${qs}` : ''}`)
+          .then((r) => {
+            if (alive) setAnalytics(r);
+          })
+          .catch(fail(t('The analytics report could not be loaded.')))
       );
     }
     if (tab === 'content') {
@@ -655,6 +699,274 @@ export default function Admin() {
         ['Quiz attempts', overview.quizAttempts],
       ]
     : [];
+
+  const renderAnalytics = () => {
+    if (!analytics) return null;
+    const { totals, periods, series, devices, registrations, external, range } = analytics;
+
+    // Chart geometry: bars for downloads, a line for visitors, one shared scale.
+    const peak = Math.max(1, ...series.map((d) => Math.max(d.visitors, d.downloads)));
+    const W = 720;
+    const H = 190;
+    const pad = 10;
+    const step = series.length > 1 ? (W - pad * 2) / (series.length - 1) : 0;
+    const px = (i: number) => pad + i * step;
+    const py = (v: number) => H - pad - (v / peak) * (H - pad * 2);
+    const linePath = series.map((d, i) => `${i === 0 ? 'M' : 'L'}${px(i).toFixed(1)},${py(d.visitors).toFixed(1)}`).join(' ');
+    const barWidth = Math.max(1.5, Math.min(9, step * 0.55));
+
+    const periodRows: [string, string][] = [
+      ['today', 'Today'],
+      ['last7', 'Last 7 days'],
+      ['last30', 'Last 30 days'],
+      ['thisWeek', 'This week'],
+      ['thisMonth', 'This month'],
+      ['allTime', 'All time'],
+    ];
+
+    const deviceRow = (label: string, value: number, total: number) => (
+      <div className="admin-device-row" key={label}>
+        <span className="small">{t(label)}</span>
+        <span className="admin-device-bar">
+          <span style={{ width: `${total ? Math.round((value / total) * 100) : 0}%` }} />
+        </span>
+        <span className="small muted">
+          {value} · {total ? Math.round((value / total) * 100) : 0}%
+        </span>
+      </div>
+    );
+
+    const visitTotal = Object.values(devices.visits).reduce((a, b) => a + b, 0);
+    const downloadTotal = Object.values(devices.downloads).reduce((a, b) => a + b, 0);
+
+    const storeCard = (label: string, info: StoreStats) => (
+      <div className="admin-note" key={label}>
+        <div className="admin-item-main">
+          <strong>{t(label)}</strong>
+          <span className="small muted">
+            {info.available && info.value !== null
+              ? `${info.value} ${t('downloads')}`
+              : t('Not connected — no figure is shown rather than an estimate.')}
+          </span>
+        </div>
+        <p className="small muted" style={{ margin: '6px 0 0' }}>
+          {t(info.reason)}
+        </p>
+        <ul className="small muted" style={{ margin: '6px 0 0 18px' }}>
+          {info.howTo.map((step) => (
+            <li key={step}>{t(step)}</li>
+          ))}
+        </ul>
+        <p className="small muted" style={{ margin: '6px 0 0' }}>
+          {t('Store link')}: {info.storeLinkConfigured ? t('configured') : t('not configured')}
+        </p>
+      </div>
+    );
+
+    return (
+      <>
+        <div className="admin-kpis">
+          <div className="admin-kpi">
+            <span className="stat">{totals.visitors}</span>
+            <span className="admin-kpi-label">{t('Portal visitors')}</span>
+          </div>
+          <div className="admin-kpi">
+            <span className="stat">{totals.downloads}</span>
+            <span className="admin-kpi-label">{t('APK downloads')}</span>
+          </div>
+          <div className="admin-kpi">
+            <span className="stat">{totals.uniqueDownloaders}</span>
+            <span className="admin-kpi-label">{t('Unique downloaders')}</span>
+          </div>
+          <div className="admin-kpi">
+            <span className="stat">{registrations.total}</span>
+            <span className="admin-kpi-label">{t('Registered accounts')}</span>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="admin-toolbar">
+            <h3 className="admin-card-title" style={{ margin: 0 }}>
+              {t('Visitors and downloads')}
+            </h3>
+            <div className="admin-range">
+              <label className="small">
+                {t('From')}{' '}
+                <input
+                  className="input"
+                  type="date"
+                  value={anRange.from}
+                  max={anRange.to || undefined}
+                  onChange={(e) => setAnRange((r) => ({ ...r, from: e.target.value }))}
+                />
+              </label>
+              <label className="small">
+                {t('To')}{' '}
+                <input
+                  className="input"
+                  type="date"
+                  value={anRange.to}
+                  min={anRange.from || undefined}
+                  onChange={(e) => setAnRange((r) => ({ ...r, to: e.target.value }))}
+                />
+              </label>
+              <button className="btn btn-ghost btn-sm" type="button" onClick={() => setReload((n) => n + 1)}>
+                {t('Apply')}
+              </button>
+              <button className="btn btn-primary btn-sm" type="button" onClick={() => setReload((n) => n + 1)}>
+                {t('Refresh')}
+              </button>
+            </div>
+          </div>
+          <p className="small muted" style={{ margin: '4px 0 10px' }}>
+            {range.from} → {range.to} ({range.days} {t('days')}) · {t('Days are UTC')} · {t('Updated')}{' '}
+            {when(analytics.generatedAt)}
+          </p>
+
+          <svg
+            className="admin-chart"
+            viewBox={`0 0 ${W} ${H}`}
+            role="img"
+            aria-label={t('Visitors and downloads trend')}
+          >
+            <defs>
+              <linearGradient id="anGold" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#d9b65c" stopOpacity="0.95" />
+                <stop offset="100%" stopColor="#c9a24a" stopOpacity="0.35" />
+              </linearGradient>
+            </defs>
+            {[0, 0.5, 1].map((f) => (
+              <line
+                key={f}
+                x1={pad}
+                x2={W - pad}
+                y1={py(peak * f)}
+                y2={py(peak * f)}
+                stroke="rgba(255,255,255,.08)"
+                strokeWidth="1"
+              />
+            ))}
+            {series.map((d, i) => (
+              <rect
+                key={d.day}
+                x={px(i) - barWidth / 2}
+                y={py(d.downloads)}
+                width={barWidth}
+                height={Math.max(0, H - pad - py(d.downloads))}
+                fill="url(#anGold)"
+                rx="1.5"
+              >
+                <title>{`${d.day}: ${d.downloads} ${t('downloads')}`}</title>
+              </rect>
+            ))}
+            <path d={linePath} fill="none" stroke="#3ecf9a" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+          </svg>
+          <div className="admin-chart-legend">
+            <span>
+              <i style={{ background: '#3ecf9a' }} /> {t('Visitors')}
+            </span>
+            <span>
+              <i style={{ background: '#c9a24a' }} /> {t('APK downloads')}
+            </span>
+            <span className="muted">
+              {t('Peak')}: {peak}
+            </span>
+          </div>
+        </div>
+
+        <div className="card">
+          <h3 className="admin-card-title">{t('Totals by period')}</h3>
+          <table className="admin-periods">
+            <thead>
+              <tr>
+                <th>{t('Period')}</th>
+                <th>{t('Portal visitors')}</th>
+                <th>{t('APK downloads')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {periodRows.map(([key, label]) => (
+                <tr key={key}>
+                  <td>{t(label)}</td>
+                  <td>{periods[key]?.visitors ?? 0}</td>
+                  <td>{periods[key]?.downloads ?? 0}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="card">
+          <h3 className="admin-card-title">{t('Device breakdown')}</h3>
+          <p className="small muted" style={{ margin: '0 0 8px' }}>
+            {t('Portal visitors')} · {visitTotal}
+          </p>
+          {deviceRow('Android', devices.visits.android, visitTotal)}
+          {deviceRow('iPhone / iPad', devices.visits.ios, visitTotal)}
+          {deviceRow('Desktop', devices.visits.desktop, visitTotal)}
+          {deviceRow('Other', devices.visits.other, visitTotal)}
+          <p className="small muted" style={{ margin: '12px 0 8px' }}>
+            {t('APK downloads')} · {downloadTotal}
+          </p>
+          {deviceRow('Android', devices.downloads.android, downloadTotal)}
+          {deviceRow('iPhone / iPad', devices.downloads.ios, downloadTotal)}
+          {deviceRow('Desktop', devices.downloads.desktop, downloadTotal)}
+          {deviceRow('Other', devices.downloads.other, downloadTotal)}
+        </div>
+
+        <div className="card">
+          <h3 className="admin-card-title">{t('App accounts')}</h3>
+          <div className="admin-kpis">
+            <div className="admin-kpi">
+              <span className="stat">{registrations.total}</span>
+              <span className="admin-kpi-label">{t('Registered accounts')}</span>
+            </div>
+            <div className="admin-kpi">
+              <span className="stat">{registrations.last7}</span>
+              <span className="admin-kpi-label">{t('New in 7 days')}</span>
+            </div>
+            <div className="admin-kpi">
+              <span className="stat">{registrations.last30}</span>
+              <span className="admin-kpi-label">{t('New in 30 days')}</span>
+            </div>
+            <div className="admin-kpi">
+              <span className="stat">{registrations.activeUsers7}</span>
+              <span className="admin-kpi-label">{t('Active in 7 days')}</span>
+            </div>
+            <div className="admin-kpi">
+              <span className="stat">{registrations.activeUsers30}</span>
+              <span className="admin-kpi-label">{t('Active in 30 days')}</span>
+            </div>
+          </div>
+          <p className="small muted" style={{ margin: 0 }}>
+            {t('Read from the application database: account creation date and last sign-in.')}
+          </p>
+        </div>
+
+        <div className="card">
+          <h3 className="admin-card-title">{t('Store statistics')}</h3>
+          <p className="small muted" style={{ margin: '0 0 10px' }}>
+            {t(
+              'Google Play and App Store install totals need an external integration. No number is displayed until it is connected.'
+            )}
+          </p>
+          {storeCard('Google Play downloads', external.playStore)}
+          {storeCard('App Store downloads', external.appStore)}
+        </div>
+
+        <div className="card">
+          <h3 className="admin-card-title">{t('How these numbers are counted')}</h3>
+          <ul className="small muted" style={{ margin: '0 0 0 18px' }}>
+            {analytics.notes.map((note) => (
+              <li key={note} style={{ marginBottom: 6 }}>
+                {t(note)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </>
+    );
+  };
 
   const renderOverview = () => {
     if (!overview) return null;
@@ -1599,6 +1911,7 @@ export default function Admin() {
           ) : null}
           {loading ? <Loading /> : null}
           {!loading && tab === 'overview' ? renderOverview() : null}
+          {!loading && tab === 'analytics' ? renderAnalytics() : null}
           {!loading && tab === 'content' ? renderContent() : null}
           {!loading && tab === 'media' ? renderMedia() : null}
           {!loading && tab === 'users' ? renderUsers() : null}

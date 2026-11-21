@@ -339,3 +339,99 @@
     grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
   }
 }
+
+/* ------------------------------- analytics -------------------------------- */
+
+.admin-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  margin-top: 6px;
+}
+
+.admin-chart-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.admin-chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+}
+
+.admin-chart-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.admin-range {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.admin-range input[type='date'] {
+  min-width: 0;
+  max-width: 150px;
+}
+
+.admin-device-row {
+  display: grid;
+  grid-template-columns: 96px minmax(60px, 1fr) 84px;
+  gap: 10px;
+  align-items: center;
+  padding: 5px 0;
+}
+
+.admin-device-bar {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09);
+  overflow: hidden;
+}
+
+.admin-device-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #1f7a5a, #c9a24a);
+}
+
+.admin-periods {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-periods th,
+.admin-periods td {
+  text-align: left;
+  padding: 8px 6px;
+  font-size: 0.85rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.admin-periods th {
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+.admin-periods td:not(:first-child),
+.admin-periods th:not(:first-child) {
+  text-align: right;
+}
+
+@media (max-width: 520px) {
+  .admin-device-row {
+    grid-template-columns: 78px minmax(48px, 1fr) 76px;
+    gap: 8px;
+  }
+}

@@ -12,9 +12,8 @@ unchanged (both last modified in `efcac76`), so the resolved dependency set is i
 the one previously scanned. The repository scan was nevertheless re-run at this revision and
 returned the same result: **444 packages, 0 advisories, 0 blocking, status `incomplete`**. The
 `incomplete` status is the attribution gap of §3 — it is **not** an unscanned package and not
-a finding. The build scripts were re-audited and the remaining warning is still an
-**attribution** gap, not an unscanned
-package (§3). The CI route's shape is now machine-checked by `npm run verify:workflow` (§3.4):
+a finding. The build scripts were re-audited and the remaining warning is still the same
+**attribution** gap described in §3. The CI route's shape is now machine-checked by `npm run verify:workflow` (§3.4):
 `android/build.gradle.kts` owns a buildscript classpath configuration but no dependencies
 of its own, so Gradle emits `android/buildscript-gradle.lockfile` and never a
 project-level `android/gradle.lockfile`. A CI scan that targets each lockfile explicitly

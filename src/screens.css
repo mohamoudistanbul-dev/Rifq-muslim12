@@ -302,3 +302,27 @@ html[data-theme='light'] .chip.active {
   line-height: 1.7;
   color: var(--muted, #b9c7bf);
 }
+
+/* Hadith reference block: narrator, collector Imam, number, grading. */
+.hadith-meta {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(201, 162, 39, 0.08);
+  border: 1px solid rgba(201, 162, 39, 0.28);
+}
+.hadith-meta > div { display: grid; gap: 2px; }
+.hadith-meta dt {
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--gold-deep, #8a6b12);
+}
+.hadith-meta dd { margin: 0; font-size: 13px; }
+.hadith-meta-ar { font-family: var(--font-arabic); font-size: 16px; direction: rtl; }
+.hadith-unknown { color: var(--muted, #6b7a72); font-style: italic; }
+
+/* Kid Academy audio player */
+.kids-audio { display: grid; gap: 6px; }

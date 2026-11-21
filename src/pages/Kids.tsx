@@ -4,6 +4,16 @@ import { AppIcon, type IconName } from '../components/Icons';
 import { useStore } from '../lib/store';
 import { get, post, ApiError } from '../lib/api';
 import PremiumGate from '../components/PremiumGate';
+import {
+  playTrack,
+  toggle as togglePlayback,
+  stop as stopPlayback,
+  subscribe as subscribePlayback,
+  speak,
+  SpeechUnavailable,
+  surahAudioUrl,
+  type PlaybackState,
+} from '../lib/kidsAudio';
 
 /**
  * Kid Academy.
@@ -75,6 +85,11 @@ export default function Kids() {
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [answer, setAnswer] = useState<number | null>(null);
   const [answered, setAnswered] = useState(false);
+  const [audio, setAudio] = useState<PlaybackState>({ status: 'idle', track: null, error: '' });
+
+  // The player lives in a module singleton, so its state is mirrored here: the
+  // lesson view can be unmounted and reopened without losing the recitation.
+  useEffect(() => subscribePlayback(setAudio), []);
 
   const load = async () => {
     try {
@@ -136,21 +151,41 @@ export default function Kids() {
     }
   };
 
-  /** Device speech synthesis: used for letter and surah pronunciation. */
-  const speak = (text: string, language = 'ar-SA') => {
+  /**
+   * Audio.
+   *
+   * Short surahs play the published recitation stream; letters and stories use
+   * the device voice. Both report a real failure instead of a silent no-op.
+   */
+  const readAloud = async (text: string, language = 'ar-SA') => {
+    if (!text.trim()) return toast(t('There is no text to read for this lesson'), 'error');
     try {
-      const synth = window.speechSynthesis;
-      if (!synth) {
-        toast(t('Audio pronunciation is not available on this device'), 'error');
+      await speak(text, language);
+    } catch (err) {
+      if (err instanceof SpeechUnavailable) {
+        toast(
+          err.reason === 'no-arabic-voice'
+            ? t('This device has no Arabic voice installed. Add one in Android text-to-speech settings, or use the surah recitations.')
+            : t('Audio pronunciation is not available on this device'),
+          'error'
+        );
         return;
       }
-      synth.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = language;
-      utterance.rate = 0.8;
-      synth.speak(utterance);
-    } catch {
       toast(t('Audio pronunciation is not available on this device'), 'error');
+    }
+  };
+
+  const playSurahRecitation = async (surahNumber: number, title: string) => {
+    if (!surahNumber) return toast(t('This lesson has no recitation number'), 'error');
+    stopSpeakingVoice();
+    await playTrack({ src: surahAudioUrl(surahNumber), title, surah: surahNumber });
+  };
+
+  const stopSpeakingVoice = () => {
+    try {
+      window.speechSynthesis?.cancel();
+    } catch {
+      /* nothing to cancel */
     }
   };
 
@@ -228,7 +263,7 @@ export default function Kids() {
               <div className="kid-glyph">
                 <div style={{ fontSize: 96, lineHeight: 1.1 }}>{body.glyph}</div>
                 <div className="muted small">{body.name} · “{body.sound}”</div>
-                <button className="btn btn-soft btn-sm" style={{ marginTop: 10 }} onClick={() => speak(body.glyph)}>
+                <button className="btn btn-soft btn-sm" style={{ marginTop: 10 }} onClick={() => void readAloud(body.glyph)}>
                   <AppIcon name="play" size={16} /> {t('Hear the letter')}
                 </button>
               </div>
@@ -242,7 +277,10 @@ export default function Kids() {
                 <div className="arabic" dir="rtl" style={{ fontSize: 26, lineHeight: 2 }}>
                   {body.arabic}
                 </div>
-                <button className="btn btn-soft btn-sm" onClick={() => speak(body.arabic || '')}>
+                <button
+                  className="btn btn-soft btn-sm"
+                  onClick={() => void playSurahRecitation(body.number, open.title[index])}
+                >
                   <AppIcon name="play" size={16} /> {t('Listen')}
                 </button>
                 {Array.isArray(body.meaning) ? (
@@ -260,7 +298,15 @@ export default function Kids() {
                 {textLines.length ? <div className="small">{textLines[index]}</div> : null}
                 {body.source ? <div className="refs tiny">{body.source}</div> : null}
                 {open.kind === 'story' ? (
-                  <button className="btn btn-soft btn-sm" onClick={() => speak(textLines[0] || '', 'en-US')}>
+                  <button
+                    className="btn btn-soft btn-sm"
+                    onClick={() =>
+                      void readAloud(
+                        textLines[index] || textLines[0] || '',
+                        lang === 'ar' ? 'ar-SA' : lang === 'so' ? 'so-SO' : 'en-US'
+                      )
+                    }
+                  >
                     <AppIcon name="play" size={16} /> {t('Read aloud')}
                   </button>
                 ) : null}
@@ -269,6 +315,48 @@ export default function Kids() {
 
             {Array.isArray(body.hint) ? <div className="muted small">{body.hint[index]}</div> : null}
           </div>
+
+          {audio.track || audio.status === 'error' ? (
+            <div className="card kids-audio" aria-live="polite">
+              <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="row" style={{ alignItems: 'center', gap: 10 }}>
+                  <AppIcon name="play" size={18} />
+                  <div>
+                    <div className="small" style={{ fontWeight: 600 }}>
+                      {audio.track?.title || t('Audio')}
+                    </div>
+                    <div className="tiny muted">
+                      {audio.status === 'loading'
+                        ? t('Loading audio…')
+                        : audio.status === 'playing'
+                          ? t('Playing')
+                          : audio.status === 'paused'
+                            ? t('Paused')
+                            : audio.status === 'error'
+                              ? t('Playback failed')
+                              : t('Ready')}
+                    </div>
+                  </div>
+                </div>
+                <div className="row" style={{ gap: 8 }}>
+                  <button
+                    className="btn btn-soft btn-sm"
+                    onClick={() => void togglePlayback()}
+                    disabled={audio.status === 'loading'}
+                  >
+                    <AppIcon name={audio.status === 'playing' ? 'pause' : 'play'} size={15} />
+                    {audio.status === 'playing' ? t('Pause') : t('Play')}
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => stopPlayback()}>
+                    {t('Stop')}
+                  </button>
+                </div>
+              </div>
+              {audio.status === 'error' && audio.error ? (
+                <p className="tiny" style={{ margin: 0, color: 'var(--danger, #b3261e)' }}>{audio.error}</p>
+              ) : null}
+            </div>
+          ) : null}
 
           {quiz && Array.isArray(quiz.q) ? (
             <div className="card">

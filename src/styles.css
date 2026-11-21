@@ -1903,3 +1903,8 @@ html[data-theme='dark'] .mushaf-sheet { background: linear-gradient(180deg, #fdf
   border: 0; background: transparent; color: inherit;
   font-size: 16px; line-height: 1; padding: 2px 4px;
 }
+
+/* Ayah-end marker is also the verse bookmark control. */
+.ayah-marker { cursor: pointer; padding: 0 4px; line-height: 1; font: inherit; }
+.ayah-marker:focus-visible { outline: 2px solid var(--gold-deep); outline-offset: 2px; }
+.ayah-marker.saved { background: radial-gradient(circle at 50% 40%, #fdf0c4, #d9b24a); border-color: #7a5a0c; }

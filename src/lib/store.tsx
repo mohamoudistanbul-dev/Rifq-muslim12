@@ -27,8 +27,16 @@ import {
   type PrayerKey,
 } from './prayer';
 import { hijriDate, type HijriDate } from './hijri';
-import { startAlertLoop, requestPermission, upcomingOccasionAlerts } from './notify';
+import { startAlertLoop, planFor, requestPermission, syncNativeSchedule, upcomingOccasionAlerts } from './notify';
 import type { CategoryPrefs, CustomReminder } from './notifyPlan';
+import {
+  EMPTY_GEO,
+  errorKind,
+  hasMoved,
+  hintForError,
+  shouldRefrashSilently,
+  type GeoRecord,
+} from './geoAuto';
 
 export interface Prefs {
   notifyEnabled: boolean;
@@ -136,6 +144,16 @@ interface Store {
   place: Place | null;
   locState: LocState;
   locError: string;
+  /** Discreet explanation when GPS is off or permission is blocked. */
+  locationHint: string;
+  /** What the platform last told us about location access. */
+  geoPermission: GeoRecord['permission'];
+  /** When the last real fix was accepted, or null. */
+  lastFixAt: number | null;
+  /** True while an explicit location request is running. */
+  pending: boolean;
+  /** Explicit user request. The only path that may re-ask after a block. */
+  refreshLocation: () => Promise<void>;
   detectLocation: () => Promise<void>;
   setManualPlace: (p: Place) => void;
   clearPlace: () => void;
@@ -206,12 +224,41 @@ export function normalizePlace(raw: unknown): Place | null {
   };
 }
 
+const GEO_KEY = 'geo-state';
+
+/**
+ * Read the stored location memory, repairing anything malformed. The record is
+ * our own account of what really happened (a fix succeeded, or the platform
+ * refused), so a denied permission is never asked for again by itself.
+ */
+function readGeo(): GeoRecord {
+  const raw = local.get<Partial<GeoRecord> | null>(GEO_KEY, null);
+  if (!raw || typeof raw !== 'object') return { ...EMPTY_GEO };
+  const permission =
+    raw.permission === 'allowed' || raw.permission === 'blocked' ? raw.permission : 'unset';
+  const num = (v: unknown): number | null => (Number.isFinite(Number(v)) ? Number(v) : null);
+  return {
+    permission,
+    askedAt: num(raw.askedAt),
+    lastFixAt: num(raw.lastFixAt),
+    lastLat: num(raw.lastLat),
+    lastLon: num(raw.lastLon),
+  };
+}
+
+function writeGeo(rec: GeoRecord): void {
+  local.set(GEO_KEY, rec);
+}
+
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [lang, setLangState] = useState<Lang>(() => local.get<Lang>('lang', 'en'));
   const [theme, setTheme] = useState<'light' | 'dark'>(() => local.get('theme', 'light'));
   const [place, setPlace] = useState<Place | null>(() => normalizePlace(local.get<Place | null>('place', null)));
   const [locState, setLocState] = useState<LocState>(place ? (place.manual ? 'idle' : 'granted') : 'idle');
   const [locError, setLocError] = useState('');
+  const [geo, setGeo] = useState<GeoRecord>(() => readGeo());
+  const [locationHint, setLocationHint] = useState('');
+  const [pending, setPending] = useState(false);
   const [calc, setCalcState] = useState<CalcOptions>(() => local.get<CalcOptions>('calc', DEFAULT_CALC));
   const [prefs, setPrefsState] = useState<Prefs>(() => normalizePrefs(local.get('prefs', {})));
   const [user, setUser] = useState<User | null>(null);
@@ -365,71 +412,132 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [applyAutoMethod, toast]
   );
 
-  const detectLocation = useCallback(async () => {
+  const remember = useCallback((patch: Partial<GeoRecord>) => {
+    setGeo((prev) => {
+      const next: GeoRecord = { ...prev, ...patch };
+      writeGeo(next);
+      return next;
+    });
+  }, []);
+
+  /**
+   * Accept a real fix. The city is only reverse geocoded when the device
+   * actually moved (or when the user asked for a refrash), so reopening the app
+   * in the same city costs no network call and no battery.
+   */
+  const applyFix = useCallback(
+    async (lat: number, lon: number, opts: { announce: boolean; forced: boolean }): Promise<void> => {
+      const nowMs = Date.now();
+      if (!opts.forced && !hasMoved(readGeo(), lat, lon)) {
+        // Same area: keep the resolved place, just mark the fix fresh.
+        remember({ permission: 'allowed', lastFixAt: nowMs, lastLat: lat, lastLon: lon });
+        setLocState('granted');
+        setLocError('');
+        setLocationHint('');
+        return;
+      }
+      try {
+        const resolved = await resolveCoords(lat, lon, opts.announce);
+        if (!resolved) {
+          setLocState('error');
+          setLocError('Location unavailable');
+          return;
+        }
+        remember({ permission: 'allowed', lastFixAt: nowMs, lastLat: lat, lastLon: lon });
+        setLocState('granted');
+        setLocError('');
+        setLocationHint('');
+      } catch {
+        // The coordinates are real; only the city name lookup failed.
+        remember({ permission: 'allowed', lastFixAt: nowMs, lastLat: lat, lastLon: lon });
+        setLocState('error');
+        setLocError('Could not identify the city for these coordinates.');
+      }
+    },
+    [remember, resolveCoords]
+  );
+
+  /**
+   * A failure is reported honestly and never escalates into another prompt:
+   * a blocked permission is remembered, while GPS off keeps the last known
+   * location on screen with a one-line explanation.
+   */
+  const handleGeoError = useCallback(
+    (code: number, asked: boolean) => {
+      const kind = errorKind(code);
+      const hasSaved = Boolean(placeRef.current);
+      if (kind === 'blocked') {
+        remember({ permission: 'blocked', askedAt: asked ? Date.now() : readGeo().askedAt });
+        setLocState('denied');
+        setLocError('Location permission denied');
+      } else {
+        // GPS off or a slow fix must never look like a permission problem.
+        setLocState('error');
+        setLocError('Location unavailable');
+      }
+      setLocationHint(hintForError(kind, hasSaved));
+    },
+    [remember]
+  );
+
+  /**
+   * Explicit request from a button: the only path allowed to re-ask after a
+   * block, and the only one that uses high accuracy.
+   */
+  const refreshLocation = useCallback(async () => {
     if (!('geolocation' in navigator)) {
       setLocState('error');
       setLocError('This device does not expose a location sensor.');
       return;
     }
+    setPending(true);
     setLocState('locating');
     setLocError('');
     navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const resolved = await resolveCoords(pos.coords.latitude, pos.coords.longitude, true);
-          if (!resolved) {
-            setLocState('error');
-            setLocError('Location unavailable');
-          }
-        } catch {
-          setLocState('error');
-          setLocError('Could not identify the city for these coordinates.');
-        }
+      (pos) => {
+        void applyFix(pos.coords.latitude, pos.coords.longitude, { announce: true, forced: true })
+          .catch(() => undefined)
+          .finally(() => setPending(false));
       },
       (err) => {
-        setLocState(err.code === err.PERMISSION_DENIED ? 'denied' : 'error');
-        setLocError(
-          err.code === err.PERMISSION_DENIED
-            ? 'Location permission denied'
-            : 'Location unavailable'
-        );
+        handleGeoError(err.code, true);
+        setPending(false);
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
     );
-  }, [resolveCoords]);
+  }, [applyFix, handleGeoError]);
 
-  // Follow the user as they move. A manual selection is never overridden.
-  useEffect(() => {
-    if (!('geolocation' in navigator) || locState === 'denied') return;
-    const consider = (lat: number, lon: number) => {
-      const currentPlace = placeRef.current;
-      if (currentPlace?.manual) return;
-      const moved =
-        !currentPlace ||
-        Math.abs(currentPlace.lat - lat) > 0.02 ||
-        Math.abs(currentPlace.lon - lon) > 0.02;
-      if (!moved) return;
-      void resolveCoords(lat, lon, true).catch(() => undefined);
-    };
-    const id = navigator.geolocation.watchPosition(
-      (pos) => consider(pos.coords.latitude, pos.coords.longitude),
-      () => undefined,
-      { maximumAge: 120000, timeout: 20000 }
+  /**
+   * Single-shot refrash: no prompt, no watch, at most every 15 minutes, and
+   * only after the user has granted access before. A manual city choice always
+   * wins, and a GPS-off device keeps showing its last known location.
+   */
+  const silentRefrash = useCallback(() => {
+    if (!('geolocation' in navigator)) return;
+    const manual = Boolean(placeRef.current?.manual);
+    if (!shouldRefrashSilently(readGeo(), manual, Date.now())) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        void applyFix(pos.coords.latitude, pos.coords.longitude, { announce: true, forced: false })
+          .catch(() => undefined);
+      },
+      (err) => handleGeoError(err.code, false),
+      { enableHighAccuracy: false, timeout: 12000, maximumAge: 5 * 60 * 1000 }
     );
-    // A watch may stay silent when the app is reopened in a new city.
-    const timer = setInterval(() => {
-      if (placeRef.current?.manual) return;
-      navigator.geolocation.getCurrentPosition(
-        (pos) => consider(pos.coords.latitude, pos.coords.longitude),
-        () => undefined,
-        { maximumAge: 300000, timeout: 15000 }
-      );
-    }, 10 * 60 * 1000);
-    return () => {
-      navigator.geolocation.clearWatch(id);
-      clearInterval(timer);
+  }, [applyFix, handleGeoError]);
+
+  // Launch and resume only: there is no interval and no watchPosition, so the
+  // app never tracks the user while it sits open.
+  useEffect(() => {
+    silentRefrash();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') silentRefrash();
     };
-  }, [locState, resolveCoords]);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [silentRefrash]);
+
+  const detectLocation = refreshLocation;
 
   /* ----------------------------- prayer times ------------------------------ */
   // The city's own calendar date: the device timezone must never decide which
@@ -514,6 +622,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     place,
     locState,
     locError,
+    locationHint,
+    geoPermission: geo.permission,
+    lastFixAt: geo.lastFixAt,
+    pending,
+    refreshLocation,
     detectLocation,
     setManualPlace,
     clearPlace,

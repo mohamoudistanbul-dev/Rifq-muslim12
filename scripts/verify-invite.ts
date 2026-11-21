@@ -244,7 +244,7 @@ async function main() {
     check('the shared file carries every byte of the APK', shared.files?.[0]?.size === FIXTURE_BYTES, String(shared.files?.[0]?.size));
     check(
       'the invitation message introduces the app',
-      /RIFQ Muslim/.test(String(shared.text)) && /Download the app here/i.test(String(shared.text)),
+      /Rifq Muslim/i.test(String(shared.text)) && /Download the app here/i.test(String(shared.text)),
       String(shared.text)
     );
     check(

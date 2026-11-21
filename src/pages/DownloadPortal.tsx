@@ -367,6 +367,21 @@ export default function DownloadPortal() {
             <AppIcon name="copy" size={17} /> {copied ? 'Link copied' : 'Copy Link'}
           </button>
           <ShareChannels url={url} message={message} />
+          <p
+            data-testid="invite-message"
+            style={{
+              margin: '12px 0 0',
+              padding: '10px 12px',
+              borderRadius: 12,
+              fontSize: 12,
+              lineHeight: 1.55,
+              background: 'rgba(212,175,55,.08)',
+              border: '1px solid rgba(212,175,55,.25)',
+              color: 'rgba(246,241,228,.85)',
+            }}
+          >
+            {message}
+          </p>
           <p style={{ margin: '10px 0 0', fontSize: 11.5, wordBreak: 'break-all', color: 'rgba(246,241,228,.6)' }} data-testid="portal-url">
             {url}
           </p>

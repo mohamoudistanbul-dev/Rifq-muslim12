@@ -90,3 +90,81 @@ Quran audio:
 4. Return to RIFQ Muslim → same Surah and position.
 5. Press Stop → playback ends and the notification disappears.
 6. Turn **Background off** → hiding the app pauses the audio.
+
+## Rich prayer notifications (expanded card with action buttons)
+
+A prayer reminder is no longer a plain line of text. When it is due, the
+notification expands into a branded card and its three buttons do real work.
+
+### What the notification shows
+
+| Element | Source |
+| --- | --- |
+| App icon and name | `ic_stat_rifq`, `RIFQ Muslim` |
+| Title with remaining time | `"Dhuhr – 30 min remaining"`, built by `prayerPayload()` in `server/rich-notify.js` |
+| Prayer time | sub-text, e.g. `Dhuhr · 13:15` |
+| Islamic banner image | `/notif/prayer-<prayer>.png` (web push) and `res/drawable-nodpi/notif_prayer.png` (`BigPictureStyle`, native) |
+| Progress bar | the 60-minute countdown window, `setProgress` natively and `progress` in the push payload |
+| Action buttons | Already Prayed · Remind in 15 min · Open App |
+
+### What the buttons actually do
+
+* **Already Prayed** — writes a confirmation for that prayer and day. In the app
+  it calls `POST /api/prayers/confirm`; from the service worker it posts the same
+  request and, if the session has expired, queues the tap in IndexedDB
+  (`rifq-sw-actions`) so the app replays it on the next open. On Android
+  `PrayerActionReceiver` records it in `rifq_prayer_log` with a `pending` entry
+  that the WebView layer syncs when the app opens. A second tap returns
+  `already: true` instead of counting twice.
+* **Remind in 15 min** — creates a real queued reminder in `prayer_snoozes`. The
+  server's `startSnoozeScheduler()` pushes it when its time comes, so the
+  follow-up arrives even with the app closed. On Android it schedules a genuine
+  `AlarmManager` alarm through the existing prayer-alarm path.
+* **Open App** — opens `/athan?prayer=<key>`.
+
+### Channels, heads-up banners and duplicates
+
+The `rifq_athan` channel is created at `IMPORTANCE_HIGH`, so Android shows a
+heads-up banner whenever the user allows it, on the lock screen
+(`VISIBILITY_PUBLIC`) and with vibration. One notification per prayer per day
+(tag `rifq-prayer-<prayer>-<yyyyMMdd>`), so a re-fired alarm replaces the old card
+instead of stacking duplicates.
+
+### Admin announcements
+
+`sendPushToUsers` now forwards `kind`, `prayer`, `time`, `remainingMinutes`,
+`image`, `progress`, `actions` and `requireInteraction` when present, so an
+announcement can carry its own image and open the full message on tap.
+
+### Endpoints
+
+* `POST /api/prayers/confirm` `{prayer, day?, source?}` — idempotent confirmation.
+* `DELETE /api/prayers/confirm` — undo.
+* `GET /api/prayers/confirmed?day=` — the day's confirmations.
+* `POST /api/prayers/snooze` `{prayer, minutes?}` / `GET` / `DELETE /:id`.
+* `GET /api/prayers/rich-preview?prayer=&remaining=` — the exact payload shape.
+* `GET /api/admin/prayers/summary` — confirmations and pending snoozes (admin).
+
+### iOS
+
+iOS shows the title, body, image attachment and tap-to-open, and action buttons
+appear when the app registers them through `UNUserNotificationCenter`. iOS does
+not support Android's expanded `BigPictureStyle` layout or an in-notification
+progress bar; those two are Android-only by platform design.
+
+### Verify
+
+```bash
+npm run verify:rich     # confirm, undo, snooze queue, rich payload, admin gating
+```
+
+### Device checklist (rich card)
+
+1. Turn on a prayer reminder, wait for it (or use **Test notification**).
+2. Expand the notification: banner image, `"<Prayer> – N min remaining"`, prayer
+   time and the progress bar must all be visible.
+3. Tap **Already Prayed** → the card closes, a confirmation appears, and the
+   tracker shows that prayer as done (not counted twice on a second tap).
+4. Tap **Remind in 15 min** → a new reminder really arrives 15 minutes later.
+5. Tap **Open App** → Rifq Muslim opens on the prayer screen.
+6. Confirm no duplicate cards appear for the same prayer.

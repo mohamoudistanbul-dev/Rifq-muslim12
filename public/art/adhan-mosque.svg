@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" width="1200" height="520" role="img" aria-label="Mosque silhouette with minarets at sunset">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#04211a"/>
+      <stop offset="0.42" stop-color="#0a3f30"/>
+      <stop offset="0.72" stop-color="#6f5320"/>
+      <stop offset="1" stop-color="#d9ac53"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffeeb4"/>
+      <stop offset="0.45" stop-color="#f6cd72" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#f6cd72" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="dome" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0a3a2c"/>
+      <stop offset="1" stop-color="#03170f"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="520" fill="url(#sky)"/>
+  <g fill="#ffe9a8" opacity="0.75">
+    <circle cx="120" cy="70" r="2.2"/><circle cx="260" cy="42" r="1.6"/><circle cx="380" cy="96" r="2"/>
+    <circle cx="520" cy="54" r="1.5"/><circle cx="700" cy="88" r="2.1"/><circle cx="860" cy="46" r="1.7"/>
+    <circle cx="1010" cy="92" r="2.3"/><circle cx="1120" cy="58" r="1.6"/><circle cx="190" cy="140" r="1.4"/>
+    <circle cx="960" cy="150" r="1.5"/><circle cx="640" cy="140" r="1.3"/>
+  </g>
+  <circle cx="600" cy="372" r="168" fill="url(#sun)"/>
+  <circle cx="600" cy="372" r="54" fill="#ffe6a6" opacity="0.85"/>
+  <g fill="#03170f">
+    <path d="M0 428h1200v92H0z"/>
+    <path d="M470 428V300c0-16 12-28 28-28h204c16 0 28 12 28 28v128z"/>
+    <path d="M470 300c0-72 58-130 130-130s130 58 130 130z" fill="url(#dome)"/>
+    <path d="M596 150c0-22 4-34 4-34s4 12 4 34z"/>
+    <circle cx="600" cy="146" r="7"/>
+    <path d="M418 428V236c0-13 9-23 20-23s20 10 20 23v192z"/>
+    <path d="M404 236h68l-34-42z"/>
+    <path d="M742 428V236c0-13 9-23 20-23s20 10 20 23v192z"/>
+    <path d="M728 236h68l-34-42z"/>
+    <path d="M300 428v-70c0-12 8-22 18-22s18 10 18 22v70zM864 428v-70c0-12 8-22 18-22s18 10 18 22v70z"/>
+  </g>
+  <g fill="none" stroke="#e8c86a" stroke-opacity="0.55" stroke-width="2">
+    <path d="M600 262c-30 0-54 22-54 50h108c0-28-24-50-54-50z"/>
+    <path d="M566 396v-56c0-14 15-25 34-25s34 11 34 25v56"/>
+    <path d="M0 470h1200" stroke-opacity="0.28"/>
+    <path d="M0 486h1200" stroke-opacity="0.16"/>
+  </g>
+  <g fill="#e8c86a" opacity="0.5">
+    <circle cx="600" cy="150" r="2.5"/><circle cx="438" cy="230" r="2"/><circle cx="762" cy="230" r="2"/>
+  </g>
+</svg>

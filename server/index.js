@@ -27,6 +27,10 @@ import { adminRouter, UPLOAD_DIR } from './admin.js';
 import { downloadRouter, apkSource, apkStatus, APK_PATH, APK_FILENAME } from './download.js';
 import { analyticsRouter, visitRouter, recordPortalVisit } from './analytics.js';
 import { seedSuperAdmin, SUPER_ADMIN_EMAIL } from './seed.js';
+import { premiumRouter, premiumAdminRouter } from './premium.js';
+import { quizRouter, quizAdminRouter } from './quiz.js';
+import kidsRouter from './kids.js';
+import { mosquesRouter } from './mosques.js';
 import { donateUrl, donateCurrency } from './donate.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -644,6 +648,12 @@ app.use('/api', geoRouter);
 app.use('/api', hadithRouter);
 app.use('/api', contentRouter);
 app.use('/api', quranAudioRouter);
+// Quiz, Kid Academy, Premium and the mosque finder. Public reads only; every
+// write below is guarded inside its own router.
+app.use('/api', quizRouter);
+app.use('/api', kidsRouter);
+app.use('/api', premiumRouter);
+app.use('/api', mosquesRouter);
 
 /* ---------------------------------- admin ---------------------------------- */
 
@@ -652,6 +662,9 @@ app.use('/api', quranAudioRouter);
 // admin router so it can never be reached by a wildcard path.
 app.use('/api/analytics', visitRouter);
 app.use('/api/admin/analytics', analyticsRouter);
+// Mounted ahead of the generic admin router so these paths are matched first.
+app.use('/api/admin/premium', premiumAdminRouter);
+app.use('/api/admin/quiz', quizAdminRouter);
 app.use('/api/admin', adminRouter);
 
 /* -------------------------------- downloads -------------------------------- */

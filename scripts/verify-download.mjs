@@ -235,7 +235,14 @@ try {
   console.log(`  FAIL ${error.message}`);
 } finally {
   uploaded.kill('SIGTERM');
-  fs.rmSync(tmpRoot, { recursive: true, force: true });
+  // Wait for the server to exit before removing its data directory: SQLite keeps
+  // -wal/-shm files open, and a live process can recreate them mid-delete.
+  await new Promise((resolve) => {
+    if (uploaded.exitCode !== null) return resolve();
+    uploaded.once('exit', resolve);
+    setTimeout(resolve, 3000);
+  });
+  fs.rmSync(tmpRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 }
 
 if (failures.length) {

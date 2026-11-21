@@ -20,6 +20,7 @@ import {
 import { sendEmail, mailConfigured } from './mail.js';
 import { answerQuestion } from './assistant.js';
 import { contentRouter, warmContent } from './content.js';
+import { hadithRouter } from './hadith.js';
 import { publicBaseUrl, renderIndex } from './publicUrl.js';
 import { geoRouter } from './geo.js';
 import { adminRouter, UPLOAD_DIR } from './admin.js';
@@ -626,6 +627,9 @@ app.post('/api/assistant', rateLimit({ windowMs: 60_000, max: 12 }), async (req,
 import { quranAudioRouter } from './quran-audio.js';
 
 app.use('/api', geoRouter);
+// Mounted before contentRouter so /hadith/daily, /hadith/:c/sections and
+// /hadith/search/query win over the legacy single-collection route.
+app.use('/api', hadithRouter);
 app.use('/api', contentRouter);
 app.use('/api', quranAudioRouter);
 

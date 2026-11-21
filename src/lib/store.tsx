@@ -27,12 +27,14 @@ import {
   type PrayerKey,
 } from './prayer';
 import { hijriDate, type HijriDate } from './hijri';
+import { startAlertLoop, requestPermission } from './notify';
 
 export interface Prefs {
   notifyEnabled: boolean;
   prayerAlerts: Record<string, boolean>;
   preReminder: number; // minutes before, 0 = off
   athanSound: string;
+  vibration: boolean;
   dailyQuran: boolean;
   dailyDua: boolean;
   dailyHadith: boolean;
@@ -45,6 +47,7 @@ export const DEFAULT_PREFS: Prefs = {
   prayerAlerts: { fajr: true, dhuhr: true, asr: true, maghrib: true, isha: true },
   preReminder: 0,
   athanSound: 'makkah',
+  vibration: true,
   dailyQuran: true,
   dailyDua: false,
   dailyHadith: false,
@@ -416,57 +419,33 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   /* ---------------------------- notifications ------------------------------ */
   const requestNotify = useCallback(async () => {
-    if (typeof Notification === 'undefined') {
+    const result = await requestPermission();
+    if (result === 'unsupported') {
       setNotifyPermission('unsupported');
       toast('This browser does not support notifications', 'error');
       return;
     }
-    const result = await Notification.requestPermission();
     setNotifyPermission(result);
     if (result === 'granted') {
       setPrefs({ notifyEnabled: true });
       toast('Prayer reminders enabled', 'success');
+    } else if (result === 'denied') {
+      toast('Notifications are blocked. Allow them in the browser or app settings.', 'error');
     } else {
       toast('Notification permission was not granted', 'error');
     }
   }, [setPrefs, toast]);
 
-  // In-app scheduling while the app is open. Android background delivery needs
-  // the native shell described in docs/ANDROID_BUILD.md.
+  // Alert delivery. The loop reads the very same `times` object that renders the
+  // countdown, so a notification can never disagree with the clock on screen,
+  // and every slot is deduplicated in localStorage (see lib/notify.ts).
   useEffect(() => {
-    if (!prefs.notifyEnabled || notifyPermission !== 'granted' || !times || !place) return;
-    const id = setInterval(() => {
-      const current = new Date();
-      for (const key of FIVE) {
-        if (prefs.prayerAlerts[key] === false) continue;
-        const at = times[key];
-        const diff = current.getTime() - at.getTime();
-        const slot = `${at.toISOString()}:${key}`;
-        if (diff >= 0 && diff < 60000 && !firedRef.current.has(slot)) {
-          firedRef.current.add(slot);
-          const body =
-            key === 'fajr'
-              ? `Fajr time in ${place.city}. Prayer is better than sleep.`
-              : `It is time for ${key[0].toUpperCase()}${key.slice(1)} in ${place.city}.`;
-          try {
-            new Notification('RIFQ Muslim', { body, icon: '/icons/icon-192.png', tag: slot });
-          } catch {
-            /* notification constructor can fail on some platforms */
-          }
-          if (prefs.athanSound !== 'silent') {
-            try {
-              new Audio(
-                `https://cdn.islamic.network/athan/${prefs.athanSound === 'madinah' ? 'madinah' : 'makkah'}.mp3`
-              ).play().catch(() => undefined);
-            } catch {
-              /* autoplay blocked */
-            }
-          }
-        }
-      }
-    }, 15000);
-    return () => clearInterval(id);
-  }, [prefs.notifyEnabled, prefs.prayerAlerts, prefs.athanSound, notifyPermission, times, place]);
+    const stop = startAlertLoop(
+      () => ({ times, city: place?.city || 'your city' }),
+      () => prefs
+    );
+    return stop;
+  }, [prefs, times, place]);
 
   const value: Store = {
     lang,

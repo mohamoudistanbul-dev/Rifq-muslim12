@@ -187,7 +187,10 @@ export function reminderSound(prefSound: string | undefined, general: string | u
 }
 
 /** Sound for a prayer alert: the Adhan only while that prayer's audio is on. */
-export function prayerSound(athanSound: string, audioEnabled: boolean): string {
+export function prayerSound(
+  athanSound: string | undefined,
+  audioEnabled: boolean | undefined
+): string {
   return audioEnabled && athanSound && athanSound !== 'silent' ? athanSound : 'beep';
 }
 

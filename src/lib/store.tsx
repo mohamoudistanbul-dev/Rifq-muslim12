@@ -617,6 +617,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         prayerAlerts: prefs.prayerAlerts,
         preReminder: prefs.preReminder,
         athanSound: prefs.athanSound,
+        notifySound: prefs.notifySound,
+        adhanAudio: prefs.adhanAudio,
         vibration: prefs.vibration,
         categories: prefs.categories,
         custom: prefs.customReminders,

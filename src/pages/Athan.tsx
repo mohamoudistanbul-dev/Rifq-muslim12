@@ -156,6 +156,8 @@ export default function Athan() {
         prayerAlerts: prefs.prayerAlerts,
         preReminder: prefs.preReminder,
         athanSound: prefs.athanSound,
+        notifySound: prefs.notifySound,
+        adhanAudio: prefs.adhanAudio,
         vibration: prefs.vibration,
         categories: prefs.categories,
         custom: prefs.customReminders,

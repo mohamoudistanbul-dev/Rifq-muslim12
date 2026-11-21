@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../lib/store';
 import { LANGS, type Lang } from '../lib/i18n';
 import { AppIcon } from './Icons';
+import { useUnreadNotifications } from '../lib/inbox';
 
 export function Logo({ size = 40 }: { size?: number }) {
   return (
@@ -20,6 +21,7 @@ export function Logo({ size = 40 }: { size?: number }) {
 export function TopBar({ title, back, actions }: { title?: string; back?: boolean; actions?: React.ReactNode }) {
   const { lang, setLang, t, user } = useStore();
   const navigate = useNavigate();
+  const unread = useUnreadNotifications();
   return (
     <header className="topbar">
       <div className="topbar-inner">
@@ -51,8 +53,35 @@ export function TopBar({ title, back, actions }: { title?: string; back?: boolea
               </option>
             ))}
           </select>
-          <NavLink to="/athan" className="icon-btn" aria-label={t('Notifications')}>
+          <NavLink
+            to="/notifications"
+            className="icon-btn"
+            aria-label={t('Notifications')}
+            style={{ position: 'relative' }}
+          >
             <AppIcon name="bell" />
+            {unread > 0 && (
+              <span
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  top: -2,
+                  right: -2,
+                  minWidth: 16,
+                  height: 16,
+                  padding: '0 4px',
+                  borderRadius: 8,
+                  background: 'var(--gold)',
+                  color: '#10241c',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  lineHeight: '16px',
+                  textAlign: 'center',
+                }}
+              >
+                {unread > 9 ? '9+' : unread}
+              </span>
+            )}
           </NavLink>
           <NavLink to={user ? '/profile' : '/login'} className="icon-btn" aria-label={t('Profile')}>
             <AppIcon name="user" />

@@ -13,6 +13,7 @@ import Hadith from './pages/Hadith';
 import Calendar from './pages/Calendar';
 import Bookmarks from './pages/Bookmarks';
 import Athan from './pages/Athan';
+import Notifications from './pages/Notifications';
 import Zakat from './pages/Zakat';
 import Places from './pages/Places';
 import Kids from './pages/Kids';
@@ -77,6 +78,7 @@ function AppBody() {
               <Route path="/calendar" element={<Calendar />} />
               <Route path="/bookmarks" element={<Bookmarks />} />
               <Route path="/athan" element={<Athan />} />
+              <Route path="/notifications" element={<Notifications />} />
               <Route path="/zakat" element={<Zakat />} />
               <Route path="/places" element={<Places />} />
               <Route path="/kids" element={<Kids />} />

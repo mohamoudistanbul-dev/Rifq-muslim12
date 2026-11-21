@@ -58,6 +58,10 @@ export interface OccasionDate {
 }
 
 export interface PlanInput {
+  /** General notification sound for reminders: `beep` (chime) or `silent`. */
+  notifySound?: string;
+  /** Per-prayer Adhan audio switches; a missing key means enabled. */
+  athanAudio?: Record<string, boolean>;
   now: Date;
   /** Today's prayer times, from the same engine that renders the countdown. */
   times: Record<string, Date> | null;
@@ -157,6 +161,45 @@ export function categoryLabel(category: DailyCategory): string {
   return DAILY_COPY[category].label;
 }
 
+/**
+ * Audio routing — the single Adhan rule for the whole app.
+ *
+ * The Adhan recording is reserved for one event: a real prayer time arriving.
+ * Pre-prayer notices, Quran/Hadith/Dua reminders, adhkar, Islamic occasions,
+ * user reminders and admin messages all use the general notification sound (or
+ * silence). Because the app, the Adhan screen and the native alarm scheduler
+ * all read these helpers, none of them can start drifting apart.
+ */
+export const NOTIFY_SOUND_IDS = ['beep', 'silent'] as const;
+export type NotifySoundId = (typeof NOTIFY_SOUND_IDS)[number];
+
+export function normalizeNotifySound(id: string | undefined): NotifySoundId {
+  return id === 'silent' ? 'silent' : 'beep';
+}
+
+/** Sound for a daily reminder, user reminder or admin message. */
+export function reminderSound(prefSound: string, general: string | undefined): string {
+  const g = normalizeNotifySound(general);
+  if (prefSound === 'default') return g;
+  if ((NOTIFY_SOUND_IDS as readonly string[]).includes(prefSound)) return prefSound;
+  // An Adhan id saved by an older build must never fire on a reminder.
+  return g;
+}
+
+/** Sound for a prayer alert: the Adhan only while that prayer's audio is on. */
+export function prayerSound(athanSound: string, audioEnabled: boolean): string {
+  return audioEnabled && athanSound && athanSound !== 'silent' ? athanSound : 'beep';
+}
+
+/** True only for a real prayer alert that carries an Adhan recording. */
+export function isPrayerAudio(category: string, sound: string): boolean {
+  return (
+    (PRAYER_KEYS as readonly string[]).includes(category) &&
+    sound !== 'beep' &&
+    sound !== 'silent'
+  );
+}
+
 /** Lays out every alert the app can deliver, newest last. */
 export function planAlerts(input: PlanInput): PlannedAlert[] {
   const out: PlannedAlert[] = [];
@@ -177,7 +220,7 @@ export function planAlerts(input: PlanInput): PlannedAlert[] {
           key === 'fajr'
             ? `Fajr time in ${city}. Prayer is better than sleep.`
             : `${cap(key)} time in ${city}.`,
-        sound: input.athanSound,
+        sound: prayerSound(input.athanSound, input.athanAudio?.[key] !== false),
         vibrate: input.vibration,
         url: '/athan',
       });
@@ -189,7 +232,7 @@ export function planAlerts(input: PlanInput): PlannedAlert[] {
           at: new Date(at.getTime() - input.preReminder * 60_000),
           title: `RIFQ Muslim — ${cap(key)} soon`,
           body: `${cap(key)} in ${input.preReminder} minutes in ${city}.`,
-          sound: 'beep',
+          sound: normalizeNotifySound(input.notifySound),
           vibrate: input.vibration,
           url: '/athan',
         });
@@ -230,7 +273,7 @@ export function planAlerts(input: PlanInput): PlannedAlert[] {
         at,
         title,
         body,
-        sound: pref.sound === 'default' ? input.athanSound : pref.sound,
+        sound: reminderSound(pref.sound, input.notifySound),
         vibrate: pref.vibrate,
         url: copy.url,
       });
@@ -251,7 +294,7 @@ export function planAlerts(input: PlanInput): PlannedAlert[] {
         at,
         title: `RIFQ Muslim — ${reminder.title || 'Reminder'}`,
         body: reminder.body || reminder.title || 'Your reminder from RIFQ Muslim.',
-        sound: 'beep',
+        sound: normalizeNotifySound(input.notifySound),
         vibrate: true,
         url: '/more',
       });

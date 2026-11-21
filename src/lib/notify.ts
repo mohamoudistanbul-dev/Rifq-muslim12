@@ -566,6 +566,8 @@ export function planFor(state: LoopState, now = new Date()): PlannedAlert[] {
     preReminder: state.prefs.preReminder,
     vibration: state.prefs.vibration,
     athanSound: state.prefs.athanSound,
+    notifySound: state.prefs.notifySound,
+    athanAudio: state.prefs.adhanAudio,
     categories: state.prefs.categories,
     custom: state.prefs.custom,
     occasions: state.occasions,
@@ -597,7 +599,9 @@ export async function testCategory(category: CategoryId, state: LoopState): Prom
   const body = sample
     ? sample.body
     : `Notifications are working for ${state.city}. This is a test; no prayer time was changed.`;
-  const sound = sample?.sound || state.prefs.athanSound;
+  const sound =
+    sample?.sound ||
+    (PRAYER_CATEGORIES.includes(category) ? state.prefs.athanSound : 'beep');
 
   const shown = await showAlert({
     title,
@@ -620,7 +624,8 @@ export async function testCategory(category: CategoryId, state: LoopState): Prom
     });
   }
 
-  const played = await playAdhan(sound);
+  // A reminder test must never play the Adhan recording.
+  const played = isPrayerAudio(category, sound) ? await playAdhan(sound) : playChime();
   return { shown, played, title, body, sound };
 }
 
@@ -735,8 +740,15 @@ export function startAlertLoop(getState: () => LoopState): () => void {
           tag: alert.slot,
         });
       }
-      if (alert.sound === 'beep') playChime();
-      else if (alert.sound !== 'silent') void playAdhan(alert.sound);
+      // The Adhan recording belongs to the prayer time itself. Reminders,
+      // pre-prayer notices and admin messages get the general sound instead.
+      if (alert.sound === 'silent') {
+        /* the user chose silence for this category */
+      } else if (isPrayerAudio(alert.category, alert.sound)) {
+        void playAdhan(alert.sound);
+      } else {
+        playChime();
+      }
     }
 
     const signature = syncSignature(state, now);

@@ -89,6 +89,47 @@ contentRouter.get('/quran/surah/:number', async (req, res) => {
   }
 });
 
+/*
+ * One printed Madani Mushaf page (604 pages), straight from the same verified
+ * Uthmani edition the surah route uses. The reader needs this because a Mushaf
+ * page regularly carries the end of one surah and the start of the next, which
+ * a per-surah route cannot express.
+ */
+contentRouter.get('/quran/page/:page', async (req, res) => {
+  const page = Number(req.params.page);
+  if (!Number.isInteger(page) || page < 1 || page > 604) {
+    return res.status(400).json({ error: 'Page must be 1-604.' });
+  }
+  const translation = String(req.query.translation || 'en.sahih').replace(/[^a-z0-9.\-]/gi, '');
+  try {
+    const data = await fetchJson(
+      `https://api.alquran.cloud/v1/page/${page}/editions/quran-uthmani,${translation}`,
+      { ttl: 604800 }
+    );
+    const [arabic, translated] = data.data;
+    res.json({
+      page,
+      totalPages: 604,
+      translationEdition: translated.edition.identifier,
+      ayahs: arabic.ayahs.map((a, i) => ({
+        number: a.numberInSurah,
+        surah: a.surah?.number,
+        surahName: a.surah?.name,
+        surahEnglishName: a.surah?.englishName,
+        text: a.text,
+        juz: a.juz,
+        page: a.page,
+        hizbQuarter: a.hizbQuarter,
+        sajda: !!a.sajda,
+        translation: translated.ayahs[i]?.text || '',
+      })),
+      source: 'AlQuran Cloud — Quran Uthmani text with the selected translation',
+    });
+  } catch (err) {
+    res.status(502).json({ error: `This Mushaf page could not be loaded: ${err.message}` });
+  }
+});
+
 contentRouter.get('/quran/search', async (req, res) => {
   const q = String(req.query.q || '').trim();
   const lang = ['en', 'ar', 'so'].includes(String(req.query.lang)) ? req.query.lang : 'en';

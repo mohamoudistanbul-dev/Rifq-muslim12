@@ -1809,3 +1809,97 @@ html[dir='rtl'] .rtl-flip {
   color: var(--gold, #c9a227);
 }
 
+
+/* ============================================================
+   Mushaf page reading — printed-Quran layout
+   ============================================================ */
+.mushaf { display: flex; flex-direction: column; gap: 12px; }
+.mushaf-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mushaf-toolbar-end { justify-content: flex-end; }
+.mushaf-pagecount {
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted, #b9d6c8);
+}
+.mushaf-sheet {
+  position: relative; overflow: hidden;
+  background: linear-gradient(180deg, #fffdf5, #f6eed8);
+  border: 1px solid var(--gold);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  padding: 14px 14px 10px;
+}
+.mushaf-sheet::before {
+  content: ''; position: absolute; inset: 6px; pointer-events: none;
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  border-radius: calc(var(--radius) - 6px);
+}
+.mushaf-band {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: linear-gradient(180deg, var(--emerald), #0a4a37);
+  color: var(--gold-soft);
+  border-radius: 10px; padding: 6px 10px;
+  font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.mushaf-band-title { font-family: var(--font-arabic); font-size: 15px; letter-spacing: 0; text-transform: none; color: #fff; }
+.mushaf-band-side { font-size: 10px; opacity: 0.9; }
+.mushaf-run + .mushaf-run { margin-top: 14px; }
+.mushaf-surah-frame {
+  border: 1px solid var(--gold); border-radius: 12px;
+  background: rgba(212, 175, 55, 0.1);
+  padding: 6px 10px; margin: 4px 0 10px; text-align: center;
+}
+.mushaf-surah-header { font-family: var(--font-arabic); font-size: 20px; color: #0a3a2a; line-height: 1.6; }
+.mushaf-surah-sub { font-size: 10.5px; color: #6b5a2a; letter-spacing: 0.04em; }
+.mushaf-bismillah {
+  font-family: var(--font-arabic); font-size: 20px; text-align: center;
+  color: #0a3a2a; margin: 2px 0 10px;
+}
+.mushaf-text {
+  direction: rtl; text-align: justify; text-align-last: center;
+  font-family: var(--font-arabic); line-height: 2.15;
+  color: #0e2a20; word-spacing: 0.06em;
+}
+.mushaf-ayah { display: inline; }
+.ayah-marker {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 26px; height: 26px; margin: 0 4px; padding: 0 4px;
+  border-radius: 50%; border: 1px solid var(--gold-deep);
+  background: radial-gradient(circle at 50% 40%, #fff8e2, #efdca4);
+  color: #6b4f0a; font-size: 11px; vertical-align: middle;
+  font-family: var(--font-ui);
+}
+.mushaf-foot {
+  display: flex; justify-content: center; margin-top: 12px;
+  font-size: 11px; color: #6b5a2a; letter-spacing: 0.14em;
+}
+.mushaf-status { font-size: 12px; color: var(--muted, #b9d6c8); }
+.mushaf-status-warn { color: var(--gold-soft, #efd894); }
+.mushaf-note { font-size: 12px; color: #6b5a2a; margin: 0; }
+.mushaf-jumps { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-top: 10px; }
+.mushaf-jump { display: flex; align-items: center; gap: 6px; }
+.mushaf-jump .input, .mushaf-jump .select { min-width: 0; }
+
+/* A printed page keeps its paper tone in dark mode; only the surround darkens. */
+html[data-theme='dark'] .mushaf-sheet { background: linear-gradient(180deg, #fdf8ea, #f1e6cc); }
+
+/* ============================================================
+   Offline banner — never blocks the screen
+   ============================================================ */
+.offline-banner {
+  position: sticky; top: 0; z-index: 60;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; font-size: 12.5px;
+  background: linear-gradient(90deg, #7a2b12, #a3411c);
+  color: #fff4e2; border-bottom: 1px solid rgba(212, 175, 55, 0.5);
+}
+.offline-banner[data-state='server-down'] { background: linear-gradient(90deg, #4a3a06, #6d5409); }
+.offline-icon { font-size: 15px; line-height: 1; }
+.offline-text { flex: 1; line-height: 1.35; }
+.offline-retry {
+  border: 1px solid rgba(255, 255, 255, 0.55); background: transparent; color: inherit;
+  border-radius: 999px; padding: 4px 10px; font-size: 11.5px; font-weight: 600;
+}
+.offline-close {
+  border: 0; background: transparent; color: inherit;
+  font-size: 16px; line-height: 1; padding: 2px 4px;
+}

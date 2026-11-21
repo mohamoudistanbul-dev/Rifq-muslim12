@@ -26,6 +26,14 @@ import {
   cookieOptions,
 } from './auth.js';
 import { mailConfigured } from './mail.js';
+import { sendPushToUsers } from './push.js';
+import {
+  listAnnouncements,
+  createAnnouncement,
+  updateAnnouncement,
+  cancelAnnouncement,
+  sendAnnouncement,
+} from './announcements.js';
 import { APK_DIR, APK_FILE, APK_MAX_BYTES, apkInfoSnapshot, apkStatus } from './download.js';
 
 /**
@@ -690,6 +698,16 @@ adminRouter.delete('/posts/:id', requireAdmin, (req, res) => {
 
 /* ------------------------------ notifications ------------------------------ */
 
+/* Describes what device delivery actually did, in words the owner can act on. */
+function pushNote(push) {
+  if (!push || !push.users) return 'No recipient to push to.';
+  if (!push.devices) return 'Saved to the inbox. No device is registered for background push yet.';
+  const parts = [`Background push: ${push.sent}/${push.devices} device(s) accepted`];
+  if (push.failed) parts.push(`${push.failed} failed`);
+  if (push.removed) parts.push(`${push.removed} stale subscription(s) removed`);
+  return `${parts.join(', ')}.`;
+}
+
 adminRouter.get('/notifications', requireAdmin, (_req, res) => {
   res.json({ notifications: db.prepare('SELECT * FROM broadcasts ORDER BY created_at DESC LIMIT 100').all() });
 });
@@ -699,7 +717,7 @@ adminRouter.get('/notifications', requireAdmin, (_req, res) => {
  * per recipient. `audience` is `all` or `selected` (with `userIds`), and the
  * stored counts are what actually happened, not an assumption.
  */
-adminRouter.post('/notifications', requireAdmin, (req, res) => {
+adminRouter.post('/notifications', requireAdmin, async (req, res) => {
   const title = String(req.body?.title || '').trim().slice(0, 120);
   const body = String(req.body?.body || '').trim().slice(0, 1000);
   const link = String(req.body?.link || '').trim().slice(0, 300);
@@ -726,22 +744,23 @@ adminRouter.post('/notifications', requireAdmin, (req, res) => {
   ).run(id, title, body, audience, JSON.stringify(valid), req.user.id, 0, 0, 0, null, nowIso());
 
   const result = deliverBroadcast({ broadcastId: id, userIds: valid, kind: 'admin', title, body, link });
-  const note = unknown.length ? `${unknown.length} selected account(s) no longer exist and were skipped.` : null;
-  db.prepare('UPDATE broadcasts SET recipients = ?, delivered = ?, failed = ?, delivery_note = ? WHERE id = ?').run(
-    result.recipients,
-    result.delivered,
-    result.failed,
-    note,
-    id
-  );
+  /* Real device delivery: one push per registered device, per recipient. */
+  const push = await sendPushToUsers(valid, { title, body, link, broadcastId: id });
+  const notes = [];
+  if (unknown.length) notes.push(`${unknown.length} selected account(s) no longer exist and were skipped.`);
+  notes.push(pushNote(push));
+  db.prepare(
+    'UPDATE broadcasts SET recipients = ?, delivered = ?, failed = ?, push_sent = ?, push_failed = ?, delivery_note = ? WHERE id = ?'
+  ).run(result.recipients, result.delivered, result.failed, push.sent, push.failed, notes.join(' '), id);
   auditLog(
     req.user,
     'admin.notification.create',
-    `${title} -> ${audience} (${result.delivered}/${result.recipients} delivered)`
+    `${title} -> ${audience} (${result.delivered}/${result.recipients} inbox, ${push.sent}/${push.devices} push)`
   );
   res.status(201).json({
     item: db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(id),
     delivery: result,
+    push,
     skipped: unknown.length,
   });
 });
@@ -757,6 +776,37 @@ adminRouter.delete('/notifications/:id', requireAdmin, (req, res) => {
   db.prepare('DELETE FROM broadcasts WHERE id = ?').run(req.params.id);
   auditLog(req.user, 'admin.notification.delete', req.params.id);
   res.json({ ok: true });
+});
+
+/* ----------------------------- announcements ----------------------------- */
+
+/* Scheduled messages: written now, sent by the server when due. */
+adminRouter.get('/announcements', requireAdmin, (_req, res) => {
+  res.json({ announcements: listAnnouncements() });
+});
+
+adminRouter.post('/announcements', requireAdmin, (req, res) => {
+  const result = createAnnouncement(req.user, req.body || {});
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.status(201).json(result);
+});
+
+adminRouter.put('/announcements/:id', requireAdmin, (req, res) => {
+  const result = updateAnnouncement(req.user, req.params.id, req.body || {});
+  if (result.error) return res.status(result.status || 400).json({ error: result.error });
+  res.json(result);
+});
+
+adminRouter.post('/announcements/:id/send', requireAdmin, async (req, res) => {
+  const result = await sendAnnouncement(req.user, req.params.id);
+  if (result.error) return res.status(result.status || 400).json({ error: result.error });
+  res.json(result);
+});
+
+adminRouter.post('/announcements/:id/cancel', requireAdmin, (req, res) => {
+  const result = cancelAnnouncement(req.user, req.params.id);
+  if (result.error) return res.status(result.status || 400).json({ error: result.error });
+  res.json(result);
 });
 
 /* --------------------------------- settings -------------------------------- */

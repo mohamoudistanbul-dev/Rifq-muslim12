@@ -175,12 +175,12 @@ function distance(a, b) {
 
 function record(page, theme, selector, data) {
   if (!data) return;
-  if (data.fgAlpha < 0.2) {
-    results.push({ page, theme, selector, skipped: true, fg: data.fg });
+  const fg = parseColor(data.color);
+  if (!fg) return;
+  if (fg.a < 0.2) {
+    results.push({ page, theme, selector, skipped: true, fg: data.color });
     return;
   }
-  const fg = parseColor(data.fg);
-  if (!fg) return;
 
   // Discard samples that are essentially the glyph colour, then judge the text
   // by its least favourable remaining backdrop.
@@ -238,6 +238,12 @@ async function sampleElement(page, selector) {
 
   await locator.scrollIntoViewIfNeeded();
   await page.waitForTimeout(60);
+  // The sticky top bar would otherwise cover the element being sampled.
+  await locator.evaluate((el) => {
+    const top = el.getBoundingClientRect().top;
+    if (top < 92) window.scrollBy(0, top - 96);
+  });
+  await page.waitForTimeout(60);
 
   const info = await locator.evaluate((el) => {
     const cs = getComputedStyle(el);
@@ -266,16 +272,19 @@ async function sampleElement(page, selector) {
     };
   });
 
-  const { rect, dpr } = info;
+  const { rect } = info;
   if (rect.w < 4 || rect.h < 4) return null;
 
-  // Inset the clip so the element's own border doesn't dominate the samples.
+  // Clamp to the viewport: pixels outside it are not painted.
+  const vp = page.viewportSize() || { width: 390, height: 844 };
   const inset = 2;
+  const x0 = Math.max(0, Math.min(rect.x + inset, vp.width - 2));
+  const y0 = Math.max(0, Math.min(rect.y + inset, vp.height - 2));
   const clip = {
-    x: Math.max(0, rect.x + inset),
-    y: Math.max(0, rect.y + inset),
-    width: Math.max(1, rect.w - inset * 2),
-    height: Math.max(1, rect.h - inset * 2),
+    x: x0,
+    y: y0,
+    width: Math.max(1, Math.min(rect.w - inset * 2, vp.width - x0)),
+    height: Math.max(1, Math.min(rect.h - inset * 2, vp.height - y0)),
   };
 
   const shot = await page.screenshot({ clip });
@@ -291,7 +300,7 @@ async function sampleElement(page, selector) {
   ];
 
   const samples = points.map(([x, y]) => pixelAt(img, x, y));
-  return { ...info, dpr, samples };
+  return { ...info, samples };
 }
 
 async function main() {

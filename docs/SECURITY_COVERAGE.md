@@ -6,13 +6,14 @@ This document records exactly what the automated dependency scan covers, what it
 reports, what it **cannot** cover in this environment, and how to close the rest.
 It is **not** a statement that the application is secure.
 
-Last updated: 2026-11-21 (Analytics Dashboard revision) — this revision added **no
-dependency**: `package.json` still declares the same 8 runtime and 6 dev packages, and
-`package-lock.json` is unchanged, so the scan was deliberately **not** re-run (a repeat
-of an unchanged scan is not new evidence). The numbers below therefore still describe the
-previously scanned dependency set. Earlier on 2026-11-21 the repository scan was re-run and
-returned the same result: 444 packages, 0 advisories, status `incomplete`. The build scripts
-were re-audited and the remaining warning is still an **attribution** gap, not an unscanned
+Last updated: 2026-11-21 (Kid Academy / Quiz / Qibla / Near Mosques / Premium revision,
+rev 24) — this revision added **no dependency**: `package.json` and `package-lock.json` are
+unchanged (both last modified in `efcac76`), so the resolved dependency set is identical to
+the one previously scanned. The repository scan was nevertheless re-run at this revision and
+returned the same result: **444 packages, 0 advisories, 0 blocking, status `incomplete`**. The
+`incomplete` status is the attribution gap of §3 — it is **not** an unscanned package and not
+a finding. The build scripts were re-audited and the remaining warning is still an
+**attribution** gap, not an unscanned
 package (§3). The CI route's shape is now machine-checked by `npm run verify:workflow` (§3.4):
 `android/build.gradle.kts` owns a buildscript classpath configuration but no dependencies
 of its own, so Gradle emits `android/buildscript-gradle.lockfile` and never a
@@ -235,7 +236,8 @@ directly (§2.2).
 `.github/workflows/dependency-scan.yml` is committed but **has not been executed**. AppJet
 cannot run GitHub Actions, and this environment has neither Gradle nor the Android SDK, so no
 CI result exists to report. Everything stated in §1–§2 therefore still describes the AppJet
-scan of revision 20 (444 packages, 0 advisories, status `incomplete`) — not a CI run.
+scan of revision 24 (444 packages, 0 advisories, 0 blocking, status `incomplete`) — not a CI
+run.
 
 When the owner triggers it from the repository's **Actions** tab:
 

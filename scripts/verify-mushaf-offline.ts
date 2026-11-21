@@ -90,7 +90,7 @@ check('Juz start pages table', /JUZ_START_PAGE/.test(mushafSrc));
 check('previous/next page navigation', mushafSrc.includes('Previous') && mushafSrc.includes('Next'));
 check('jump to page, juz and ayah', mushafSrc.includes('mushaf-jumps') && mushafSrc.includes('mushaf-jump'));
 check('font size controls', mushafSrc.includes('onFontSize') && mushafSrc.includes('mushaf-toolbar'));
-check('bookmark from the page', mushafSrc.includes('onBookmarkAyah'));
+check('bookmark from the page', mushafSrc.includes('onToggleAyah') && mushafSrc.includes('onTogglePage'));
 check('last read position is remembered', mushafSrc.includes('onRemember'));
 check('right-to-left text direction', mushafSrc.includes('rtl') || mushafSrc.includes('dir='));
 check('pages are cached for offline reading', mushafSrc.includes('local.set') && mushafSrc.includes('mushaf.'));
@@ -140,6 +140,51 @@ check('banner is mounted in the app shell', /<OfflineBanner/.test(read('src/App.
 const connSrc = read('src/lib/connectivity.ts');
 check('connectivity distinguishes offline from server-down', connSrc.includes("'server-down'") && connSrc.includes("'offline'"));
 check('connectivity listens to browser events', connSrc.includes("addEventListener('online'"));
+
+/* ------------------------------------------------------------------ */
+section('4. Arabic-only reading, Kid Academy audio, Hadith references and Rate Us');
+
+check(
+  'reading screen requests no translation',
+  quranSrc.includes('/quran/surah/${surahNumber}') && !quranSrc.includes('?translation=')
+);
+const translationSrc = read('src/pages/QuranTranslation.tsx');
+check('translations live on their own screen', translationSrc.includes('?translation='));
+check('translations route registered', read('src/App.tsx').includes('/quran/:number/translation'));
+
+const hadithSrc = read('server/hadith.js');
+check('collections name their collector Imam', hadithSrc.includes('imamArabic'));
+check(
+  'hadith items carry narrator and Imam',
+  hadithSrc.includes('narrator: narratorFromEnglish(') && hadithSrc.includes('imam: meta.imam')
+);
+check('narrator is read from the published translation', hadithSrc.includes('export function narratorFromEnglish'));
+const hadithPage = read('src/pages/Hadith.tsx');
+check(
+  'hadith screen shows narrator, Imam and grading',
+  hadithPage.includes('الصحابي الراوي') && hadithPage.includes('item.imam') && hadithPage.includes('hadith-grade')
+);
+
+const kidsSrc = read('src/pages/Kids.tsx');
+check('Kid Academy uses the shared recitation player', kidsSrc.includes('playSurahRecitation') && kidsSrc.includes('kidsAudio'));
+check(
+  'Kid Academy shows loading, pause and stop',
+  kidsSrc.includes('Loading audio') && kidsSrc.includes('Pause') && kidsSrc.includes('Stop')
+);
+check(
+  'surah audio uses the published recitation stream',
+  read('src/lib/kidsAudio.ts').includes('cdn.islamic.network/quran/audio-surah')
+);
+
+const rateSrc = read('src/pages/RateUs.tsx');
+check(
+  'Rate Us is routed and reachable from the menu',
+  read('src/App.tsx').includes('path="/rate"') && read('src/pages/More.tsx').includes("to: '/rate'")
+);
+check(
+  'Rate Us uses saved store links and the native review',
+  read('src/lib/rateUs.ts').includes('playStoreUrl') && rateSrc.includes('requestNativeReview')
+);
 
 /* ------------------------------------------------------------------ */
 console.log('');

@@ -172,6 +172,21 @@ export default function QuranAudio() {
 
   return (
     <Page title="Quran Audio" subtitle="Listen to complete surahs and keep them offline — audio only.">
+      <div className="section-hero section-hero-audio">
+        <img
+          className="section-hero-art"
+          src="/art/quran-audio.svg"
+          alt=""
+          aria-hidden="true"
+          loading="lazy"
+          decoding="async"
+        />
+        <div className="section-hero-copy">
+          <span className="section-hero-eyebrow">RIFQ Muslim</span>
+          <strong>Listen to the Quran</strong>
+          <span className="section-hero-sub">Ten reciters · download for offline listening</span>
+        </div>
+      </div>
       {catalogError && (
         <div className="card qa-warn">
           <strong>Audio unavailable</strong>
@@ -245,6 +260,10 @@ export default function QuranAudio() {
         {selected && !selected.available && (
           <p className="tiny qa-warn-text">This reciter is not responding right now. Choose another reciter.</p>
         )}
+        <p className="qa-art-note">
+          Reciter artwork is original RIFQ design. We never present a fabricated likeness as a
+          reciter&rsquo;s photograph, and the recitation you hear is the published recording.
+        </p>
       </div>
 
       {/* ----------------------------- now playing ---------------------------- */}

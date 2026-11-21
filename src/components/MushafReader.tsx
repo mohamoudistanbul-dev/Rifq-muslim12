@@ -55,10 +55,10 @@ export const JUZ_START_PAGE = [
 
 export const MUSHAF_TOTAL_PAGES = 604;
 
-const BISMILLAH = 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ';
+export const BISMILLAH = 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ';
 
 /** A run of consecutive ayahs belonging to one surah, as printed on the page. */
-interface SurahRun {
+export interface SurahRun {
   surah: number;
   arabicName: string;
   englishName: string;
@@ -67,7 +67,7 @@ interface SurahRun {
   showBismillah: boolean;
 }
 
-function groupRuns(ayahs: MushafAyah[]): SurahRun[] {
+export function groupRuns(ayahs: MushafAyah[]): SurahRun[] {
   const runs: SurahRun[] = [];
   for (const ayah of ayahs) {
     const surah = ayah.surah || 0;

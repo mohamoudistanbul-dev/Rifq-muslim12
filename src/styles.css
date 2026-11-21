@@ -1908,3 +1908,61 @@ html[data-theme='dark'] .mushaf-sheet { background: linear-gradient(180deg, #fdf
 .ayah-marker { cursor: pointer; padding: 0 4px; line-height: 1; font: inherit; }
 .ayah-marker:focus-visible { outline: 2px solid var(--gold-deep); outline-offset: 2px; }
 .ayah-marker.saved { background: radial-gradient(circle at 50% 40%, #fdf0c4, #d9b24a); border-color: #7a5a0c; }
+
+/* ============================================================
+   Section artwork — Adhan, Quran Audio and reciter cards
+   ============================================================ */
+.section-hero {
+  position: relative; overflow: hidden; isolation: isolate;
+  display: flex; align-items: flex-end;
+  min-height: 132px; margin-bottom: 14px;
+  border: 1px solid var(--gold); border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  background: #04211a;
+}
+.section-hero-audio { min-height: 148px; }
+.section-hero-art {
+  position: absolute; inset: 0; z-index: 0;
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.section-hero-copy {
+  position: relative; z-index: 1; width: 100%;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 16px 16px 13px;
+  background: linear-gradient(180deg, rgba(4, 33, 26, 0) 0%, rgba(4, 33, 26, 0.68) 55%, rgba(4, 33, 26, 0.93) 100%);
+}
+.section-hero-eyebrow {
+  font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--gold-soft, #efd894);
+}
+.section-hero-copy strong { font-size: 18px; color: #fff; line-height: 1.25; }
+.section-hero-sub { font-size: 12px; color: #d9e9e0; }
+
+/* Reciter chips carry the tiling geometric ornament behind the artwork. */
+.qa-reciter-chip { background-image: url('/art/pattern-emerald.svg'); background-size: 58px 58px; background-repeat: repeat; }
+.qa-reciter-avatar { border: 2px solid rgba(212, 175, 55, 0.6); }
+.qa-art-note { font-size: 11px; line-height: 1.45; color: var(--muted, #b9d6c8); margin: 10px 0 0; }
+
+/* ============================================================
+   Continuous Mushaf — printed pages stacked vertically
+   ============================================================ */
+.mushaf-wrap { padding-bottom: 42px; }
+.mushaf-scroll { display: flex; flex-direction: column; gap: 12px; }
+.mushaf-scroll-sentinel { height: 1px; flex: 0 0 1px; }
+.mushaf-scroll-page { scroll-margin-top: 10px; }
+.mushaf-sheet-loading { min-height: 420px; display: flex; flex-direction: column; gap: 10px; }
+.mushaf-skeleton-line {
+  display: block; height: 13px; border-radius: 6px;
+  background: linear-gradient(90deg, rgba(212, 175, 55, 0.16), rgba(212, 175, 55, 0.34), rgba(212, 175, 55, 0.16));
+  background-size: 200% 100%; animation: mushaf-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes mushaf-shimmer {
+  0% { background-position: 120% 0; }
+  100% { background-position: -20% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mushaf-skeleton-line { animation: none; }
+}
+.mushaf-missing { font-size: 12.5px; line-height: 1.5; color: #6b5a2a; margin: 0; }
+/* The ayah-end symbol is decorative on the continuous page, not a control. */
+.ayah-marker-static { cursor: default; }

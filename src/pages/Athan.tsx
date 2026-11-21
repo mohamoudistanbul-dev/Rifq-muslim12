@@ -273,6 +273,22 @@ export default function Athan() {
 
   return (
     <Page title="Athan & Notifications">
+      <div className="section-hero section-hero-adhan">
+        <img
+          className="section-hero-art"
+          src="/art/adhan-mosque.svg"
+          alt=""
+          aria-hidden="true"
+          loading="lazy"
+          decoding="async"
+        />
+        <div className="section-hero-copy">
+          <span className="section-hero-eyebrow">RIFQ Muslim</span>
+          <strong>Adhan &amp; prayer alerts</strong>
+          <span className="section-hero-sub">The real adhan, at the real prayer time</span>
+        </div>
+      </div>
+
       <p className="muted small" style={{ margin: '0 0 14px' }}>
         All alerts are calculated from{' '}
         {place ? `${place.city}, ${place.country}` : 'your selected location'} using the same engine as the Home

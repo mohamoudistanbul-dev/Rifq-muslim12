@@ -519,6 +519,15 @@ export default function Admin() {
           .catch(fail(t('Verification requests could not be loaded.')))
       );
     }
+    if (tab === 'verification') {
+      jobs.push(
+        get<{ requests: typeof badgeReqs }>('/admin/badge-requests?status=all')
+          .then((r) => {
+            if (alive) setBadgeReqs(r.requests);
+          })
+          .catch(fail(t('Verification requests could not be loaded.')))
+      );
+    }
     if (tab === 'messages') {
       jobs.push(
         get<{ messages: Message[] }>('/admin/messages')
@@ -1243,17 +1252,11 @@ export default function Admin() {
     </>
   );
 
-  const renderUsers = () => (
+  const renderVerification = () => (
     <>
-      <div className="card">
-        <input
-          className="input"
-          placeholder={t('Search users by name or email')}
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          aria-label={t('Search users')}
-        />
-      </div>
+      {badgeReqs.length === 0 ? (
+        <p className="small muted">{t('No verification requests yet.')}</p>
+      ) : null}
       {badgeReqs.length > 0 && (
         <div className="card">
           <h3 className="h3">{t('Verification requests')}</h3>
@@ -1351,6 +1354,20 @@ export default function Admin() {
           ))}
         </div>
       )}
+    </>
+  );
+
+  const renderUsers = () => (
+    <>
+      <div className="card">
+        <input
+          className="input"
+          placeholder={t('Search users by name or email')}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          aria-label={t('Search users')}
+        />
+      </div>
       {users.length === 0 ? (
         <p className="small muted">{t('No users found.')}</p>
       ) : (
@@ -2017,6 +2034,7 @@ export default function Admin() {
           {!loading && tab === 'content' ? renderContent() : null}
           {!loading && tab === 'media' ? renderMedia() : null}
           {!loading && tab === 'users' ? renderUsers() : null}
+          {!loading && tab === 'verification' ? renderVerification() : null}
           {!loading && tab === 'messages' ? renderMessages() : null}
           {!loading && tab === 'community' ? renderCommunity() : null}
           {!loading && tab === 'notifications' ? renderNotifications() : null}

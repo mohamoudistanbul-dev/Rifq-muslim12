@@ -119,9 +119,11 @@ export interface User {
   theme: 'light' | 'dark';
   role: string;
   emailVerified: boolean;
-  /** Blue verified tick. Server-controlled: only a Super Admin can grant it. */
+  /** Blue verified tick. Server-controlled: only an administrator can grant it. */
   badgeVerified?: boolean;
   badgeVerifiedAt?: string | null;
+  /** Profile picture, saved from a verification request or the admin dashboard. */
+  avatarUrl?: string | null;
   prefs: Partial<Prefs>;
   createdAt: string;
 }

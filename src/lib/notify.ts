@@ -189,6 +189,10 @@ export interface AlertPayload {
   tag: string;
   vibrate?: boolean;
   url?: string;
+  /** Set for a prayer alert: enables the expanded image and the action buttons. */
+  prayer?: string;
+  /** Banner image rendered by the expanded notification. */
+  image?: string;
 }
 
 /** Shows a branded notification, preferring the native bridge, then the worker. */
@@ -236,10 +240,21 @@ export async function showAlert(payload: AlertPayload): Promise<boolean> {
         body: payload.body,
         tag: payload.tag,
         icon: '/icons/icon-192.png',
-        data: { url: payload.url || '/athan' },
+        data: { url: payload.url || '/athan', prayer: payload.prayer || null },
         // The adhan recording is played by the page so it can be paused and
         // stopped; the system sound stays silent.
         silent: true,
+        // A prayer alert is expandable: banner image, remaining-time title and
+        // the three working buttons handled by the service worker.
+        image: payload.image || (payload.prayer ? `/notif/prayer-${payload.prayer}.png` : undefined),
+        actions: payload.prayer
+          ? [
+              { action: 'prayed', title: 'Already Prayed' },
+              { action: 'snooze', title: 'Remind in 15 min' },
+              { action: 'open', title: 'Open App' },
+            ]
+          : undefined,
+        requireInteraction: Boolean(payload.prayer),
       });
       return true;
     } catch {

@@ -182,10 +182,11 @@ function record(page, theme, selector, data) {
     return;
   }
 
-  // Discard samples that are essentially the glyph colour, then judge the text
-  // by its least favourable remaining backdrop.
-  const backdrop = data.samples.filter((s) => distance(s, fg) > 24);
-  const pool = backdrop.length ? backdrop : data.samples;
+  // A sample taken inside a rounded or padded element can land on a glyph
+  // edge. Those are blends rather than surfaces, so they are dropped unless
+  // nothing else was captured.
+  const clean = data.samples.filter((s) => ratio(fg, s) > 1.6);
+  const pool = clean.length ? clean : data.samples;
   let worst = null;
   let worstRatio = Infinity;
   for (const sample of pool) {
@@ -248,6 +249,12 @@ async function sampleElement(page, selector) {
   const info = await locator.evaluate((el) => {
     const cs = getComputedStyle(el);
     const rect = el.getBoundingClientRect();
+    const bgMatch = cs.backgroundColor.match(/rgba?\(([^)]+)\)/);
+    const bgParts = bgMatch
+      ? bgMatch[1].split(/[\s,/]+/).filter(Boolean).map(Number)
+      : [];
+    const bgAlpha = bgParts.length > 3 ? bgParts[3] : 1;
+    const ownBg = bgAlpha > 0.05 || (cs.backgroundImage && cs.backgroundImage !== 'none');
     const chain = [];
     let cur = el;
     while (cur && chain.length < 8) {
@@ -267,7 +274,7 @@ async function sampleElement(page, selector) {
       fontWeight: cs.fontWeight,
       text: (el.textContent || '').trim().slice(0, 40),
       rect: { x: rect.x, y: rect.y, w: rect.width, h: rect.height },
-      dpr: window.devicePixelRatio || 1,
+      ownBg: Boolean(ownBg),
       chain,
     };
   });
@@ -275,29 +282,49 @@ async function sampleElement(page, selector) {
   const { rect } = info;
   if (rect.w < 4 || rect.h < 4) return null;
 
-  // Clamp to the viewport: pixels outside it are not painted.
+  // Capture the element plus a margin. The margin matters for elements that
+  // paint nothing themselves: their text sits on an ancestor's surface.
+  const margin = 8;
   const vp = page.viewportSize() || { width: 390, height: 844 };
-  const inset = 2;
-  const x0 = Math.max(0, Math.min(rect.x + inset, vp.width - 2));
-  const y0 = Math.max(0, Math.min(rect.y + inset, vp.height - 2));
   const clip = {
-    x: x0,
-    y: y0,
-    width: Math.max(1, Math.min(rect.w - inset * 2, vp.width - x0)),
-    height: Math.max(1, Math.min(rect.h - inset * 2, vp.height - y0)),
+    x: Math.max(0, Math.min(rect.x - margin, vp.width - 2)),
+    y: Math.max(0, Math.min(rect.y - margin, vp.height - 2)),
+    width: 0,
+    height: 0,
   };
+  clip.width = Math.max(1, Math.min(rect.w + margin * 2, vp.width - clip.x));
+  clip.height = Math.max(1, Math.min(rect.h + margin * 2, vp.height - clip.y));
 
   const shot = await page.screenshot({ clip });
   const img = decodePng(shot);
   const w = img.width;
   const h = img.height;
-  const points = [
-    [1, 1],
-    [w - 2, 1],
-    [1, h - 2],
-    [w - 2, h - 2],
-    [Math.floor(w / 2), 1],
+
+  const ix = rect.x - clip.x;
+  const iy = rect.y - clip.y;
+  const iw = rect.w;
+  const ih = rect.h;
+
+  // Centre lines avoid rounded corners, which would otherwise sample the page
+  // showing through a pill-shaped element.
+  const inside = [
+    [ix + iw / 2, iy + 2],
+    [ix + iw / 2, iy + ih - 3],
+    [ix + 2, iy + ih / 2],
+    [ix + iw - 3, iy + ih / 2],
   ];
+  // Just outside the box: the surface an element without its own background is
+  // actually painted on. Offsets clear the 3px accent borders used on rows.
+  const outside = [
+    [ix + iw / 2, iy - 5],
+    [ix + iw / 2, iy + ih + 5],
+    [ix - 5, iy + ih / 2],
+    [ix + iw + 5, iy + ih / 2],
+  ];
+
+  const inBounds = ([x, y]) => x >= 0 && y >= 0 && x <= w - 1 && y <= h - 1;
+  const chosen = info.ownBg ? inside.filter(inBounds) : outside.filter(inBounds);
+  const points = chosen.length ? chosen : inside.filter(inBounds);
 
   const samples = points.map(([x, y]) => pixelAt(img, x, y));
   return { ...info, samples };

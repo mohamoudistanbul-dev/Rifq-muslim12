@@ -274,8 +274,12 @@ console.log('\nUser reminders');
   );
 
   const weekly = planned.filter((a) => a.slot.startsWith('custom:weekly1:'));
-  check('a weekly reminder only lands on its weekday', weekly.every((a) => a.at.getDay() === 5), JSON.stringify(weekly.map((a) => a.at.getDay())));
-  eq('a weekly reminder fires once in eight days', weekly.length, 1);
+  check(
+    'a weekly reminder only lands on its weekday',
+    weekly.length > 0 && weekly.every((a) => a.at.getDay() === 5),
+    JSON.stringify(weekly.map((a) => a.at.getDay()))
+  );
+  eq('a weekly reminder fires once per week in an eight-day window', weekly.length, 2);
 
   const once = planned.filter((a) => a.slot.startsWith('custom:once1:'));
   eq('a one-off reminder is planned once', once.length, 1);

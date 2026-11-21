@@ -342,8 +342,7 @@ export default function Hadith() {
   );
 
   return (
-    <Page>
-      <h1 style={S.h1}>Hadith</h1>
+    <Page title="Hadith">
       <p style={S.sub}>
         Six canonical collections, Arabic text with published translations, references and gradings.
       </p>

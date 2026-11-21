@@ -189,9 +189,8 @@ export default function Athan() {
   };
 
   return (
-    <Page>
+    <Page title="Athan & Notifications">
       <div style={S.header}>
-        <h1 style={S.h1}>Athan &amp; Notifications</h1>
         <p style={S.sub}>
           Prayer alerts are calculated from {place ? `${place.city}, ${place.country}` : 'your selected location'} using the same
           engine that shows the countdown on the Home screen.

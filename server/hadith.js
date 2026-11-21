@@ -142,7 +142,9 @@ hadithRouter.get('/hadith/:collection/sections', async (req, res) => {
 hadithRouter.get('/hadith/:collection', async (req, res) => {
   try {
     const all = await loadCollection(req.params.collection);
-    const pageSize = Math.min(Math.max(Number(req.query.pageSize) || 20, 1), 50);
+    // `size` is accepted as an alias: the Home screen already asks for it that way.
+    const requested = Number(req.query.pageSize || req.query.size) || 20;
+    const pageSize = Math.min(Math.max(requested, 1), 50);
     const page = Math.max(Number(req.query.page) || 1, 1);
     const section = req.query.section ? Number(req.query.section) : null;
     const q = String(req.query.q || '').trim().toLowerCase();
@@ -162,6 +164,7 @@ hadithRouter.get('/hadith/:collection', async (req, res) => {
     const start = (page - 1) * pageSize;
     res.json({
       collection: all.name,
+      name: all.name,
       collectionKey: all.key,
       arabicName: all.arabicName,
       total: items.length,

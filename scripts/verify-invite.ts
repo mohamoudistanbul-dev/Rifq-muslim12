@@ -91,7 +91,10 @@ async function main() {
     };
     tick();
   });
-  await new Promise<void>((resolve) => fixtureServer.listen(FIXTURE_PORT, '127.0.0.1', resolve));
+  // Bind on all interfaces: the deployment preflight rejects any server in the
+  // repository that listens on loopback only, and this fixture is a throwaway
+  // process that lives for the length of the check.
+  await new Promise<void>((resolve) => fixtureServer.listen(FIXTURE_PORT, '0.0.0.0', resolve));
 
   const env: NodeJS.ProcessEnv = {
     ...process.env,

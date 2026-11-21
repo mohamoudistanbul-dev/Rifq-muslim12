@@ -147,7 +147,7 @@ verificationRouter.get('/badge/request', requireAuth, (req, res) => {
  * one, and an already verified account cannot ask again. Nothing here grants
  * the badge — approval happens in the admin routes only.
  */
-verificationRouter.post('/badge/request', requireAuth, rateLimit({ windowMs: 10 * 60_000, max: 6 }), (req, res) => {
+verificationRouter.post('/badge/request', requireAuth, rateLimit({ windowMs: 10 * 60_000, max: 20 }), (req, res) => {
   const me = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
   if (!me) return res.status(401).json({ error: 'Please sign in to continue.' });
   if (me.badge_verified) {

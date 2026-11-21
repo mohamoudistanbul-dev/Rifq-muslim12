@@ -10,6 +10,7 @@ import {
   notificationState,
   pauseAdhan,
   playAdhan,
+  playChime,
   resetAlertMemory,
   resumeAdhan,
   stopAdhan,
@@ -568,6 +569,31 @@ export default function Athan() {
         <div className="athan-card-actions">
           <button type="button" className="btn btn-primary btn-block" onClick={addReminder}>
             Add reminder
+          </button>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 14 }}>
+        <h2 className="athan-title">General notification sound</h2>
+        <p className="athan-meta" style={{ margin: '0 0 10px' }}>
+          Used by every alert that is not a prayer time: pre-prayer notices, Quran, Hadith, Dua and
+          adhkar reminders, Islamic occasions and admin messages. The Adhan recording is never used
+          here.
+        </p>
+        <select
+          className="select"
+          value={prefs.notifySound}
+          onChange={(e) => setPrefs({ notifySound: e.target.value })}
+          aria-label="General notification sound"
+          data-testid="notify-sound"
+        >
+          <option value="beep">Chime</option>
+          <option value="silent">Silent — notification only</option>
+        </select>
+
+        <div className="athan-card-actions">
+          <button type="button" className="btn btn-soft btn-block" onClick={() => playChime()}>
+            ▶ Preview chime
           </button>
         </div>
       </div>

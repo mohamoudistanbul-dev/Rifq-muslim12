@@ -376,7 +376,7 @@ export async function resumeAdhan(): Promise<boolean> {
   }
 }
 
-function playChime(): boolean {
+export function playChime(): boolean {
   try {
     const Ctor =
       window.AudioContext ||

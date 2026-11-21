@@ -173,7 +173,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [notifyPermission, setNotifyPermission] = useState<string>(() =>
     typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
   );
-  const firedRef = useRef<Set<string>>(new Set());
   const placeRef = useRef<Place | null>(place);
 
   useEffect(() => {

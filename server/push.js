@@ -181,6 +181,16 @@ export async function sendPushToUsers(userIds, payload) {
     url: payload.link || payload.url || '/notifications',
     tag: payload.tag || (payload.broadcastId ? `rifq-${payload.broadcastId}` : 'rifq'),
     broadcastId: payload.broadcastId || null,
+    /* Rich presentation (expanded image, actions, progress). Absent fields are
+     * simply omitted, so existing announcements keep their plain notification. */
+    kind: payload.kind || null,
+    prayer: payload.prayer || null,
+    time: payload.time || null,
+    remainingMinutes: Number.isFinite(Number(payload.remainingMinutes)) ? Number(payload.remainingMinutes) : null,
+    image: payload.image || null,
+    progress: payload.progress || null,
+    actions: Array.isArray(payload.actions) ? payload.actions.slice(0, 3) : null,
+    requireInteraction: payload.requireInteraction === true,
   });
 
   for (const userId of targets) {

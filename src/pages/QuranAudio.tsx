@@ -5,6 +5,8 @@ import { usePlayer, SPEEDS, formatTime } from '../lib/quranPlayer';
 import { useDownloads, formatBytes } from '../lib/downloads';
 import { trackKey } from '../lib/audioStore';
 import { reciterArtwork } from '../lib/quranAudio';
+import { useAccess } from '../lib/access';
+import PremiumGate from '../components/PremiumGate';
 import type { AudioSurah } from '../lib/quranAudio';
 import '../audio.css';
 import '../quranAudioUi.css';

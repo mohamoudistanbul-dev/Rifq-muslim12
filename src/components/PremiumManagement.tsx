@@ -35,6 +35,7 @@ interface Counts {
 
 interface HistoryRow {
   id: string;
+  userId?: string;
   email: string;
   name: string;
   provider: string;

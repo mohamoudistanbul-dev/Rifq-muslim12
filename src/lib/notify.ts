@@ -607,6 +607,19 @@ export async function testCategory(category: CategoryId, state: LoopState): Prom
     url: sample?.url,
     prayer: PRAYER_CATEGORIES.includes(category) ? String(category) : undefined,
   });
+  // A prayer test reproduces the real prayer experience: the banner and the
+  // in-app Adhan card with its "Already Prayed" and "Remind in 15 min"
+  // buttons, so the buttons can be exercised without waiting for a prayer.
+  if (PRAYER_CATEGORIES.includes(category)) {
+    pushAdhan({
+      title: sample?.title || 'Prayer reminder',
+      body,
+      prayer: String(category),
+      sound,
+      tag: `test:${category}:${Date.now()}`,
+    });
+  }
+
   const played = await playAdhan(sound);
   return { shown, played, title, body, sound };
 }

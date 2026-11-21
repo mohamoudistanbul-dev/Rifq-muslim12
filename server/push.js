@@ -16,7 +16,7 @@
  * config) for a closed app to wake up; the web build uses the browser's own push
  * service, which needs no account from the owner.
  */
-import webpush from 'web-push';
+import * as webpush from 'web-push';
 import { db, getSetting, setSetting, newId, nowIso } from './db.js';
 
 const VAPID_SUBJECT = String(process.env.VAPID_SUBJECT || 'mailto:rifqmuslim@gmail.com');

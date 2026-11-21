@@ -20,6 +20,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { getSetting, DATA_DIR } from './db.js';
+import { recordApkDownload } from './analytics.js';
 
 export const APK_FILENAME = 'RIFQ-Muslim.apk';
 export const APK_PATH = `/download/${APK_FILENAME}`;
@@ -214,6 +215,13 @@ async function streamRemote(req, res, source) {
     body.destroy();
     upstream.body?.cancel?.().catch(() => undefined);
   });
+
+  // Counted only when the full file was delivered in one 200 response. A range
+  // request is a resume, and an aborted pipe never reaches 'finish'.
+  res.on('finish', () => {
+    if (req.method === 'GET' && !range && upstream.status === 200) recordApkDownload(req);
+  });
+
   body.pipe(res);
 }
 
@@ -245,6 +253,14 @@ function streamLocal(req, res, source) {
   const stream = fs.createReadStream(source.file, { start, end });
   stream.on('error', () => res.destroy());
   req.on('close', () => stream.destroy());
+
+  // A real download: the response finished and the whole file went out from
+  // byte 0. Button clicks never reach here, and a resumed range request is not
+  // a second download.
+  res.on('finish', () => {
+    if (req.method === 'GET' && start === 0 && end === size - 1) recordApkDownload(req);
+  });
+
   return stream.pipe(res);
 }
 

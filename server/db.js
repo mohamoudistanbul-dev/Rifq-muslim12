@@ -382,6 +382,29 @@ CREATE TABLE IF NOT EXISTS badge_requests (
 
 CREATE INDEX IF NOT EXISTS idx_badge_requests_status ON badge_requests(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_media_created ON media(created_at);
+
+/*
+ * Downloads and visitors analytics (Admin -> Analytics).
+ *
+ * One row per counted event. `visitor` is a salted HMAC of ip+ua+day, never an
+ * IP address, and UNIQUE(kind, visitor, bucket) is what makes the counting
+ * idempotent: a refresh, a double-fired beacon or a retried request collapses
+ * onto the existing row instead of adding a second event.
+ */
+CREATE TABLE IF NOT EXISTS analytics_events (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  device TEXT NOT NULL DEFAULT 'unknown',
+  day TEXT NOT NULL,
+  bucket TEXT NOT NULL,
+  visitor TEXT NOT NULL,
+  referrer TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  UNIQUE(kind, visitor, bucket)
+);
+
+CREATE INDEX IF NOT EXISTS idx_analytics_kind_day ON analytics_events(kind, day);
+CREATE INDEX IF NOT EXISTS idx_analytics_day ON analytics_events(day);
 `);
 
 export const newId = () => crypto.randomUUID();

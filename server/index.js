@@ -25,6 +25,7 @@ import { publicBaseUrl, renderIndex } from './publicUrl.js';
 import { geoRouter } from './geo.js';
 import { adminRouter, UPLOAD_DIR } from './admin.js';
 import { downloadRouter, apkSource, apkStatus, APK_PATH, APK_FILENAME } from './download.js';
+import { analyticsRouter, visitRouter, recordPortalVisit } from './analytics.js';
 import { seedSuperAdmin, SUPER_ADMIN_EMAIL } from './seed.js';
 import { donateUrl, donateCurrency } from './donate.js';
 
@@ -646,6 +647,11 @@ app.use('/api', quranAudioRouter);
 
 /* ---------------------------------- admin ---------------------------------- */
 
+// Public visit beacon first, then the guarded analytics report, then the rest of
+// the admin API. Mount order keeps /api/admin/analytics out of the generic
+// admin router so it can never be reached by a wildcard path.
+app.use('/api/analytics', visitRouter);
+app.use('/api/admin/analytics', analyticsRouter);
 app.use('/api/admin', adminRouter);
 
 /* -------------------------------- downloads -------------------------------- */
@@ -671,6 +677,9 @@ const readIndexHtml = (file) => {
 
 app.use((req, res, next) => {
   if (req.method !== 'GET' || req.path.startsWith('/api/')) return next();
+  // Serving the public download portal is the visitor event itself, so the count
+  // does not depend on client-side JavaScript running.
+  if (req.path === '/download' || req.path === '/download/') recordPortalVisit(req);
   const index = path.join(dist, 'index.html');
   if (!fs.existsSync(index)) {
     return res.status(503).json({ error: 'The app is starting up. Please refresh in a moment.' });

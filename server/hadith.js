@@ -14,6 +14,7 @@
  * fetched once and kept in memory with a long TTL.
  */
 import { Router } from 'express';
+import { requireItemAccess } from './access.js';
 
 const BASE = 'https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions';
 const DAY = 24 * 60 * 60 * 1000;
@@ -139,7 +140,7 @@ hadithRouter.get('/hadith/:collection/sections', async (req, res) => {
   }
 });
 
-hadithRouter.get('/hadith/:collection', async (req, res) => {
+hadithRouter.get('/hadith/:collection', requireItemAccess((req) => `hadith.collection.${req.params.collection}`), async (req, res) => {
   try {
     const all = await loadCollection(req.params.collection);
     // `size` is accepted as an alias: the Home screen already asks for it that way.

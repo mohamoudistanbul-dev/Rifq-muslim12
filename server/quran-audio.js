@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Readable } from 'node:stream';
+import { requireItemAccess } from './access.js';
 import { Router } from 'express';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -213,7 +214,7 @@ quranAudioRouter.get('/quran/audio/:reciter/:surah/info', async (req, res) => {
  * Stream or download one surah. Range requests are passed straight through, so
  * seeking works and interrupted downloads can resume.
  */
-quranAudioRouter.get('/quran/audio/:reciter/:surah', async (req, res) => {
+quranAudioRouter.get('/quran/audio/:reciter/:surah', requireItemAccess((req) => `quran.surah.${Number(req.params.surah) || 0}`), async (req, res) => {
   const reciter = reciterById(req.params.reciter);
   const surah = Number(req.params.surah);
   if (!reciter) return res.status(404).json({ error: 'Unknown reciter.' });

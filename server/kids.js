@@ -1,6 +1,7 @@
 import express from 'express';
 import { db, newId, nowIso, auditLog } from './db.js';
 import { requireAuth, requireAdmin } from './auth.js';
+import { accessFor } from './access.js';
 import { KIDS_LESSONS } from './kids-data.js';
 
 /**
@@ -107,15 +108,21 @@ router.get('/kids/lessons', (req, res) => {
   const rows = db.prepare('SELECT id, active, sort FROM kids_lessons').all();
   const flags = new Map(rows.map((r) => [r.id, r]));
 
-  const lessons = KIDS_LESSONS.filter((l) => flags.get(l.id)?.active !== 0).map((l) => ({
-    id: l.id,
-    kind: l.kind,
-    kindLabel: KIND_LABEL[l.kind] || l.kind,
-    sort: l.sort,
-    title: l.title,
-    body: l.body,
-    progress: map[l.id] || { done: false, stars: 0 },
-  }));
+  const lessons = KIDS_LESSONS.filter((l) => flags.get(l.id)?.active !== 0)
+    .map((l) => {
+      const access = accessFor(req, `kids.lesson.${l.id}`);
+      return {
+        id: l.id,
+        kind: l.kind,
+        kindLabel: KIND_LABEL[l.kind] || l.kind,
+        sort: l.sort,
+        title: l.title,
+        body: access.allowed ? l.body : null,
+        progress: map[l.id] || { done: false, stars: 0 },
+        locked: !access.allowed && access.locked,
+      };
+    })
+    .filter((l) => l.body !== null || l.locked);
 
   res.json({
     ok: true,
@@ -159,6 +166,15 @@ router.post('/kids/complete', requireAuth, (req, res) => {
   const lesson = CATALOG.get(lessonId);
   if (!lesson) return res.status(400).json({ ok: false, error: 'unknown_lesson' });
   if (!activeIds().includes(lessonId)) return res.status(409).json({ ok: false, error: 'lesson_disabled' });
+
+  const access = accessFor(req, `kids.lesson.${lessonId}`);
+  if (!access.allowed) {
+    return res.status(402).json({
+      ok: false,
+      error: access.locked ? 'premium_required' : 'lesson_unavailable',
+      locked: Boolean(access.locked),
+    });
+  }
 
   const base = lesson.kind === 'surah' || lesson.kind === 'story' ? 2 : 1;
   const requested = Number(req.body?.stars);

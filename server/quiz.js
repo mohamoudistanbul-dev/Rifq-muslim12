@@ -1,6 +1,7 @@
 import express from 'express';
 import { db, newId, nowIso, auditLog } from './db.js';
 import { requireAuth, requireAdmin, requireSuperAdmin } from './auth.js';
+import { accessFor } from './access.js';
 
 /**
  * Islamic quiz.
@@ -304,7 +305,11 @@ quizRouter.get('/bank', (req, res) => {
     .filter((row) => (level ? row.level === level : true))
     .filter((row) => (category === 'all' ? true : row.category === category));
 
-  const questions = [...rows].sort(() => Math.random() - 0.5).slice(0, limit);
+  const questions = [...rows]
+    .filter((row) => accessFor(req, `quiz.category.${row.category}`).allowed)
+    .filter((row) => accessFor(req, `quiz.level.${row.level}`).allowed)
+    .sort(() => Math.random() - 0.5)
+    .slice(0, limit);
   res.json({ questions: questions.map((row) => clientQuestion(row, req.query.lang)), total: rows.length });
 });
 

@@ -1,7 +1,7 @@
 import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
-import { db, newId, nowIso, auditLog, publicUser, getSetting, setSetting } from './db.js';
+import { db, newId, nowIso, auditLog, publicUser, getSetting, setSetting, DATA_DIR } from './db.js';
 import {
   requireAdmin,
   requireSuperAdmin,
@@ -25,7 +25,8 @@ import { APK_DIR, APK_FILE, APK_MAX_BYTES, apkInfoSnapshot } from './download.js
  */
 export const adminRouter = express.Router();
 
-export const UPLOAD_DIR = path.join(process.cwd(), 'data', 'uploads');
+// Uploaded media lives on the persistent disk so it survives a redeploy.
+export const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const CONTENT_TYPES = ['article', 'page', 'banner', 'announcement'];
@@ -43,6 +44,11 @@ const SETTING_DEFAULTS = {
   tagline: 'Your Faith, Your Daily Companion',
   announcement_text: '',
   announcement_active: 'false',
+  // Official installation links used by Invite Friends. Empty means "not
+  // configured yet" — the app then shares its own live address instead of
+  // inventing a store listing.
+  play_store_url: '',
+  app_store_url: '',
 };
 const SETTING_KEYS = Object.keys(SETTING_DEFAULTS);
 
@@ -637,6 +643,9 @@ adminRouter.put('/settings', requireSuperAdmin, (req, res) => {
     }
     if (key === 'download_url' && value && !/^https?:\/\//.test(value)) {
       return res.status(400).json({ error: 'Download URL must start with http:// or https://' });
+    }
+    if ((key === 'play_store_url' || key === 'app_store_url') && value && !/^https?:\/\/[^\s]+$/i.test(value)) {
+      return res.status(400).json({ error: 'Store links must start with http:// or https://' });
     }
     setSetting(key, value);
   }

@@ -19,12 +19,13 @@ import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import { getSetting } from './db.js';
+import { getSetting, DATA_DIR } from './db.js';
 
 export const APK_FILENAME = 'RIFQ-Muslim.apk';
 export const APK_PATH = `/download/${APK_FILENAME}`;
 export const APK_MIME = 'application/vnd.android.package-archive';
-export const APK_DIR = path.join(process.cwd(), 'data', 'apk');
+// Uploaded APKs live on the persistent disk so they survive a redeploy.
+export const APK_DIR = path.join(DATA_DIR, 'apk');
 export const APK_FILE = path.join(APK_DIR, APK_FILENAME);
 export const APK_MAX_BYTES = 200 * 1024 * 1024;
 

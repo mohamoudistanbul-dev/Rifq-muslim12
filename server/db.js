@@ -8,14 +8,72 @@ import { createRequire } from 'node:module';
  *
  * Chosen because it needs no native compilation: the exact same engine runs in
  * development and in the deployed container. The database lives in a real
- * SQLite file on disk (data/rifq.db) and is written atomically after every
- * mutation, so records survive restarts and redeploys that keep the volume.
+ * SQLite file on the persistent disk (/data/rifq.db) and is written atomically
+ * after every mutation, so records survive restarts and redeploys.
  */
 const require = createRequire(import.meta.url);
 const initSqlJs = require('sql.js');
 
-const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), 'data', 'rifq.db');
+const BUNDLED_DATA = path.join(process.cwd(), 'data');
+
+/** True when `dir` exists (or can be created) and accepts a real write. */
+function writable(dir) {
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const probe = path.join(dir, '.rifq-write-probe');
+    fs.writeFileSync(probe, 'ok');
+    fs.unlinkSync(probe);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Durable data directory.
+ *
+ * The container filesystem is replaced on every publish, so the SQLite file and
+ * uploaded files must live on the persistent disk (mounted at /data) instead of
+ * inside the image. DATA_DIR overrides the location; if the disk is missing or
+ * read-only the app keeps working from the bundled folder rather than failing.
+ */
+function resolveDataDir() {
+  const preferred = String(process.env.DATA_DIR || '').trim();
+  const candidates = preferred ? [preferred] : ['/data'];
+  for (const dir of candidates) {
+    if (writable(dir)) return dir;
+  }
+  return BUNDLED_DATA;
+}
+
+export const DATA_DIR = resolveDataDir();
+export const DATA_DURABLE = path.resolve(DATA_DIR) !== path.resolve(BUNDLED_DATA);
+fs.mkdirSync(DATA_DIR, { recursive: true });
+
+const DB_PATH = process.env.DB_PATH || path.join(DATA_DIR, 'rifq.db');
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+
+/*
+ * First boot on a fresh disk: bring the shipped database across so existing
+ * accounts, content and settings are not lost when the disk is attached.
+ * Set SEED_BUNDLED_DB=0 to start from an empty database instead.
+ */
+const bundledDb = path.join(BUNDLED_DATA, 'rifq.db');
+if (
+  process.env.SEED_BUNDLED_DB !== '0' &&
+  !fs.existsSync(DB_PATH) &&
+  fs.existsSync(bundledDb) &&
+  path.resolve(bundledDb) !== path.resolve(DB_PATH)
+) {
+  try {
+    fs.copyFileSync(bundledDb, DB_PATH);
+    console.log(`[db] copied the bundled database to ${DB_PATH}`);
+  } catch (err) {
+    console.error('[db] could not copy the bundled database:', err.message);
+  }
+}
+
+console.log(`[db] data directory: ${DATA_DIR} (${DATA_DURABLE ? 'persistent disk' : 'container filesystem'})`);
 
 const SQL = await initSqlJs({
   locateFile: (file) => path.join(path.dirname(require.resolve('sql.js')), file),

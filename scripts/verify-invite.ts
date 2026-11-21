@@ -244,10 +244,14 @@ async function main() {
     check('the shared file carries every byte of the APK', shared.files?.[0]?.size === FIXTURE_BYTES, String(shared.files?.[0]?.size));
     check(
       'the invitation message introduces the app',
-      /RIFQ Muslim/.test(String(shared.text)) && /Made by Eng Mohamud Yusuf/.test(String(shared.text)),
+      /RIFQ Muslim/.test(String(shared.text)) && /Download the app here/i.test(String(shared.text)),
       String(shared.text)
     );
-    check('the invitation message contains no URL', !/https?:\/\//i.test(String(shared.text)), String(shared.text));
+    check(
+      'the invitation message carries the public download portal link',
+      /https?:\/\/\S+\/download\b/.test(String(shared.text)),
+      String(shared.text)
+    );
 
     check('no page errors', pageErrors.length === 0, pageErrors.join(' | '));
 
@@ -266,9 +270,44 @@ async function main() {
     check('iOS: no APK link', (await iosPage.locator('a[href$=".apk"]').count()) === 0);
     check(
       'iOS: explains that the Android file is not offered',
-      /not available yet/i.test(iosText) && /App Store/i.test(iosText),
+      /App Store/i.test(iosText) && /never sends an Android file to an iPhone/i.test(iosText),
       iosText.slice(0, 200)
     );
+
+    // 5b. The public download portal itself, on both kinds of phone.
+    const portalAndroid = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      userAgent: ANDROID_UA,
+    });
+    const portalA = await portalAndroid.newPage();
+    await portalA.goto(`${BASE}/download`, { waitUntil: 'networkidle' });
+    await portalA.waitForSelector('a[href$=".apk"]', { timeout: 15000 }).catch(() => null);
+    const portalAText: string = await portalA.locator('body').innerText();
+    const androidHref = await portalA.locator('a[href$=".apk"]').first().getAttribute('href');
+    check('portal: Android visitors are offered the APK', Boolean(androidHref), portalAText.slice(0, 160));
+    check(
+      'portal: Android button points at the real APK file',
+      /\/download\/RIFQ-Muslim\.apk$/.test(String(androidHref)),
+      String(androidHref)
+    );
+    check('portal: invitation wording is shown', /Join me on Rifq Muslim/i.test(portalAText), portalAText.slice(0, 160));
+    await portalAndroid.close();
+
+    const portalIos = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      userAgent: IOS_UA,
+    });
+    const portalI = await portalIos.newPage();
+    await portalI.goto(`${BASE}/download`, { waitUntil: 'networkidle' });
+    await portalI.waitForTimeout(700);
+    const portalIText: string = await portalI.locator('body').innerText();
+    check('portal: iPhone is never handed the Android file', (await portalI.locator('a[href$=".apk"]').count()) === 0);
+    check(
+      'portal: iPhone is told the App Store listing is needed',
+      /App Store/i.test(portalIText),
+      portalIText.slice(0, 200)
+    );
+    await portalIos.close();
 
     // 6. Nothing else was disturbed.
     for (const route of ['/', '/more', '/quran/1']) {

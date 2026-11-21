@@ -5,6 +5,7 @@ import { AppIcon } from '../components/Icons';
 import { useStore } from '../lib/store';
 import { get } from '../lib/api';
 import DownloadApp from '../components/DownloadApp';
+import { INVITE_URL, INVITE_QR_OPTIONS } from '../lib/inviteLink';
 
 interface Config {
   downloadUrl: string;
@@ -13,32 +14,46 @@ interface Config {
   tagline: string;
 }
 
+const DEFAULT_TAGLINE = 'Your Faith, Your Daily Companion';
+
 export default function Invite() {
   const { t, toast } = useStore();
-  const [config, setConfig] = useState<Config | null>(null);
+  const [tagline, setTagline] = useState(DEFAULT_TAGLINE);
   const [qr, setQr] = useState('');
 
+  /**
+   * The QR code, the Download App button and every share action below use
+   * INVITE_URL, so scanning an invitation always opens the same address the
+   * share buttons send. The QR is generated from that constant directly rather
+   * than from /api/config, so it stays correct even if the config call fails.
+   */
   useEffect(() => {
+    let alive = true;
+
+    QRCode.toDataURL(INVITE_URL, INVITE_QR_OPTIONS)
+      .then((url) => {
+        if (alive) setQr(url);
+      })
+      .catch(() => {
+        if (alive) setQr('');
+      });
+
+    // Only the tagline comes from the server; the link never does.
     get<Config>('/config')
       .then((res) => {
-        setConfig(res);
-        // The QR code and every share button point at the official website link.
-        const target = res.siteUrl || res.downloadUrl || window.location.origin;
-        return QRCode.toDataURL(target, { margin: 1, width: 320, color: { dark: '#0b3b2e', light: '#ffffff' } });
+        if (alive && res.tagline) setTagline(res.tagline);
       })
-      .then((url) => setQr(url))
-      .catch(() =>
-        setConfig({
-          downloadUrl: window.location.origin,
-          siteUrl: window.location.origin,
-          appName: 'RIFQ Muslim',
-          tagline: 'Your Faith, Your Daily Companion',
-        })
-      );
+      .catch(() => {
+        /* keep the default tagline */
+      });
+
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  const link = config?.siteUrl || config?.downloadUrl || window.location.origin;
-  const message = `RIFQ Muslim — ${config?.tagline || 'Your Faith, Your Daily Companion'}\nPrayer times, Quran, Hadith, Qibla and more.\n${link}`;
+  const link = INVITE_URL;
+  const message = `RIFQ Muslim — ${tagline}\nPrayer times, Quran, Hadith, Qibla and more.\n${link}`;
 
   const open = (url: string) => window.open(url, '_blank', 'noopener,noreferrer');
 
@@ -72,7 +87,7 @@ export default function Invite() {
     <Page title="Invite Friends" subtitle={t('Share RIFQ Muslim with your family and friends')}>
       <div className="card center">
         <p className="section-title" style={{ marginTop: 0 }}>{t('Scan to open RIFQ Muslim')}</p>
-        {qr ? <img src={qr} alt={t('Invitation QR code')} width={220} height={220} style={{ borderRadius: 12 }} /> : <p className="tiny muted">{t('Generating QR code…')}</p>}
+        {qr ? <img src={qr} alt={t('Invitation QR code')} data-qr-target={INVITE_URL} width={220} height={220} style={{ borderRadius: 12 }} /> : <p className="tiny muted">{t('Generating QR code…')}</p>}
         <p className="tiny muted" style={{ wordBreak: 'break-all', marginBottom: 0 }}>{link}</p>
       </div>
 
@@ -86,11 +101,11 @@ export default function Invite() {
 
       <div className="notice">
         <p className="small" style={{ margin: 0 }}>
-          {t('This link is the single official address of RIFQ Muslim. The QR code and every share button use it, so an invitation always opens the official website.')}
+          {t('This is the official RIFQ Muslim download link. The QR code and every share button use it, so an invitation always opens the official download page.')}
         </p>
       </div>
 
-      <DownloadApp compact />
+      <DownloadApp compact href={INVITE_URL} />
     </Page>
   );
 }

@@ -29,12 +29,15 @@ function inAppBrowser(): string | null {
  * `Content-Disposition: attachment`, so Android hands it to the Download
  * Manager and saves it as RIFQ-Muslim.apk.
  */
-export default function DownloadApp({ compact = false }: { compact?: boolean }) {
+export default function DownloadApp({ compact = false, href }: { compact?: boolean; href?: string }) {
   const { t } = useStore();
   const [info, setInfo] = useState<ApkInfo | null>(null);
   const [status, setStatus] = useState<Status>('idle');
   const [copied, setCopied] = useState(false);
   const host = inAppBrowser();
+  // When the caller supplies its own official link (the Invite Friends page),
+  // the button opens that URL directly and the APK-file status below is skipped.
+  const external = href?.trim() || null;
 
   useEffect(() => {
     let alive = true;
@@ -118,14 +121,27 @@ export default function DownloadApp({ compact = false }: { compact?: boolean }) 
         </p>
       )}
 
-      <button
-        className="btn btn-primary btn-block"
-        style={{ marginTop: 12 }}
-        onClick={download}
-        aria-describedby="rifq-download-status"
-      >
-        <AppIcon name="download" size={17} /> {t('DOWNLOAD RIFQ MUSLIM')}
-      </button>
+      {external ? (
+        <a
+          className="btn btn-primary btn-block"
+          style={{ marginTop: 12 }}
+          href={external}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-download-url={external}
+        >
+          <AppIcon name="download" size={17} /> {t('DOWNLOAD RIFQ MUSLIM')}
+        </a>
+      ) : (
+        <button
+          className="btn btn-primary btn-block"
+          style={{ marginTop: 12 }}
+          onClick={download}
+          aria-describedby="rifq-download-status"
+        >
+          <AppIcon name="download" size={17} /> {t('DOWNLOAD RIFQ MUSLIM')}
+        </button>
+      )}
 
       {status === 'inapp' && (
         <div style={{ marginTop: 10 }}>
@@ -143,6 +159,7 @@ export default function DownloadApp({ compact = false }: { compact?: boolean }) 
         </div>
       )}
 
+      {!external && (
       <p
         id="rifq-download-status"
         role="status"
@@ -158,6 +175,7 @@ export default function DownloadApp({ compact = false }: { compact?: boolean }) 
         {status === 'unavailable' &&
           t('The Android file is not available yet. Please try again soon.')}
       </p>
+      )}
     </section>
   );
 }

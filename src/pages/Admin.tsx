@@ -152,6 +152,8 @@ interface Notice {
   delivered?: number;
   failed?: number;
   delivery_note?: string | null;
+  push_sent?: number;
+  push_failed?: number;
 }
 
 interface Overview {
@@ -1726,6 +1728,8 @@ export default function Admin() {
                 {when(n.created_at)} · {n.audience === 'selected' ? t('Selected users') : t('All users')} ·{' '}
                 {Number(n.delivered || 0)}/{Number(n.recipients || 0)} {t('delivered')}
                 {Number(n.failed || 0) > 0 ? ` · ${n.failed} ${t('failed')}` : ''}
+                {Number(n.push_sent || 0) > 0 ? ` · ${n.push_sent} device push` : ''}
+                {Number(n.push_failed || 0) > 0 ? ` · ${n.push_failed} push failed` : ''}
               </p>
               {n.delivery_note ? (
                 <p className="small" style={{ margin: '2px 0 0', color: 'var(--gold)' }}>

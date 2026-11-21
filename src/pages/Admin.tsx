@@ -406,7 +406,25 @@ export default function Admin() {
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [badgeReqs, setBadgeReqs] = useState<
-    { id: string; userId: string; name: string; email: string; note: string; status: string; createdAt: string }[]
+    {
+      id: string;
+      userId: string;
+      name: string;
+      email: string;
+      role: string;
+      fullName: string;
+      reason: string;
+      avatarUrl: string;
+      accountAvatar: string;
+      links: string[];
+      documents: { id: string; name: string; mime: string; size: number }[];
+      status: string;
+      createdAt: string;
+      decidedAt?: string | null;
+      decidedBy?: string | null;
+      decisionReason?: string;
+      badgeVerified: boolean;
+    }[]
   >([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
@@ -1239,21 +1257,71 @@ export default function Admin() {
         <div className="card">
           <h3 className="h3">{t('Verification requests')}</h3>
           <p className="small muted">
-            {t('Only the Super Admin can approve or reject a blue badge request.')}
+            {t('Review the profile picture, reason and documents. The Owner and administrators can decide; every decision is recorded with your account.')}
           </p>
           {badgeReqs.map((r) => (
-            <div className="admin-item" key={r.id}>
+            <div className="admin-item" key={r.id} style={{ alignItems: 'flex-start' }}>
               <div className="admin-item-main">
-                <strong className="qa-author">{r.name || r.email}</strong>
-                <p className="small muted" style={{ margin: '2px 0 0' }}>
-                  {r.email} | {when(r.createdAt)}
-                  {r.note ? ` | ${r.note}` : ''}
-                </p>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  {r.avatarUrl || r.accountAvatar ? (
+                    <img
+                      src={r.avatarUrl || r.accountAvatar}
+                      alt={r.fullName || r.name || r.email}
+                      style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--gold)' }}
+                    />
+                  ) : (
+                    <div className="tile-icon" style={{ width: 44, height: 44, fontSize: 18 }}>
+                      {(r.fullName || r.name || r.email).slice(0, 1).toUpperCase()}
+                    </div>
+                  )}
+                  <div>
+                    <strong className="qa-author">
+                      {r.fullName || r.name || r.email}
+                      {r.badgeVerified && <VerifiedBadge />}
+                    </strong>
+                    <p className="tiny muted" style={{ margin: '2px 0 0' }}>
+                      {r.email} · {r.role} · {t('Requested')} {when(r.createdAt)}
+                    </p>
+                  </div>
+                </div>
+                <p className="small" style={{ margin: '8px 0 0', whiteSpace: 'pre-wrap' }}>{r.reason}</p>
+                {r.links?.length > 0 && (
+                  <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {r.links.map((link) => (
+                      <a key={link} className="tiny" href={link} target="_blank" rel="noreferrer noopener" style={{ color: 'var(--gold)' }}>
+                        {link}
+                      </a>
+                    ))}
+                  </div>
+                )}
+                {r.documents?.length > 0 && (
+                  <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {r.documents.map((d) => (
+                      <a
+                        key={d.id}
+                        className="btn btn-ghost btn-sm"
+                        href={`/api/admin/badge-requests/${r.id}/documents/${d.id}`}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                      >
+                        {t('Open document')}: {d.name}
+                      </a>
+                    ))}
+                  </div>
+                )}
+                {r.status !== 'pending' && (
+                  <p className="tiny muted" style={{ margin: '6px 0 0' }}>
+                    {r.status === 'approved' ? t('Approved') : t('Rejected')}
+                    {r.decidedAt ? ` ${when(r.decidedAt)}` : ''}
+                    {r.decidedBy ? ` · ${r.decidedBy}` : ''}
+                    {r.decisionReason ? ` · ${r.decisionReason}` : ''}
+                  </p>
+                )}
               </div>
               <div className="admin-item-actions">
                 <button
                   className="btn btn-soft btn-sm"
-                  disabled={!isSuper}
+                  disabled={!isAdmin || r.status !== 'pending'}
                   onClick={() =>
                     void run(() => patch(`/admin/badge-requests/${r.id}`, { action: 'approve' }), t('Verification badge granted.'))
                   }
@@ -1262,10 +1330,18 @@ export default function Admin() {
                 </button>
                 <button
                   className="btn btn-ghost btn-sm"
-                  disabled={!isSuper}
-                  onClick={() =>
-                    void run(() => patch(`/admin/badge-requests/${r.id}`, { action: 'reject' }), t('Verification request rejected.'))
-                  }
+                  disabled={!isAdmin || r.status !== 'pending'}
+                  onClick={() => {
+                    const reason = window.prompt(
+                      t('Optional: explain why this request is rejected. The user will see this reason.'),
+                      ''
+                    );
+                    if (reason === null) return;
+                    void run(
+                      () => patch(`/admin/badge-requests/${r.id}`, { action: 'reject', reason: reason.trim() }),
+                      t('Verification request rejected.')
+                    );
+                  }}
                 >
                   {t('Reject')}
                 </button>
@@ -1305,13 +1381,31 @@ export default function Admin() {
               </select>
               <button
                 className={`btn btn-sm ${u.badgeVerified ? 'btn-ghost' : 'btn-soft'}`}
-                title={t('Blue verified badge — Super Admin only')}
-                onClick={() =>
-                  void run(
-                    () => patch(`/admin/users/${u.id}/badge`, { verified: !u.badgeVerified }),
-                    u.badgeVerified ? t('Verification badge removed.') : t('Verification badge granted.')
-                  )
+                title={
+                  u.badgeVerified && (u.role === 'admin' || u.role === 'superadmin')
+                    ? t('The Owner and administrators are verified by role.')
+                    : t('Blue verified badge — administrators only')
                 }
+                disabled={u.badgeVerified && (u.role === 'admin' || u.role === 'superadmin')}
+                onClick={() => {
+                  if (u.badgeVerified) {
+                    const reason = window.prompt(
+                      t('Why is this verification being removed? A short reason is recorded in the decision history.'),
+                      ''
+                    );
+                    if (reason === null) return;
+                    if (reason.trim().length < 4) {
+                      toast(t('Please record a short reason for removing verification.'), 'error');
+                      return;
+                    }
+                    void run(
+                      () => patch(`/admin/users/${u.id}/badge`, { verified: false, reason: reason.trim() }),
+                      t('Verification badge removed.')
+                    );
+                    return;
+                  }
+                  void run(() => patch(`/admin/users/${u.id}/badge`, { verified: true }), t('Verification badge granted.'));
+                }}
               >
                 {u.badgeVerified ? t('Remove ✓') : t('Verify ✓')}
               </button>

@@ -5,6 +5,7 @@ import { AppIcon } from '../components/Icons';
 import { useStore } from '../lib/store';
 import { setReadingSelection } from '../lib/touchGuard';
 import { get, post, local } from '../lib/api';
+import MushafReader from '../components/MushafReader';
 
 interface SurahMeta {
   number: number;
@@ -389,34 +390,35 @@ export function QuranReader() {
               <p className="tiny muted" style={{ marginBottom: 0 }}>{data.source}</p>
             </div>
 
-            {surahNumber !== 1 && surahNumber !== 9 && (
+            {view !== 'mushaf' && surahNumber !== 1 && surahNumber !== 9 && (
               <p className="arabic center" dir="rtl" lang="ar" style={{ fontSize: 26, margin: '14px 0' }}>
                 بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
               </p>
             )}
 
             {view === 'mushaf' && (
-              <article className={`card mushaf-page${selectMode ? ' selection-enabled' : ''}`}>
-                <p
-                  className="arabic mushaf-text"
-                  dir="rtl"
-                  lang="ar"
-                  data-selectable
-                  style={{ fontSize: prefs.quranFontSize, lineHeight: 2.4, margin: 0 }}
-                >
-                  {data.ayahs.map((ayah) => (
-                    <span key={ayah.number} id={`m-ayah-${ayah.number}`} style={{ scrollMarginTop: 90 }}>
-                      {ayah.text}
-                      <span className="ayah-marker" aria-label={`${surahNumber}:${ayah.number}`}>
-                        {' '}۝{ayah.number}{' '}
-                      </span>
-                    </span>
-                  ))}
-                </p>
-                <p className="tiny muted" style={{ marginBottom: 0 }}>
-                  {t('Continuous Uthmani text. Switch to verse view for translation and bookmarks.')}
-                </p>
-              </article>
+              <MushafReader
+                surahNumber={surahNumber}
+                surahArabicName={data.name}
+                surahEnglishName={data.englishName}
+                startPage={data.ayahs[0]?.page || 1}
+                ayahs={data.ayahs}
+                translation={translation}
+                fontSize={prefs.quranFontSize}
+                selectMode={selectMode}
+                onFontSize={(delta) =>
+                  setPrefs({
+                    quranFontSize: Math.max(18, Math.min(46, prefs.quranFontSize + delta)),
+                  })
+                }
+                onRemember={(ayahNo) => rememberAyah(ayahNo)}
+                onBookmarkAyah={(ayahNo) => {
+                  const ayah = data.ayahs.find((a) => a.number === ayahNo);
+                  if (ayah) void toggleBookmark(ayah);
+                }}
+                jumpToAyah={jumpTo || undefined}
+                toast={toast}
+              />
             )}
 
             <div

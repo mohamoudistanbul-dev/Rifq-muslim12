@@ -110,11 +110,16 @@ export default function More() {
           <span className="menu-cta-label">{t('Design')}</span>
           <span className="menu-cta-desc">{t('Appearance and branding')}</span>
         </Link>
-        <Link to="/admin" className="menu-cta-tile admin">
-          <AppIcon name="dashboard" size={22} />
-          <span className="menu-cta-label">{t('Admin')}</span>
-          <span className="menu-cta-desc">{isAdmin ? t('Dashboard open') : t('Secure sign-in')}</span>
-        </Link>
+        {/* Admin is private: ordinary users never see this entry. The owner
+            signs in at /admin, which renders the secure login until an
+            admin session exists — the API rejects everything else. */}
+        {isAdmin && (
+          <Link to="/admin" className="menu-cta-tile admin">
+            <AppIcon name="dashboard" size={22} />
+            <span className="menu-cta-label">{t('Admin')}</span>
+            <span className="menu-cta-desc">{t('Dashboard open')}</span>
+          </Link>
+        )}
         <Link to="/support" className="menu-cta-tile support">
           <AppIcon name="support" size={22} />
           <span className="menu-cta-label">{t('Support')}</span>

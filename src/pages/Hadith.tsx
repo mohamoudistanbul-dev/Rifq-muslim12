@@ -38,6 +38,14 @@ interface HadithItem {
   book: number | null;
   section: string;
   grades: Grade[];
+  /** Sahabi narrator, read from the published English isnad sentence. */
+  narrator?: string;
+  narratorSource?: string;
+  /** Collector Imam of the collection, from the verified collection metadata. */
+  imam?: string;
+  imamArabic?: string;
+  collection?: string;
+  collectionArabicName?: string;
 }
 
 interface CollectionResponse {
@@ -156,16 +164,60 @@ function Item({
         </p>
       ) : null}
 
-      {item.grades.length ? (
-        <div className="hadith-grades">
-          {item.grades.map((g, i) => (
-            <span key={`${g.scholar}-${i}`} className="hadith-grade">
-              {g.grade}
-              {g.scholar ? ` — ${g.scholar}` : ''}
-            </span>
-          ))}
+      {/* Reference block: every line is either dataset content or an explicit
+          "not stated" — the client never fills a gap with a guess. */}
+      <dl className="hadith-meta">
+        <div>
+          <dt>Narrator (الصحابي الراوي)</dt>
+          <dd dir="auto">
+            {item.narrator ? item.narrator : <span className="hadith-unknown">Not stated in this dataset</span>}
+          </dd>
         </div>
-      ) : null}
+        <div>
+          <dt>Collected by (الإمام المصنّف)</dt>
+          <dd dir="auto">
+            {item.imam || collection}
+            {item.imamArabic ? <span className="hadith-meta-ar" dir="rtl" lang="ar"> {item.imamArabic}</span> : null}
+          </dd>
+        </div>
+        <div>
+          <dt>Collection</dt>
+          <dd dir="auto">
+            {item.collection || collection}
+            {item.collectionArabicName ? (
+              <span className="hadith-meta-ar" dir="rtl" lang="ar"> {item.collectionArabicName}</span>
+            ) : null}
+          </dd>
+        </div>
+        <div>
+          <dt>Hadith number</dt>
+          <dd>{item.number}</dd>
+        </div>
+        <div>
+          <dt>Book &amp; chapter</dt>
+          <dd>
+            {item.book != null ? `Book ${item.book}` : 'Book number not stated'}
+            {item.section ? ` · ${item.section}` : ''}
+          </dd>
+        </div>
+        <div>
+          <dt>Authenticity</dt>
+          <dd>
+            {item.grades.length ? (
+              <span className="hadith-grades">
+                {item.grades.map((g, i) => (
+                  <span key={`${g.scholar}-${i}`} className="hadith-grade">
+                    {g.grade}
+                    {g.scholar ? ` — ${g.scholar}` : ''}
+                  </span>
+                ))}
+              </span>
+            ) : (
+              <span className="hadith-unknown">Grading not stated in this dataset</span>
+            )}
+          </dd>
+        </div>
+      </dl>
     </article>
   );
 }

@@ -4,6 +4,7 @@ import { Page, Loading } from '../components/Shell';
 import VerifiedBadge from '../components/VerifiedBadge';
 import { useStore } from '../lib/store';
 import { get, patch, post, put, del } from '../lib/api';
+import { PremiumAdmin, QuizAdmin, KidsAdmin } from './AdminPanels';
 import '../admin.css';
 
 type Tab =
@@ -17,7 +18,10 @@ type Tab =
   | 'notifications'
   | 'settings'
   | 'activity'
-  | 'security';
+  | 'security'
+  | 'premium'
+  | 'quiz'
+  | 'kids';
 
 interface AuditRow {
   id: string;
@@ -212,6 +216,9 @@ const TABS: { id: Tab; label: string; superOnly?: boolean }[] = [
   { id: 'settings', label: 'Website settings', superOnly: true },
   { id: 'activity', label: 'Activity log' },
   { id: 'security', label: 'Security' },
+  { id: 'premium', label: 'Premium' },
+  { id: 'quiz', label: 'Quiz bank' },
+  { id: 'kids', label: 'Kid Academy' },
 ];
 
 const SETTING_FIELDS: { key: string; label: string; kind?: 'text' | 'email' | 'url' | 'textarea' | 'bool' }[] = [
@@ -1921,6 +1928,9 @@ export default function Admin() {
           {!loading && tab === 'settings' ? renderSettings() : null}
           {!loading && tab === 'activity' ? renderActivity() : null}
           {!loading && tab === 'security' ? renderSecurity() : null}
+          {!loading && tab === 'premium' ? <PremiumAdmin /> : null}
+          {!loading && tab === 'quiz' ? <QuizAdmin /> : null}
+          {!loading && tab === 'kids' ? <KidsAdmin /> : null}
         </div>
       </div>
     </Page>

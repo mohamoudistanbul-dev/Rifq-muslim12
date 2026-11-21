@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Page } from '../components/Shell';
-import { AppIcon } from '../components/Icons';
+import { AppIcon, type IconName } from '../components/Icons';
 import { useStore } from '../lib/store';
 import { get, post, ApiError } from '../lib/api';
 
@@ -46,7 +46,7 @@ interface Certificate {
   issuedAt: string;
 }
 
-const KIND_ICON: Record<string, string> = {
+const KIND_ICON: Record<string, IconName> = {
   letter: 'book',
   surah: 'quran',
   pillar: 'star',
@@ -201,7 +201,23 @@ export default function Kids() {
     const answeredCorrect = answered && quiz && answer === quiz.answer;
 
     return (
-      <Page title={open.title[index]} subtitle={t(open.kindLabel)} onBack={() => { setOpen(null); setAnswer(null); setAnswered(false); }}>
+      <Page
+        title={open.title[index]}
+        subtitle={t(open.kindLabel)}
+        back={false}
+        actions={
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => {
+              setOpen(null);
+              setAnswer(null);
+              setAnswered(false);
+            }}
+          >
+            {t('Back to lessons')}
+          </button>
+        }
+      >
         <div className="stack">
           <div className="card kid-card">
             {open.kind === 'letter' ? (

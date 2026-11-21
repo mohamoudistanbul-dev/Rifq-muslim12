@@ -1,16 +1,35 @@
 /**
- * Prayer notification and Adhan delivery.
+ * Notification and Adhan delivery for RIFQ Muslim.
  *
- * One engine is used by the countdown, the Athan settings screen and the test
- * button, so what the user sees and what is delivered cannot drift apart:
- *  - the same prayer-time objects that render the clock trigger the alerts;
- *  - every alert is deduplicated by prayer + timestamp in localStorage, so a
- *    reload, a second tab or the 20 s sweep can never double-notify;
- *  - Adhan audio is a real recording streamed from the sound catalogue; the
- *    "chime" and "silent" options are labelled as such instead of pretending
- *    to be an adhan.
+ * One engine drives every notification in the app: the five prayers, the
+ * pre-prayer reminder, the daily Quran / hadith / dua reminders, morning and
+ * evening adhkar, Islamic occasions and the user's own reminders.
+ *
+ * Guarantees:
+ *  - the schedule is computed once, in `notifyPlan`, from the same prayer-time
+ *    objects that render the countdown, so a notification cannot disagree with
+ *    the clock on screen;
+ *  - every slot is deduplicated in localStorage, so a reload, a second tab or
+ *    the 20 s sweep can never deliver the same alert twice;
+ *  - on Android the plan is handed to the native alarm scheduler, which is what
+ *    makes delivery work when the app is closed (a web page alone cannot);
+ *  - audio is a real recording with working play / pause / stop, and the two
+ *    non-adhan options are labelled as such instead of pretending.
  */
 import { FIVE } from './prayer';
+import { OCCASIONS, hijriDate } from './hijri';
+import {
+  categoryLabel,
+  localDayKey,
+  planAlerts,
+  dueAlerts,
+  upcomingAlerts,
+  type CategoryId,
+  type CategoryPrefs,
+  type CustomReminder,
+  type OccasionDate,
+  type PlannedAlert,
+} from './notifyPlan';
 
 export type SoundId = 'makkah' | 'madinah' | 'alaqsa' | 'egypt' | 'turkiye' | 'beep' | 'silent';
 
@@ -67,14 +86,76 @@ export type PermissionState = NotificationPermission | 'unsupported';
 
 export function notificationState(): PermissionState {
   if (typeof Notification === 'undefined') return 'unsupported';
-  return Notification.permission;
+  try {
+    return Notification.permission;
+  } catch {
+    return 'unsupported';
+  }
 }
 
 export async function requestPermission(): Promise<PermissionState> {
   if (typeof Notification === 'undefined') return 'unsupported';
-  const result = await Notification.requestPermission();
-  if (result === 'granted') void registerServiceWorker();
-  return result;
+  try {
+    const result = await Notification.requestPermission();
+    if (result === 'granted') void registerServiceWorker();
+    return result;
+  } catch {
+    return notificationState();
+  }
+}
+
+/* ------------------------------ capabilities ------------------------------ */
+
+export interface NativeBridge {
+  available: boolean;
+  schedulePrayer(id: string, atMillis: number, title: string, body: string): boolean;
+  cancelPrayer(id: string): void;
+}
+
+function nativeBridge(): NativeBridge | null {
+  if (typeof window === 'undefined') return null;
+  const bridge = (window as unknown as { RifqNativeBridge?: NativeBridge }).RifqNativeBridge;
+  return bridge && bridge.available ? bridge : null;
+}
+
+export function isNativeApp(): boolean {
+  return !!nativeBridge();
+}
+
+export type BackgroundMode = 'native-alarm' | 'pwa-push-required' | 'foreground-only';
+
+export interface Capabilities {
+  native: boolean;
+  ios: boolean;
+  standalone: boolean;
+  serviceWorker: boolean;
+  permission: PermissionState;
+  /** How (and whether) alerts can arrive with the app closed. */
+  background: BackgroundMode;
+  /** Whether the adhan recording itself plays with the app closed. */
+  adhanWhenClosed: boolean;
+}
+
+export function capabilities(): Capabilities {
+  const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent || '';
+  const ios = /iPad|iPhone|iPod/.test(ua) || (ua.includes('Macintosh') && 'ontouchend' in document);
+  const standalone =
+    typeof window !== 'undefined' &&
+    (window.matchMedia?.('(display-mode: standalone)').matches ||
+      (navigator as unknown as { standalone?: boolean }).standalone === true);
+  const native = isNativeApp();
+  return {
+    native,
+    ios,
+    standalone,
+    serviceWorker: typeof navigator !== 'undefined' && 'serviceWorker' in navigator,
+    permission: notificationState(),
+    background: native ? 'native-alarm' : ios ? 'pwa-push-required' : 'foreground-only',
+    // A native alarm posts a notification; a full adhan recording with the app
+    // closed would need a foreground media service, which this build does not
+    // ship. Never claim otherwise.
+    adhanWhenClosed: false,
+  };
 }
 
 /* ----------------------------- service worker ----------------------------- */
@@ -106,9 +187,10 @@ export interface AlertPayload {
   url?: string;
 }
 
-/** Shows a branded notification, preferring the service worker. */
+/** Shows a branded notification, preferring the native bridge, then the worker. */
 export async function showAlert(payload: AlertPayload): Promise<boolean> {
   if (notificationState() !== 'granted') return false;
+
   if (payload.vibrate && typeof navigator !== 'undefined' && 'vibrate' in navigator) {
     try {
       navigator.vibrate([250, 120, 250]);
@@ -116,6 +198,22 @@ export async function showAlert(payload: AlertPayload): Promise<boolean> {
       /* vibration is optional */
     }
   }
+
+  // Inside the Android app `window.Notification` is replaced by the native
+  // bridge, so this path posts a real system notification.
+  if (nativeBridge()) {
+    try {
+      new Notification(payload.title || 'RIFQ Muslim', {
+        body: payload.body,
+        tag: payload.tag,
+        icon: '/icons/icon-192.png',
+      });
+      return true;
+    } catch {
+      /* fall through */
+    }
+  }
+
   const reg = await registerServiceWorker();
   if (reg) {
     try {
@@ -124,8 +222,8 @@ export async function showAlert(payload: AlertPayload): Promise<boolean> {
         tag: payload.tag,
         icon: '/icons/icon-192.png',
         data: { url: payload.url || '/athan' },
-        // The adhan recording is played by the page so it can be stopped and
-        // so the volume follows the device; the system sound stays silent.
+        // The adhan recording is played by the page so it can be paused and
+        // stopped; the system sound stays silent.
         silent: true,
       });
       return true;
@@ -133,6 +231,7 @@ export async function showAlert(payload: AlertPayload): Promise<boolean> {
       /* fall through to the constructor */
     }
   }
+
   try {
     new Notification(payload.title || 'RIFQ Muslim', {
       body: payload.body,
@@ -147,8 +246,57 @@ export async function showAlert(payload: AlertPayload): Promise<boolean> {
 
 /* --------------------------------- audio ---------------------------------- */
 
+export interface AudioSnapshot {
+  soundId: SoundId | null;
+  playing: boolean;
+  paused: boolean;
+  position: number;
+  duration: number;
+  label: string;
+  error: string | null;
+}
+
+const EMPTY_AUDIO: AudioSnapshot = {
+  soundId: null,
+  playing: false,
+  paused: false,
+  position: 0,
+  duration: 0,
+  label: '',
+  error: null,
+};
+
 let currentAudio: HTMLAudioElement | null = null;
 let chimeContext: AudioContext | null = null;
+let audioSnapshot: AudioSnapshot = EMPTY_AUDIO;
+const audioListeners = new Set<(snapshot: AudioSnapshot) => void>();
+
+function emitAudio(patch: Partial<AudioSnapshot>): void {
+  audioSnapshot = { ...audioSnapshot, ...patch };
+  for (const listener of audioListeners) {
+    try {
+      listener(audioSnapshot);
+    } catch {
+      /* a broken listener must not stop playback */
+    }
+  }
+}
+
+export function subscribeAudio(listener: (snapshot: AudioSnapshot) => void): () => void {
+  audioListeners.add(listener);
+  listener(audioSnapshot);
+  return () => {
+    audioListeners.delete(listener);
+  };
+}
+
+export function audioState(): AudioSnapshot {
+  return audioSnapshot;
+}
+
+export function isAdhanPlaying(): boolean {
+  return !!currentAudio && !currentAudio.paused;
+}
 
 export function stopAdhan(): void {
   if (currentAudio) {
@@ -160,14 +308,40 @@ export function stopAdhan(): void {
     }
     currentAudio = null;
   }
+  emitAudio(EMPTY_AUDIO);
+}
+
+export function pauseAdhan(): boolean {
+  if (!currentAudio || currentAudio.paused) return false;
+  try {
+    currentAudio.pause();
+    emitAudio({ playing: false, paused: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function resumeAdhan(): Promise<boolean> {
+  if (!currentAudio) return false;
+  try {
+    await currentAudio.play();
+    emitAudio({ playing: true, paused: false, error: null });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function playChime(): boolean {
   try {
-    const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    const Ctor =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctor) return false;
     chimeContext = chimeContext || new Ctor();
     const ctx = chimeContext;
+    if (ctx.state === 'suspended') void ctx.resume();
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -179,6 +353,10 @@ function playChime(): boolean {
     osc.connect(gain).connect(ctx.destination);
     osc.start(now);
     osc.stop(now + 1.3);
+    emitAudio({ soundId: 'beep', playing: true, paused: false, label: 'Short chime', position: 0, duration: 1.3, error: null });
+    window.setTimeout(() => {
+      if (audioSnapshot.soundId === 'beep') emitAudio(EMPTY_AUDIO);
+    }, 1400);
     return true;
   } catch {
     return false;
@@ -188,59 +366,231 @@ function playChime(): boolean {
 export async function playAdhan(id: string): Promise<boolean> {
   stopAdhan();
   const sound = soundById(id);
-  if (sound.id === 'silent') return true;
+
+  if (sound.id === 'silent') {
+    emitAudio({ soundId: 'silent', label: sound.label, playing: false, paused: false });
+    return true;
+  }
   if (!sound.url) return playChime();
+
   try {
     const el = new Audio(sound.url);
     el.preload = 'auto';
     el.crossOrigin = 'anonymous';
     currentAudio = el;
+
+    el.addEventListener('loadedmetadata', () => {
+      if (currentAudio !== el) return;
+      emitAudio({ duration: Number.isFinite(el.duration) ? el.duration : 0 });
+    });
+    el.addEventListener('timeupdate', () => {
+      if (currentAudio !== el) return;
+      emitAudio({ position: el.currentTime });
+    });
+    el.addEventListener('ended', () => {
+      if (currentAudio === el) stopAdhan();
+    });
+    el.addEventListener('error', () => {
+      if (currentAudio === el) {
+        currentAudio = null;
+        emitAudio({
+          ...EMPTY_AUDIO,
+          soundId: sound.id,
+          label: sound.label,
+          error: 'This recording could not be loaded. Check your connection and try again.',
+        });
+      }
+    });
+
+    emitAudio({
+      soundId: sound.id,
+      label: sound.label,
+      playing: false,
+      paused: false,
+      position: 0,
+      duration: 0,
+      error: null,
+    });
+
     await el.play();
+    emitAudio({ playing: true, paused: false });
     return true;
   } catch {
+    currentAudio = null;
+    emitAudio({
+      ...EMPTY_AUDIO,
+      soundId: sound.id,
+      label: sound.label,
+      error: 'Playback did not start. Check the device volume and try again.',
+    });
     return false;
   }
 }
 
-export function isAdhanPlaying(): boolean {
-  return !!currentAudio && !currentAudio.paused;
+/* --------------------------- native alarm bridge --------------------------- */
+
+const NATIVE_KEY = 'rifq.native.alarms.v1';
+
+function readNativeIds(): string[] {
+  try {
+    const raw = localStorage.getItem(NATIVE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+    return Array.isArray(parsed) ? (parsed as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeNativeIds(ids: string[]): void {
+  try {
+    localStorage.setItem(NATIVE_KEY, JSON.stringify(ids.slice(0, 200)));
+  } catch {
+    /* storage may be unavailable in private mode */
+  }
+}
+
+export interface NativeSyncResult {
+  supported: boolean;
+  scheduled: number;
+  cancelled: number;
+}
+
+/**
+ * Hands the next seven days of the plan to the Android alarm scheduler and
+ * cancels anything that is no longer planned. This is what delivers alerts when
+ * the app is closed; without it the plan would only run while the page is alive.
+ */
+export function syncNativeSchedule(planned: PlannedAlert[], now: Date): NativeSyncResult {
+  const bridge = nativeBridge();
+  if (!bridge) return { supported: false, scheduled: 0, cancelled: 0 };
+
+  const upcoming = upcomingAlerts(planned, now, 7 * 86400000, 60);
+  const nextIds = new Set<string>();
+  let scheduled = 0;
+
+  for (const alert of upcoming) {
+    try {
+      if (bridge.schedulePrayer(alert.slot, alert.at.getTime(), alert.title, alert.body)) {
+        nextIds.add(alert.slot);
+        scheduled += 1;
+      }
+    } catch {
+      /* one failed alarm must not stop the rest */
+    }
+  }
+
+  let cancelled = 0;
+  for (const id of readNativeIds()) {
+    if (nextIds.has(id)) continue;
+    try {
+      bridge.cancelPrayer(id);
+      cancelled += 1;
+    } catch {
+      /* nothing to cancel */
+    }
+  }
+
+  writeNativeIds([...nextIds]);
+  return { supported: true, scheduled, cancelled };
+}
+
+export function clearNativeSchedule(): void {
+  const bridge = nativeBridge();
+  if (!bridge) return;
+  for (const id of readNativeIds()) {
+    try {
+      bridge.cancelPrayer(id);
+    } catch {
+      /* ignore */
+    }
+  }
+  writeNativeIds([]);
 }
 
 /* --------------------------------- testing -------------------------------- */
 
+export interface LoopState {
+  times: Record<string, Date> | null;
+  city: string;
+  prefs: {
+    notifyEnabled: boolean;
+    prayerAlerts: Record<string, boolean>;
+    preReminder: number;
+    athanSound: string;
+    vibration: boolean;
+    categories: CategoryPrefs;
+    custom: CustomReminder[];
+  };
+  occasions: OccasionDate[];
+}
+
+export function planFor(state: LoopState, now = new Date()): PlannedAlert[] {
+  return planAlerts({
+    now,
+    times: state.times,
+    city: state.city,
+    prayerAlerts: state.prefs.prayerAlerts,
+    preReminder: state.prefs.preReminder,
+    vibration: state.prefs.vibration,
+    athanSound: state.prefs.athanSound,
+    categories: state.prefs.categories,
+    custom: state.prefs.custom,
+    occasions: state.occasions,
+  });
+}
+
+/** The next alert of one category, used by the per-category test buttons. */
+export function sampleFor(state: LoopState, category: CategoryId): PlannedAlert | null {
+  const planned = planFor(state);
+  return planned.find((a) => a.category === category) || null;
+}
+
 export interface TestResult {
   shown: boolean;
   played: boolean;
+  title: string;
+  body: string;
+  sound: string;
 }
 
-export async function testAlert(options: { sound: string; vibrate: boolean; city?: string }): Promise<TestResult> {
+/**
+ * Delivers a real notification for one category, using the wording that
+ * category would actually produce. The tag carries a timestamp so a test is
+ * never suppressed by the dedupe memory.
+ */
+export async function testCategory(category: CategoryId, state: LoopState): Promise<TestResult> {
+  const sample = sampleFor(state, category);
+  const title = sample ? `Test — ${sample.title}` : 'RIFQ Muslim — test notification';
+  const body = sample
+    ? sample.body
+    : `Notifications are working for ${state.city}. This is a test; no prayer time was changed.`;
+  const sound = sample?.sound || state.prefs.athanSound;
+
   const shown = await showAlert({
-    title: 'RIFQ Muslim — test notification',
-    body: `Notifications are working${options.city ? ` for ${options.city}` : ''}. This is a test, no prayer time was changed.`,
-    tag: 'rifq-test',
-    vibrate: options.vibrate,
+    title,
+    body,
+    tag: `rifq-test:${category}:${Date.now()}`,
+    vibrate: sample?.vibrate ?? state.prefs.vibration,
+    url: sample?.url,
   });
+  const played = await playAdhan(sound);
+  return { shown, played, title, body, sound };
+}
+
+/** Kept for the simple "send a test notification" button. */
+export async function testAlert(options: {
+  sound: string;
+  vibrate: boolean;
+  city?: string;
+}): Promise<TestResult> {
+  const title = 'RIFQ Muslim — test notification';
+  const body = `Notifications are working${options.city ? ` for ${options.city}` : ''}. This is a test, no prayer time was changed.`;
+  const shown = await showAlert({ title, body, tag: `rifq-test:${Date.now()}`, vibrate: options.vibrate });
   const played = await playAdhan(options.sound);
-  return { shown, played };
+  return { shown, played, title, body, sound: options.sound };
 }
 
 /* ------------------------------- scheduling ------------------------------- */
-
-export interface AlertPrefs {
-  notifyEnabled: boolean;
-  prayerAlerts: Record<string, boolean>;
-  preReminder: number;
-  athanSound: string;
-  vibration: boolean;
-  dailyQuran: boolean;
-  dailyHadith: boolean;
-  dailyDua: boolean;
-}
-
-export interface AlertContext {
-  times: Record<string, Date> | null;
-  city: string;
-}
 
 const FIRED_KEY = 'rifq.alerts.fired.v1';
 const WINDOW_MS = 90_000;
@@ -255,86 +605,82 @@ function firedList(): string[] {
   }
 }
 
-function alreadyFired(slot: string): boolean {
-  return firedList().includes(slot);
-}
-
 function markFired(slot: string): void {
   try {
     const list = firedList();
+    if (list.includes(slot)) return;
     list.push(slot);
-    localStorage.setItem(FIRED_KEY, JSON.stringify(list.slice(-500)));
+    localStorage.setItem(FIRED_KEY, JSON.stringify(list.slice(-800)));
   } catch {
     /* storage may be unavailable in private mode */
   }
 }
 
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+/** Clears the dedupe memory — used by the "reschedule now" control. */
+export function resetAlertMemory(): void {
+  try {
+    localStorage.removeItem(FIRED_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function syncSignature(state: LoopState, now: Date): string {
+  return JSON.stringify({
+    day: localDayKey(now),
+    times: state.times
+      ? Object.fromEntries(Object.entries(state.times).map(([k, v]) => [k, v instanceof Date ? v.toISOString() : null]))
+      : null,
+    prayers: state.prefs.prayerAlerts,
+    pre: state.prefs.preReminder,
+    sound: state.prefs.athanSound,
+    categories: state.prefs.categories,
+    custom: state.prefs.custom,
+    occasions: state.occasions,
+    enabled: state.prefs.notifyEnabled,
+  });
+}
 
 /**
  * Starts the alert loop. Returns a cleanup function.
- * Uses the exact `times` object the UI renders, so no second calculation.
+ * Runs every 20 s, on return to the foreground, and immediately on start.
  */
-export function startAlertLoop(getContext: () => AlertContext, getPrefs: () => AlertPrefs): () => void {
+export function startAlertLoop(getState: () => LoopState): () => void {
+  let lastSync = '';
+
   const tick = () => {
-    const prefs = getPrefs();
-    if (!prefs.notifyEnabled || notificationState() !== 'granted') return;
-    const { times, city } = getContext();
-    const now = Date.now();
+    const state = getState();
+    const now = new Date();
+    const enabled = state.prefs.notifyEnabled && notificationState() === 'granted';
+    const planned = planFor(state, now);
 
-    if (times) {
-      for (const key of FIVE) {
-        const at = times[key];
-        if (!(at instanceof Date) || Number.isNaN(at.getTime())) continue;
-        if (prefs.prayerAlerts[key] === false) continue;
-
-        const slot = `prayer:${key}:${at.toISOString()}`;
-        const diff = now - at.getTime();
-        if (diff >= 0 && diff < WINDOW_MS && !alreadyFired(slot)) {
-          markFired(slot);
-          void showAlert({
-            body:
-              key === 'fajr'
-                ? `Fajr time in ${city}. Prayer is better than sleep.`
-                : `${cap(key)} time in ${city}.`,
-            tag: slot,
-            vibrate: prefs.vibration,
-          });
-          void playAdhan(prefs.athanSound);
-        }
-
-        if (prefs.preReminder > 0) {
-          const preSlot = `pre:${slot}`;
-          const preAt = at.getTime() - prefs.preReminder * 60_000;
-          const preDiff = now - preAt;
-          if (preDiff >= 0 && preDiff < WINDOW_MS && !alreadyFired(preSlot)) {
-            markFired(preSlot);
-            void showAlert({
-              body: `${cap(key)} in ${prefs.preReminder} minutes in ${city}.`,
-              tag: preSlot,
-              vibrate: prefs.vibration,
-            });
-          }
-        }
+    if (!enabled) {
+      // Turning notifications off must also cancel the Android alarms, or they
+      // would still fire while the app is closed.
+      if (lastSync !== 'off') {
+        lastSync = 'off';
+        clearNativeSchedule();
       }
+      return;
     }
 
-    // Daily reminders, fired once per day shortly after 09:00 device time.
-    const clock = new Date();
-    if (clock.getHours() === 9 && clock.getMinutes() < 5) {
-      const dayKey = `${clock.getFullYear()}-${clock.getMonth() + 1}-${clock.getDate()}`;
-      const reminders: [boolean, string, string][] = [
-        [prefs.dailyQuran, 'quran', 'Your daily Quran reading is waiting in RIFQ Muslim.'],
-        [prefs.dailyHadith, 'hadith', 'The hadith of the day is ready in RIFQ Muslim.'],
-        [prefs.dailyDua, 'dua', 'A dua for today is waiting for you in RIFQ Muslim.'],
-      ];
-      for (const [enabled, kind, body] of reminders) {
-        if (!enabled) continue;
-        const slot = `daily:${kind}:${dayKey}`;
-        if (alreadyFired(slot)) continue;
-        markFired(slot);
-        void showAlert({ body, tag: slot, vibrate: prefs.vibration, url: `/${kind === 'quran' ? 'quran' : kind}` });
-      }
+    for (const alert of dueAlerts(planned, now, WINDOW_MS, firedList())) {
+      markFired(alert.slot);
+      void showAlert({
+        title: alert.title,
+        body: alert.body,
+        tag: alert.slot,
+        vibrate: alert.vibrate,
+        url: alert.url,
+      });
+      if (alert.sound === 'beep') playChime();
+      else if (alert.sound !== 'silent') void playAdhan(alert.sound);
+    }
+
+    const signature = syncSignature(state, now);
+    if (signature !== lastSync) {
+      lastSync = signature;
+      syncNativeSchedule(planned, now);
     }
   };
 
@@ -351,11 +697,39 @@ export function startAlertLoop(getContext: () => AlertContext, getPrefs: () => A
   };
 }
 
-/** Clears the dedupe memory — used by the "reschedule now" control. */
-export function resetAlertMemory(): void {
-  try {
-    localStorage.removeItem(FIRED_KEY);
-  } catch {
-    /* ignore */
+/* -------------------------------- occasions ------------------------------- */
+
+/** Islamic occasions falling in the next `days` days, as local date keys. */
+export function upcomingOccasionAlerts(now: Date, days = 8): OccasionDate[] {
+  const out: OccasionDate[] = [];
+  for (let offset = 0; offset < days; offset += 1) {
+    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+    const hijri = hijriDate(day);
+    if (!hijri) continue;
+    const occasion = OCCASIONS.find((o) => o.month === hijri.month && o.day === hijri.day);
+    if (occasion) {
+      out.push({ name: occasion.title, date: localDayKey(day), note: occasion.note });
+    }
   }
+  return out;
 }
+
+/* ------------------------------- UI helpers ------------------------------- */
+
+export const CATEGORY_LABELS: Record<CategoryId, string> = {
+  fajr: 'Fajr',
+  dhuhr: 'Dhuhr',
+  asr: 'Asr',
+  maghrib: 'Maghrib',
+  isha: 'Isha',
+  pre: 'Pre-prayer reminder',
+  quran: categoryLabel('quran'),
+  hadith: categoryLabel('hadith'),
+  dua: categoryLabel('dua'),
+  adhkarMorning: categoryLabel('adhkarMorning'),
+  adhkarEvening: categoryLabel('adhkarEvening'),
+  occasions: categoryLabel('occasions'),
+  custom: 'Your reminders',
+};
+
+export { FIVE };

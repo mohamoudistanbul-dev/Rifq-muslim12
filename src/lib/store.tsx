@@ -27,7 +27,8 @@ import {
   type PrayerKey,
 } from './prayer';
 import { hijriDate, type HijriDate } from './hijri';
-import { startAlertLoop, requestPermission } from './notify';
+import { startAlertLoop, requestPermission, upcomingOccasionAlerts } from './notify';
+import type { CategoryPrefs, CustomReminder } from './notifyPlan';
 
 export interface Prefs {
   notifyEnabled: boolean;
@@ -38,6 +39,10 @@ export interface Prefs {
   dailyQuran: boolean;
   dailyDua: boolean;
   dailyHadith: boolean;
+  /** Per-category time, sound, vibration and frequency for daily reminders. */
+  categories: CategoryPrefs;
+  /** Reminders the user created themselves. */
+  customReminders: CustomReminder[];
   quranFontSize: number;
   hour12: boolean;
 }
@@ -51,9 +56,52 @@ export const DEFAULT_PREFS: Prefs = {
   dailyQuran: true,
   dailyDua: false,
   dailyHadith: false,
+  categories: {
+    quran: { enabled: true, time: '08:00', sound: 'default', vibrate: true, frequency: 'daily' },
+    hadith: { enabled: false, time: '12:30', sound: 'default', vibrate: true, frequency: 'daily' },
+    dua: { enabled: false, time: '18:00', sound: 'default', vibrate: true, frequency: 'daily' },
+    adhkarMorning: { enabled: true, time: '06:30', sound: 'default', vibrate: true, frequency: 'daily' },
+    adhkarEvening: { enabled: true, time: '18:30', sound: 'default', vibrate: true, frequency: 'daily' },
+    occasions: { enabled: false, time: '09:00', sound: 'default', vibrate: true, frequency: 'daily' },
+  },
+  customReminders: [],
   quranFontSize: 28,
   hour12: true,
 };
+
+/**
+ * Merges saved preferences with the defaults, including the nested notification
+ * groups, and carries the older flat daily reminders into the new structure so
+ * an existing user does not lose a choice they already made.
+ */
+export function normalizePrefs(raw: unknown): Prefs {
+  const saved = (raw && typeof raw === 'object' ? raw : {}) as Partial<Prefs>;
+  const savedCats = (
+    saved.categories && typeof saved.categories === 'object' ? saved.categories : {}
+  ) as Partial<CategoryPrefs>;
+
+  const categories = { ...DEFAULT_PREFS.categories } as CategoryPrefs;
+  for (const key of Object.keys(categories) as (keyof CategoryPrefs)[]) {
+    categories[key] = { ...categories[key], ...(savedCats[key] || {}) };
+  }
+  if (!savedCats.quran && typeof saved.dailyQuran === 'boolean') {
+    categories.quran = { ...categories.quran, enabled: saved.dailyQuran };
+  }
+  if (!savedCats.hadith && typeof saved.dailyHadith === 'boolean') {
+    categories.hadith = { ...categories.hadith, enabled: saved.dailyHadith };
+  }
+  if (!savedCats.dua && typeof saved.dailyDua === 'boolean') {
+    categories.dua = { ...categories.dua, enabled: saved.dailyDua };
+  }
+
+  return {
+    ...DEFAULT_PREFS,
+    ...saved,
+    prayerAlerts: { ...DEFAULT_PREFS.prayerAlerts, ...(saved.prayerAlerts || {}) },
+    categories,
+    customReminders: Array.isArray(saved.customReminders) ? saved.customReminders : [],
+  };
+}
 
 export interface User {
   id: string;
@@ -165,7 +213,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [locState, setLocState] = useState<LocState>(place ? (place.manual ? 'idle' : 'granted') : 'idle');
   const [locError, setLocError] = useState('');
   const [calc, setCalcState] = useState<CalcOptions>(() => local.get<CalcOptions>('calc', DEFAULT_CALC));
-  const [prefs, setPrefsState] = useState<Prefs>(() => ({ ...DEFAULT_PREFS, ...local.get('prefs', {}) }));
+  const [prefs, setPrefsState] = useState<Prefs>(() => normalizePrefs(local.get('prefs', {})));
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [now, setNow] = useState(() => new Date());
@@ -439,10 +487,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // countdown, so a notification can never disagree with the clock on screen,
   // and every slot is deduplicated in localStorage (see lib/notify.ts).
   useEffect(() => {
-    const stop = startAlertLoop(
-      () => ({ times, city: place?.city || 'your city' }),
-      () => prefs
-    );
+    const stop = startAlertLoop(() => ({
+      times,
+      city: place?.city || 'your city',
+      prefs,
+      occasions: upcomingOccasionAlerts(new Date()),
+    }));
     return stop;
   }, [prefs, times, place]);
 

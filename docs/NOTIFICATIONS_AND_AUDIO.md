@@ -1,0 +1,92 @@
+# RIFQ Muslim — Notifications and Quran background audio
+
+This document states exactly what runs today, what depends on the device, and what
+still needs an account or credential. Nothing here is a claim of a completed
+real-device test.
+
+## 1. What the app does now
+
+### Floating banners while the app is open
+
+`src/lib/foreground.ts` is a small event bus. `showAlert()` in `src/lib/notify.ts`
+always publishes to it, so a user who is inside the app sees the alert even when
+Android/iOS notification permission is denied.
+
+`src/components/ForegroundAlerts.tsx` renders the banner stack (mounted once in
+`src/App.tsx`): RIFQ Muslim icon, title, message, **Open** (routes to the related
+screen) and dismiss. Banners expire after 9 seconds and are capped at three.
+
+A web page cannot draw a true system heads-up banner itself; the system banner
+comes from the notification itself (Android high-importance channel / iOS banner
+presentation), and the in-app banner covers the "user is looking at the app" case.
+
+### Prayer time with the app open
+
+When a prayer alert fires, the app also shows the branded Adhan screen: prayer
+name, local clock, the real Adhan recording with Play/Stop, **Prayer settings** and
+**Dismiss**. The recording is not started twice for one slot — the slot key in
+`localStorage` (`rifq.alerts.fired`) still guarantees one alert per slot, so
+reloading or opening a second tab cannot repeat it.
+
+### Background and closed app
+
+- **Browser tab:** `public/sw.js` shows the notification and routes a tap to
+  `data.url`. A closed browser tab cannot schedule anything; this is a platform
+  limit, and the Athan screen says so in plain words.
+- **Installed Android app:** the WebView bridge schedules the same plan through
+  `syncNativeSchedule()` into `PrayerAlarmReceiver` / `PrayerNotifications`
+  (exact alarms, boot re-registration).
+- **Push messages from the owner/admin:** `server/push.js` (web-push, VAPID) sends
+  to every registered device, stores `push_status` / `push_error` per recipient and
+  shows the counts in the Admin dashboard. Delivery is reported, never assumed.
+
+### Quran audio in the background
+
+`src/lib/quranPlayer.tsx` owns exactly one `<audio>` element for the whole app, so
+navigating between screens never destroys playback. It publishes Media Session
+metadata (Surah in Arabic and English, reciter, artwork), handles
+play/pause/previous/next/seek/stop from the lock screen, reports playback state and
+position, and restores the last Surah and position on return.
+
+Leaving the app does **not** pause recitation. The Now Playing screen has a
+**Background on/off** control (persisted as `rifq.quranAudio.background`); turning it
+off pauses the audio when the app is hidden. Interruptions (calls, headphone
+unplug) are handled by the platform audio session.
+
+## 2. What still needs a native build or an account
+
+| Item | State | What is required |
+| --- | --- | --- |
+| System notification banner, Android/iOS | Works when permission is granted | User taps **Allow notifications** |
+| Alerts with the app fully closed (push) | Server side complete | A signed APK/IPA with a push service; browsers use Web Push, which is already configured |
+| Firebase Cloud Messaging | Not configured | `google-services.json` + FCM server key for native push on Android |
+| APNs (iOS) | Not configured | Apple developer account, APNs key, `UIBackgroundModes: audio` + push entitlement |
+| Media foreground service (Android 8+) | Permissions declared in `AndroidManifest.xml` | `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, `MODIFY_AUDIO_SETTINGS` are declared; a `MediaSessionService` must be added in the native project to hold playback when the OS reclaims the WebView |
+| iOS background audio | Not configured | `Info.plist` → `UIBackgroundModes` → `audio` in the iOS project |
+| Real-device verification | Not performed here | Install the built APK/IPA on a phone and repeat the checks below |
+
+The WebView is already configured with `mediaPlaybackRequiresUserGesture = false`
+(`MainActivity.kt`), which is what allows recitation to start and continue without
+a fresh user gesture.
+
+## 3. Device test checklist (run on a real phone)
+
+Notifications:
+
+1. Deny permission, open a prayer test → in-app banner still appears.
+2. Grant permission, send a test → system banner appears at the top of the screen.
+3. Open the app, background it, wait for a reminder → notification appears.
+4. Close the app completely, wait for a reminder → notification appears (installed
+   app: exact alarm; browser: not possible, by design).
+5. Tap a notification → the related screen opens.
+6. Send an owner message from Admin → it appears in the inbox once and the
+   dashboard shows real sent/failed counts.
+
+Quran audio:
+
+1. Start a Surah, open WhatsApp → audio continues.
+2. Lock the screen → audio continues, lock-screen controls work.
+3. Press pause on the lock screen → playback pauses.
+4. Return to RIFQ Muslim → same Surah and position.
+5. Press Stop → playback ends and the notification disappears.
+6. Turn **Background off** → hiding the app pauses the audio.

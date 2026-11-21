@@ -5,8 +5,10 @@
  * all use INVITE_URL (src/lib/inviteLink.ts). This check runs the real server
  * (so the page renders exactly as deployed) and asserts:
  *
- *   - the QR <img> is byte-for-byte the QR encoding of INVITE_URL, computed here
- *     with the same library and options, so a scan cannot open anything else
+ *   - the rendered QR image, decoded pixel by pixel, reproduces exactly the QR
+ *     module matrix of INVITE_URL (computed here with the same library), so a
+ *     scan cannot open anything else. Byte comparison would be wrong: the
+ *     browser renders the PNG through canvas while Node uses pngjs.
  *   - the official URL is printed under the QR
  *   - the Download App button is an anchor whose href is INVITE_URL, opening a
  *     new tab with rel=noopener (works on Android and iOS without JS)
@@ -32,6 +34,7 @@ const chromium = pw.chromium ?? pw.default?.chromium;
 
 const PORT = 4187;
 const BASE = `http://127.0.0.1:${PORT}`;
+const MARGIN = Number(INVITE_QR_OPTIONS.margin);
 
 const failures: string[] = [];
 
@@ -69,19 +72,18 @@ async function main() {
     browser = await chromium.launch();
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
 
-    // Record what the page asks the OS/browser to do instead of really opening it.
-    await context.addInitScript(() => {
-      const w = window as any;
-      w.__opened = [];
-      w.__copied = [];
-      w.open = (u: any) => {
-        w.__opened.push(String(u));
-        return null;
-      };
-      Object.defineProperty(navigator, 'clipboard', {
-        configurable: true,
-        value: { writeText: async (s: any) => w.__copied.push(String(s)) },
-      });
+    // Injected as a raw string on purpose: a transpiled function would be
+    // rewritten with helpers (__name) that do not exist inside the page.
+    await context.addInitScript({
+      content: `
+        window.__opened = [];
+        window.__copied = [];
+        window.open = function (u) { window.__opened.push(String(u)); return null; };
+        Object.defineProperty(navigator, 'clipboard', {
+          configurable: true,
+          value: { writeText: function (s) { window.__copied.push(String(s)); return Promise.resolve(); } }
+        });
+      `,
     });
 
     const page = await context.newPage();
@@ -95,15 +97,49 @@ async function main() {
 
     // 2. The QR code encodes exactly the official URL.
     const qrSrc = await page.getAttribute('img[data-qr-target]', 'src');
-    const expectedQr = await QRCode.toDataURL(INVITE_URL, INVITE_QR_OPTIONS);
     const declared = await page.getAttribute('img[data-qr-target]', 'data-qr-target');
     check('QR code declares the official URL', declared === INVITE_URL, String(declared));
-    check(
-      'QR image encodes exactly that URL',
-      qrSrc === expectedQr,
-      'rendered QR does not match QRCode(INVITE_URL)'
-    );
     check('QR image is a PNG data URL', String(qrSrc).startsWith('data:image/png;base64,'));
+
+    // Expected matrix, straight from the same library the page uses.
+    const expected = QRCode.create(INVITE_URL, { errorCorrectionLevel: 'M' });
+    const size: number = expected.modules.size;
+    const expectedBits: number[] = Array.from(expected.modules.data as Uint8Array);
+
+    // Decode the rendered image back into a module matrix by sampling pixels.
+    const sampled: number[] = await page.evaluate(
+      ({ qrSize, margin }) => {
+        const img = document.querySelector('img[data-qr-target]') as HTMLImageElement | null;
+        if (!img) return [];
+        const width = img.naturalWidth || 320;
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = img.naturalHeight || 320;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return [];
+        ctx.drawImage(img, 0, 0);
+        const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        const scale = width / (qrSize + margin * 2);
+        const out: number[] = [];
+        for (let row = 0; row < qrSize; row++) {
+          for (let col = 0; col < qrSize; col++) {
+            const x = Math.round((margin + col + 0.5) * scale);
+            const y = Math.round((margin + row + 0.5) * scale);
+            const i = (y * width + x) * 4;
+            const lum = pixels[i] * 0.299 + pixels[i + 1] * 0.587 + pixels[i + 2] * 0.114;
+            out.push(lum < 128 ? 1 : 0);
+          }
+        }
+        return out;
+      },
+      { qrSize: size, margin: MARGIN }
+    );
+
+    check('QR image decoded to a full module grid', sampled.length === expectedBits.length,
+      `${sampled.length} sampled vs ${expectedBits.length} expected (${size}x${size})`);
+    const differing = sampled.reduce((n, bit, i) => n + (bit === expectedBits[i] ? 0 : 1), 0);
+    check('QR code encodes exactly the official URL', differing === 0, `${differing} modules differ`);
+
     check(
       'official URL printed under the QR',
       (await page.getByText(INVITE_URL, { exact: true }).count()) >= 1

@@ -511,49 +511,7 @@ CREATE TABLE IF NOT EXISTS kids_certificates (
 );
 CREATE INDEX IF NOT EXISTS idx_subscriptions_expiry ON subscriptions(expires_at);
 
-/* Quiz and Kid Academy content: seeded from verified banks, then admin-editable. */
-CREATE TABLE IF NOT EXISTS quiz_questions (
-  id TEXT PRIMARY KEY,
-  category TEXT NOT NULL,
-  level INTEGER NOT NULL DEFAULT 1,
-  question TEXT NOT NULL,
-  options TEXT NOT NULL DEFAULT '[]',
-  answer INTEGER NOT NULL DEFAULT 0,
-  explanation TEXT NOT NULL DEFAULT '',
-  reference TEXT NOT NULL DEFAULT '',
-  i18n TEXT NOT NULL DEFAULT '{}',
-  premium INTEGER NOT NULL DEFAULT 0,
-  active INTEGER NOT NULL DEFAULT 1,
-  updated_at TEXT NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_quiz_category ON quiz_questions(category, level, active);
-
-CREATE TABLE IF NOT EXISTS kids_lessons (
-  id TEXT PRIMARY KEY,
-  track TEXT NOT NULL,
-  title TEXT NOT NULL,
-  title_ar TEXT NOT NULL DEFAULT '',
-  summary TEXT NOT NULL DEFAULT '',
-  body TEXT NOT NULL DEFAULT '',
-  audio TEXT NOT NULL DEFAULT '',
-  quiz TEXT NOT NULL DEFAULT '[]',
-  premium INTEGER NOT NULL DEFAULT 0,
-  sort INTEGER NOT NULL DEFAULT 0,
-  active INTEGER NOT NULL DEFAULT 1,
-  updated_at TEXT NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_kids_track ON kids_lessons(track, sort);
-
-CREATE TABLE IF NOT EXISTS kids_progress (
-  user_id TEXT NOT NULL,
-  lesson_id TEXT NOT NULL,
-  completed INTEGER NOT NULL DEFAULT 0,
-  stars INTEGER NOT NULL DEFAULT 0,
-  updated_at TEXT NOT NULL,
-  PRIMARY KEY (user_id, lesson_id)
-);
+CREATE INDEX IF NOT EXISTS idx_kids_kind ON kids_lessons(kind, sort);
 `);
 
 export const newId = () => crypto.randomUUID();

@@ -405,6 +405,94 @@ CREATE TABLE IF NOT EXISTS analytics_events (
 
 CREATE INDEX IF NOT EXISTS idx_analytics_kind_day ON analytics_events(kind, day);
 CREATE INDEX IF NOT EXISTS idx_analytics_day ON analytics_events(day);
+
+/*
+ * Premium subscriptions.
+ *
+ * premium_plans is the admin-editable catalogue. A subscription row is only
+ * ever written after the server has verified a purchase with Google Play or
+ * the App Store (or a Super Admin made an explicit manual grant). The client
+ * never sends an expiry date and never grants access by itself: entitlement is
+ * derived from these rows on every request.
+ */
+CREATE TABLE IF NOT EXISTS premium_plans (
+  id TEXT PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  title TEXT NOT NULL,
+  price_cents INTEGER NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'USD',
+  period TEXT NOT NULL DEFAULT 'month',
+  product_id TEXT NOT NULL DEFAULT '',
+  benefits TEXT NOT NULL DEFAULT '[]',
+  active INTEGER NOT NULL DEFAULT 1,
+  sort INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  provider TEXT NOT NULL DEFAULT 'google',
+  plan_code TEXT NOT NULL DEFAULT '',
+  product_id TEXT NOT NULL DEFAULT '',
+  purchase_token TEXT NOT NULL,
+  order_id TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending',
+  started_at TEXT,
+  expires_at TEXT,
+  auto_renew INTEGER NOT NULL DEFAULT 0,
+  last_verified_at TEXT,
+  detail TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  UNIQUE(provider, purchase_token)
+);
+
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_expiry ON subscriptions(expires_at);
+
+/* Quiz and Kid Academy content: seeded from verified banks, then admin-editable. */
+CREATE TABLE IF NOT EXISTS quiz_questions (
+  id TEXT PRIMARY KEY,
+  category TEXT NOT NULL,
+  level INTEGER NOT NULL DEFAULT 1,
+  question TEXT NOT NULL,
+  options TEXT NOT NULL DEFAULT '[]',
+  answer INTEGER NOT NULL DEFAULT 0,
+  explanation TEXT NOT NULL DEFAULT '',
+  reference TEXT NOT NULL DEFAULT '',
+  i18n TEXT NOT NULL DEFAULT '{}',
+  premium INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_quiz_category ON quiz_questions(category, level, active);
+
+CREATE TABLE IF NOT EXISTS kids_lessons (
+  id TEXT PRIMARY KEY,
+  track TEXT NOT NULL,
+  title TEXT NOT NULL,
+  title_ar TEXT NOT NULL DEFAULT '',
+  summary TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  audio TEXT NOT NULL DEFAULT '',
+  quiz TEXT NOT NULL DEFAULT '[]',
+  premium INTEGER NOT NULL DEFAULT 0,
+  sort INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_kids_track ON kids_lessons(track, sort);
+
+CREATE TABLE IF NOT EXISTS kids_progress (
+  user_id TEXT NOT NULL,
+  lesson_id TEXT NOT NULL,
+  completed INTEGER NOT NULL DEFAULT 0,
+  stars INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, lesson_id)
+);
 `);
 
 export const newId = () => crypto.randomUUID();
@@ -450,6 +538,12 @@ function ensureColumn(table, column, definition) {
 ensureColumn('users', 'badge_verified', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('users', 'badge_verified_at', 'TEXT');
 ensureColumn('users', 'badge_verified_by', 'TEXT');
+
+/*
+ * Kids Academy certificate name. Kept separate from the account name so a
+ * parent can print a child's certificate without renaming the account.
+ */
+ensureColumn('users', 'kids_name', 'TEXT');
 
 export function publicUser(row) {
   if (!row) return null;

@@ -268,7 +268,14 @@ async function main() {
     }
 
     const sw = fs.readFileSync('public/sw.js', 'utf8');
-    check('the service worker renders the expanded image', /image:/.test(sw) && /showNotification/.test(sw));
+    check(
+      'the service worker renders the expanded image',
+      /options\.image\s*=\s*data\.image/.test(sw) && /showNotification/.test(sw)
+    );
+    check(
+      'the service worker forwards the buttons to the device',
+      /options\.actions\s*=\s*actions/.test(sw) && /PRAYER_ACTIONS/.test(sw)
+    );
     check('the service worker handles the prayed action', /'prayed'/.test(sw) && /prayers\/confirm/.test(sw));
     check('the service worker handles the snooze action', /'snooze'/.test(sw) && /prayers\/snooze/.test(sw));
     check('the service worker keeps actions when the session expired', /rifq-sw-actions/.test(sw));

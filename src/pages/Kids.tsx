@@ -51,7 +51,7 @@ const KIND_ICON: Record<string, IconName> = {
   surah: 'quran',
   pillar: 'star',
   manner: 'check',
-  story: 'sparkle',
+  story: 'book',
 };
 
 export default function Kids() {

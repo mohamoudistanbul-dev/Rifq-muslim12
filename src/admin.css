@@ -339,3 +339,17 @@
     grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
   }
 }
+
+/* Mushaf reading view (Quran text-only page) */
+.mushaf-page { padding: 18px 16px; }
+.mushaf-text {
+  text-align: justify;
+  text-align-last: center;
+  word-spacing: 0.06em;
+}
+.ayah-marker {
+  color: var(--gold-deep);
+  font-size: 0.78em;
+  font-weight: 700;
+  white-space: nowrap;
+}

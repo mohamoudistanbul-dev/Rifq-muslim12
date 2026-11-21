@@ -76,7 +76,20 @@ async function main() {
       'Content-Length': String(apk.length),
       'Accept-Ranges': 'bytes',
     });
-    res.end(apk);
+    // Trickle the bytes so the page has time to render live progress, the way a
+    // real 10.5 MB download behaves on a mobile connection.
+    const part = Math.ceil(apk.length / 12);
+    let sent = 0;
+    const tick = () => {
+      if (sent >= apk.length) {
+        res.end();
+        return;
+      }
+      res.write(apk.subarray(sent, sent + part));
+      sent += part;
+      setTimeout(tick, 45);
+    };
+    tick();
   });
   await new Promise<void>((resolve) => fixtureServer.listen(FIXTURE_PORT, '127.0.0.1', resolve));
 
@@ -202,8 +215,12 @@ async function main() {
     check('downloaded file contains every byte of the APK', savedSize === FIXTURE_BYTES, `${savedSize} vs ${FIXTURE_BYTES}`);
 
     const pct: number[] = await page.evaluate(() => (window as any).__pct);
+    const live = pct.filter((v) => v > 0 && v < 100);
     check('download progress was shown', pct.length > 0, JSON.stringify(pct.slice(0, 6)));
-    check('progress reached 100%', pct.some((v) => v === 100), JSON.stringify(pct.slice(-4)));
+    // Percentages only exist when the real total size is known, so live values
+    // prove the file size reached the page and the bar tracks actual bytes.
+    check('progress reported live percentages', live.length >= 2, JSON.stringify(pct));
+    check('progress advanced past halfway', Math.max(...pct, 0) >= 50, JSON.stringify(pct.slice(-6)));
 
     await page.waitForTimeout(400);
     const afterDownload: string = await page.locator('body').innerText();

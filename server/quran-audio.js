@@ -122,6 +122,16 @@ export function validSurah(n) {
   return Number.isInteger(n) && n >= 1 && n <= 114;
 }
 
+/**
+ * The 114-surah catalogue loaded from data/quran-surahs.json.
+ *
+ * Exposed so the owner's Premium Management registry lists the real Quran
+ * content it controls instead of guessing surah names.
+ */
+export function surahCatalog() {
+  return SURAHS;
+}
+
 /** Real ranged request against the CDN: proves the URL exists and is audio. */
 export async function probeAudio(url, timeoutMs = 8000) {
   const controller = new AbortController();

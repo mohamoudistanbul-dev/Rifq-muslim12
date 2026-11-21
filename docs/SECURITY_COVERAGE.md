@@ -6,6 +6,16 @@ This document records exactly what the automated dependency scan covers, what it
 reports, what it **cannot** cover in this environment, and how to close the rest.
 It is **not** a statement that the application is secure.
 
+Latest revision (notification system fix, rev 12 of this task): the scan was re-run and
+returned the same result — **444 packages, 0 advisories, 0 blocking, status `incomplete`**.
+This revision added **no dependency**: `package-lock.json` is unchanged and `package.json`
+only gained the `verify:notifications` script (`node scripts/verify-notifications.mjs`).
+The `incomplete` status is the attribution gap of §3 — it is **not** an unscanned package
+and not a finding. All four lockfiles the CI matrix targets are present in the repository
+(`package-lock.json`, `android/app/gradle.lockfile`, `android/buildscript-gradle.lockfile`,
+`deps-audit/gradle.lockfile`), so the workflow has complete inputs; it has still **not been
+executed here**, which is the only reason the AppJet-side status stays `incomplete` (§3.4).
+
 Latest revision (Blue Tick verification system, rev 16): the scan was re-run and returned the
 same result — **444 packages, 0 advisories, 0 blocking, status `incomplete`**. This revision
 added **no dependency**: `package.json` only gained the `verify:verification` script

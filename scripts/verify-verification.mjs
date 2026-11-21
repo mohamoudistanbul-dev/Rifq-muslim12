@@ -367,7 +367,7 @@ async function main() {
     const trail = await admin.get('/admin/verifications');
     check('the badge history loads', trail.status === 200 && Array.isArray(trail.json?.decisions));
     const actions = (trail.json?.decisions || []).map((d) => d.action);
-    check('the grant is in the decision history', actions.includes('grant'), actions.slice(0, 5).join(', '));
+    check('the approval is in the decision history', actions.includes('approve'), actions.slice(0, 5).join(', '));
     check('the revoke is in the decision history', actions.includes('revoke'));
     const revokeRow = (trail.json?.decisions || []).find((d) => d.action === 'revoke');
     check('the revoke reason is recorded', String(revokeRow?.reason || '').includes('could not be confirmed'), String(revokeRow?.reason));

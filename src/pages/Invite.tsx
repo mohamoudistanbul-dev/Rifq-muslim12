@@ -296,7 +296,7 @@ export default function Invite() {
         </button>
 
         <button className="btn btn-soft btn-block" style={{ marginTop: 8 }} onClick={() => void handleCopyLink()}>
-          <AppIcon name="link" size={17} /> {t('COPY LINK')}
+          <AppIcon name="copy" size={17} /> {t('COPY LINK')}
         </button>
 
         {ios ? (

@@ -34,6 +34,7 @@ html[data-theme='dark'] {
   --text: #f6f1e2;
   --text-soft: #d8e2da;
   --muted: #9fb5a8;
+  --gold-text: var(--gold);
   --accent: var(--gold);
   --on-accent: #10261d;
   --glass: rgba(10, 53, 39, 0.72);
@@ -51,7 +52,10 @@ html[data-theme='light'] {
   --border-soft: rgba(169, 132, 31, 0.22);
   --text: #0b2a20;
   --text-soft: #21453a;
-  --muted: #5d776b;
+  --muted: #4a6156;
+  /* Gold as *text* needs more depth than the decorative gold on light
+     surfaces: #d4af37 on white is only 2.1:1, which is unreadable. */
+  --gold-text: #7a5c12;
   --accent: var(--gold-deep);
   --on-accent: #fffdf5;
   --glass: rgba(255, 255, 255, 0.82);
@@ -559,7 +563,7 @@ html[dir='rtl'] .switch input:checked + .track::after {
 .chip.active {
   background: linear-gradient(135deg, rgba(212, 175, 55, 0.22), rgba(212, 175, 55, 0.08));
   border-color: var(--gold);
-  color: var(--gold);
+  color: var(--gold-text);
   font-weight: 600;
 }
 
@@ -816,7 +820,7 @@ html[data-theme='light'] .bottom-nav {
   border-radius: 999px;
   background: rgba(212, 175, 55, 0.14);
   border: 1px solid rgba(212, 175, 55, 0.35);
-  color: var(--gold);
+  color: var(--gold-text);
   font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.4px;

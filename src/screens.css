@@ -180,14 +180,11 @@ html[data-theme='dark'] .chip.is-active {
 .athan-time {
   font-size: 0.9rem;
   font-weight: 700;
-  color: var(--gold-deep);
+  color: var(--gold-text);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-html[data-theme='dark'] .athan-time {
-  color: var(--gold);
-}
 
 .athan-note {
   font-size: 0.78rem;
@@ -227,4 +224,12 @@ html[data-theme='dark'] .athan-time {
 
 html[data-theme='light'] .athan-row input[type='checkbox'] {
   accent-color: var(--emerald);
+}
+
+/* Gold used as text needs the deeper light-theme tone to stay readable. */
+html[data-theme='light'] .hadith-grade,
+html[data-theme='light'] .athan-time,
+html[data-theme='light'] .badge-gold,
+html[data-theme='light'] .chip.active {
+  color: var(--gold-text);
 }

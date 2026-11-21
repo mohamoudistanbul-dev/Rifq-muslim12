@@ -262,6 +262,35 @@ export function QuranReader() {
 
   const audioUrl = `https://cdn.islamic.network/quran/audio-surah/128/${reciter}/${surahNumber}.mp3`;
 
+  // Reading view. 'mushaf' is the continuous Arabic page; 'study' keeps the
+  // verse cards with translation. Both render the same fetched text.
+  const [view, setView] = useState<'mushaf' | 'study'>(() => local.get('quranView', 'study'));
+  const [jumpValue, setJumpValue] = useState('');
+  useEffect(() => local.set('quranView', view), [view]);
+
+  const juzRange = data && data.ayahs.length
+    ? data.ayahs[0].juz === data.ayahs[data.ayahs.length - 1].juz
+      ? `Juz ${data.ayahs[0].juz}`
+      : `Juz ${data.ayahs[0].juz}–${data.ayahs[data.ayahs.length - 1].juz}`
+    : '';
+
+  /** Resume point: the verse the reader is actually at, not always the first. */
+  const rememberAyah = (ayahNo: number) => {
+    if (!data) return;
+    local.set('lastRead', { surah: data.number, ayah: ayahNo, name: data.englishName });
+  };
+
+  const goToAyah = (raw: string) => {
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 1 || (data && n > data.ayahCount)) {
+      toast(t('Enter an ayah number from this surah'), 'error');
+      return;
+    }
+    const el = document.getElementById(`ayah-${n}`) || document.getElementById(`m-ayah-${n}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    rememberAyah(n);
+  };
+
   return (
     <>
       <TopBar back />
@@ -282,6 +311,9 @@ export function QuranReader() {
           <>
             <div className="card">
               <p className="arabic-lg center" dir="rtl" lang="ar" style={{ margin: 0 }}>{data.name}</p>
+              <p className="tiny muted center" style={{ margin: '6px 0 0' }}>
+                {data.ayahCount} {t('ayahs')} · {juzRange}
+              </p>
               <div className="divider" />
               <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
                 <button className="btn btn-primary btn-sm" onClick={toggleAudio}>
@@ -315,6 +347,28 @@ export function QuranReader() {
                   {t('Select text')}
                 </button>
               </div>
+              <div className="row" style={{ gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                <button
+                  className={`btn btn-sm ${view === 'mushaf' ? 'btn-primary' : 'btn-soft'}`}
+                  aria-pressed={view === 'mushaf'}
+                  onClick={() => setView(view === 'mushaf' ? 'study' : 'mushaf')}
+                >
+                  {view === 'mushaf' ? t('Mushaf view') : t('Verse view')}
+                </button>
+                <input
+                  className="input"
+                  inputMode="numeric"
+                  style={{ maxWidth: 120 }}
+                  placeholder={t('Go to ayah')}
+                  aria-label={t('Go to ayah')}
+                  value={jumpValue}
+                  onChange={(e) => setJumpValue(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && goToAyah(jumpValue)}
+                />
+                <button className="btn btn-soft btn-sm" onClick={() => goToAyah(jumpValue)}>
+                  {t('Go')}
+                </button>
+              </div>
               <audio ref={audioRef} src={audioUrl} onEnded={() => setPlaying(false)} preload="none" />
               <div className="field" style={{ marginTop: 12 }}>
                 <label>{t('Reciter')}</label>
@@ -341,9 +395,42 @@ export function QuranReader() {
               </p>
             )}
 
-            <div className={`stack${selectMode ? ' selection-enabled' : ''}`} style={{ gap: 10 }}>
+            {view === 'mushaf' && (
+              <article className={`card mushaf-page${selectMode ? ' selection-enabled' : ''}`}>
+                <p
+                  className="arabic mushaf-text"
+                  dir="rtl"
+                  lang="ar"
+                  data-selectable
+                  style={{ fontSize: prefs.quranFontSize, lineHeight: 2.4, margin: 0 }}
+                >
+                  {data.ayahs.map((ayah) => (
+                    <span key={ayah.number} id={`m-ayah-${ayah.number}`} style={{ scrollMarginTop: 90 }}>
+                      {ayah.text}
+                      <span className="ayah-marker" aria-label={`${surahNumber}:${ayah.number}`}>
+                        {' '}۝{ayah.number}{' '}
+                      </span>
+                    </span>
+                  ))}
+                </p>
+                <p className="tiny muted" style={{ marginBottom: 0 }}>
+                  {t('Continuous Uthmani text. Switch to verse view for translation and bookmarks.')}
+                </p>
+              </article>
+            )}
+
+            <div
+              className={`stack${selectMode ? ' selection-enabled' : ''}`}
+              style={{ gap: 10, display: view === 'mushaf' ? 'none' : undefined }}
+            >
               {data.ayahs.map((ayah) => (
-                <article key={ayah.number} id={`ayah-${ayah.number}`} className="card" style={{ scrollMarginTop: 90 }}>
+                <article
+                  key={ayah.number}
+                  id={`ayah-${ayah.number}`}
+                  className="card"
+                  style={{ scrollMarginTop: 90 }}
+                  onClick={() => rememberAyah(ayah.number)}
+                >
                   <div className="row" style={{ justifyContent: 'space-between' }}>
                     <span className="ayah-num">{surahNumber}:{ayah.number}</span>
                     <span className="tiny muted">Juz {ayah.juz} · {t('Page')} {ayah.page}</span>

@@ -102,15 +102,26 @@ contentRouter.get('/quran/page/:page', async (req, res) => {
   }
   const translation = String(req.query.translation || 'en.sahih').replace(/[^a-z0-9.\-]/gi, '');
   try {
-    const data = await fetchJson(
-      `https://api.alquran.cloud/v1/page/${page}/editions/quran-uthmani,${translation}`,
+    /*
+     * The upstream page endpoint serves one edition per request; a comma-separated
+     * editions list returns 404 for pages. Fetch the verified Uthmani page first,
+     * then the translation, so a translation outage still leaves readable scripture.
+     */
+    const arabicData = await fetchJson(
+      `https://api.alquran.cloud/v1/page/${page}/quran-uthmani`,
       { ttl: 604800 }
     );
-    const [arabic, translated] = data.data;
+    const arabic = arabicData.data;
+    const translated = await fetchJson(
+      `https://api.alquran.cloud/v1/page/${page}/${translation}`,
+      { ttl: 604800 }
+    )
+      .then((d) => d.data)
+      .catch(() => null);
     res.json({
       page,
       totalPages: 604,
-      translationEdition: translated.edition.identifier,
+      translationEdition: translated?.edition?.identifier || null,
       ayahs: arabic.ayahs.map((a, i) => ({
         number: a.numberInSurah,
         surah: a.surah?.number,
@@ -121,7 +132,7 @@ contentRouter.get('/quran/page/:page', async (req, res) => {
         page: a.page,
         hizbQuarter: a.hizbQuarter,
         sajda: !!a.sajda,
-        translation: translated.ayahs[i]?.text || '',
+        translation: translated?.ayahs?.[i]?.text || '',
       })),
       source: 'AlQuran Cloud — Quran Uthmani text with the selected translation',
     });

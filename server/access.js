@@ -82,7 +82,12 @@ async function catalogEntries() {
 
   try {
     const audio = await import('./quran-audio.js');
-    const surahs = Array.isArray(audio.SURAHS) ? audio.SURAHS : [];
+    const surahs =
+      typeof audio.surahCatalog === 'function'
+        ? audio.surahCatalog()
+        : Array.isArray(audio.SURAHS)
+          ? audio.SURAHS
+          : [];
     surahs.forEach((surah, index) => {
       const number = Number(surah?.number) || index + 1;
       const label = [surah?.englishName, surah?.englishNameTranslation, surah?.name, surah?.latin]
@@ -317,6 +322,10 @@ accessRouter.get('/access/check', async (req, res) => {
   const key = String(req.query.key || '').trim();
   if (!key) return res.status(400).json({ error: 'A content key is required.' });
   const decision = accessFor(req, key);
+  // Staff may inspect a disabled or unpublished item; ordinary visitors get 404.
+  if (isAdminRole(req.user?.role) && decision.item) {
+    return res.status(200).json({ ...decision, staff: true });
+  }
   res.status(decision.allowed ? 200 : decision.locked ? 402 : 404).json(decision);
 });
 

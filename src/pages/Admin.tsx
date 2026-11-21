@@ -5,6 +5,7 @@ import VerifiedBadge from '../components/VerifiedBadge';
 import { useStore } from '../lib/store';
 import { get, patch, post, put, del } from '../lib/api';
 import { PremiumAdmin, QuizAdmin, KidsAdmin } from './AdminPanels';
+import PremiumManagement from '../components/PremiumManagement';
 import AnnouncementsPanel from '../components/AnnouncementsPanel';
 import '../admin.css';
 
@@ -22,6 +23,7 @@ type Tab =
   | 'activity'
   | 'security'
   | 'premium'
+  | 'premium-content'
   | 'quiz'
   | 'kids';
 
@@ -226,6 +228,7 @@ const TABS: { id: Tab; label: string; superOnly?: boolean }[] = [
   { id: 'activity', label: 'Activity log' },
   { id: 'security', label: 'Security' },
   { id: 'premium', label: 'Premium' },
+  { id: 'premium-content', label: 'Premium management' },
   { id: 'quiz', label: 'Quiz bank' },
   { id: 'kids', label: 'Kid Academy' },
 ];
@@ -2154,6 +2157,7 @@ export default function Admin() {
           {!loading && tab === 'activity' ? renderActivity() : null}
           {!loading && tab === 'security' ? renderSecurity() : null}
           {!loading && tab === 'premium' ? <PremiumAdmin /> : null}
+          {!loading && tab === 'premium-content' ? <PremiumManagement /> : null}
           {!loading && tab === 'quiz' ? <QuizAdmin /> : null}
           {!loading && tab === 'kids' ? <KidsAdmin /> : null}
         </div>

@@ -24,7 +24,7 @@ import { hadithRouter } from './hadith.js';
 import { publicBaseUrl, renderIndex } from './publicUrl.js';
 import { geoRouter } from './geo.js';
 import { adminRouter, UPLOAD_DIR } from './admin.js';
-import { downloadRouter, apkSource, APK_PATH, APK_FILENAME } from './download.js';
+import { downloadRouter, apkSource, apkStatus, APK_PATH, APK_FILENAME } from './download.js';
 import { seedSuperAdmin, SUPER_ADMIN_EMAIL } from './seed.js';
 import { donateUrl, donateCurrency } from './donate.js';
 
@@ -68,7 +68,7 @@ seedSuperAdmin();
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, app: 'RIFQ Muslim', time: nowIso() }));
 
-app.get('/api/config', (req, res) => {
+app.get('/api/config', async (req, res) => {
   res.json({
     appName: getSetting('app_name', 'RIFQ Muslim'),
     tagline: getSetting('tagline', 'Your Faith, Your Daily Companion'),
@@ -92,7 +92,7 @@ app.get('/api/config', (req, res) => {
     // RIFQ-Muslim.apk, even though the file itself lives in Cloudflare R2.
     apkUrl: APK_PATH,
     apkFilename: APK_FILENAME,
-    apkConfigured: Boolean(apkSource()),
+    apkConfigured: Boolean(await apkStatus()),
     communityEnabled: getSetting('community_enabled', 'true') === 'true',
     announcement:
       getSetting('announcement_active', 'false') === 'true'

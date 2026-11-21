@@ -66,6 +66,9 @@ function Toggle({
           onChange={(e) => onChange(e.target.checked)}
           aria-label={label}
         />
+        {/* The styles draw the toggle on .track; without it the row showed an
+            empty label and the control was invisible. */}
+        <span className="track" aria-hidden="true" />
       </label>
     </div>
   );

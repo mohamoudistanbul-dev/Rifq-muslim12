@@ -156,7 +156,7 @@ export const QUIZ_BANK = [
   {
     id: 'purity-half', category: 'hadith', level: 2, reference: 'Sahih Muslim 223',
     question: ['“Purity is half of …” — complete the hadith.', '«الطهور شطر…» أكمل الحديث.', '“Nadaafaddu waa badh …” buuxi xadiiska.'],
-    options: ['faith', 'الإيمان', 'iimaanka'], ['charity', 'الصدقة', 'sadaqada'], ['prayer', 'الصلاة', 'salaadda'], ['patience', 'الصبر', 'samirka']],
+    options: [['faith', 'الإيمان', 'iimaanka'], ['charity', 'الصدقة', 'sadaqada'], ['prayer', 'الصلاة', 'salaadda'], ['patience', 'الصبر', 'samirka']],
     answer: 0,
     explanation: ['“Purity is half of faith.”', '«الطهور شطر الإيمان».', '“Nadaafaddu waa badh iimaanka.”'],
   },

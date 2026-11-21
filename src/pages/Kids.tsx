@@ -3,6 +3,7 @@ import { Page } from '../components/Shell';
 import { AppIcon, type IconName } from '../components/Icons';
 import { useStore } from '../lib/store';
 import { get, post, ApiError } from '../lib/api';
+import PremiumGate from '../components/PremiumGate';
 
 /**
  * Kid Academy.
@@ -22,6 +23,8 @@ interface Lesson {
   title: Lang3;
   body: any;
   progress: { done: boolean; stars: number };
+  /** Server says this lesson is Premium content the current account cannot open. */
+  locked?: boolean;
 }
 
 interface Stats {
@@ -64,6 +67,7 @@ export default function Kids() {
   const [kinds, setKinds] = useState<{ id: string; label: string }[]>([]);
   const [filter, setFilter] = useState('all');
   const [open, setOpen] = useState<Lesson | null>(null);
+  const [gate, setGate] = useState<Lesson | null>(null);
   const [tab, setTab] = useState<'learn' | 'parent'>('learn');
   const [loading, setLoading] = useState(true);
 
@@ -355,15 +359,39 @@ export default function Kids() {
 
             {loading ? <div className="empty">{t('Loading lessons…')}</div> : null}
 
+            {gate ? (
+              <div className="stack" style={{ gap: 8 }}>
+                <PremiumGate itemTitle={gate.title[index]} />
+                <button className="btn btn-ghost btn-sm" onClick={() => setGate(null)}>
+                  {t('Back to lessons')}
+                </button>
+              </div>
+            ) : null}
+
             <div className="stack" style={{ gap: 8 }}>
               {visible.map((lesson) => (
-                <button key={lesson.id} className="card kid-row" onClick={() => { setOpen(lesson); setAnswer(null); setAnswered(false); }}>
+                <button
+                  key={lesson.id}
+                  className="card kid-row"
+                  onClick={() => {
+                    if (lesson.locked) {
+                      setGate(lesson);
+                      return;
+                    }
+                    setOpen(lesson);
+                    setAnswer(null);
+                    setAnswered(false);
+                  }}
+                >
                   <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
                     <div className="row" style={{ alignItems: 'center', gap: 10 }}>
                       <span className="kid-badge"><AppIcon name={KIND_ICON[lesson.kind] || 'star'} size={18} /></span>
                       <div>
                         <div className="small" style={{ fontWeight: 600 }}>{lesson.title[index]}</div>
-                        <div className="muted tiny">{t(lesson.kindLabel)}</div>
+                        <div className="muted tiny">
+                          {t(lesson.kindLabel)}
+                          {lesson.locked ? ` · ${t('Premium')}` : ''}
+                        </div>
                       </div>
                     </div>
                     <span className="tiny">{lesson.progress.done ? '★'.repeat(Math.max(1, lesson.progress.stars)) : '☆'}</span>

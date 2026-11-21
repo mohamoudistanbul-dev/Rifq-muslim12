@@ -79,6 +79,12 @@ function isLarge(fontSize, fontWeight) {
 
 function record(page, theme, selector, data) {
   if (!data) return;
+  // Gradient-clipped text paints itself through background-image with a
+  // transparent colour; its contrast cannot be read from `color`.
+  if (data.fgAlpha < 0.2) {
+    results.push({ page, theme, selector, skipped: true, fg: data.fg, bg: data.bg });
+    return;
+  }
   const fg = parseColor(data.fg);
   const bg = parseColor(data.bg);
   if (!fg || !bg) return;
@@ -87,7 +93,17 @@ function record(page, theme, selector, data) {
   const min = large ? 3 : 4.5;
   const ok = r >= min;
   if (!ok) failures += 1;
-  results.push({ page, theme, selector, ratio: Number(r.toFixed(2)), min, ok });
+  results.push({
+    page,
+    theme,
+    selector,
+    ratio: Number(r.toFixed(2)),
+    min,
+    ok,
+    fg: data.fg,
+    bg: data.bg,
+    text: data.text,
+  });
 }
 
 async function waitForServer(url, timeoutMs = 60000) {
@@ -141,6 +157,7 @@ const measure = (selector) => {
   return {
     fg: `rgb(${fg.r},${fg.g},${fg.b})`,
     bg: `rgb(${bg.r},${bg.g},${bg.b})`,
+    fgAlpha: fg.a,
     fontSize: parseFloat(cs.fontSize),
     fontWeight: cs.fontWeight,
     text: (el.textContent || '').trim().slice(0, 40),
@@ -190,10 +207,16 @@ async function main() {
 
   const width = Math.max(...results.map((r) => r.selector.length));
   for (const r of results) {
+    if (r.skipped) {
+      console.log(
+        `skip ${r.page.padEnd(8)} ${r.theme.padEnd(5)} ${r.selector.padEnd(width)} transparent text on ${r.bg}`
+      );
+      continue;
+    }
     console.log(
       `${r.ok ? 'ok  ' : 'FAIL'} ${r.page.padEnd(8)} ${r.theme.padEnd(5)} ${r.selector.padEnd(width)} ${String(
         r.ratio
-      ).padStart(6)}:1 (min ${r.min})`
+      ).padStart(6)}:1 (min ${r.min})  ${r.fg} on ${r.bg}  "${r.text}"`
     );
   }
 

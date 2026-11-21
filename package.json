@@ -16,7 +16,8 @@
     "verify:admin": "node scripts/verify-admin.mjs",
     "verify:download": "node scripts/verify-download.mjs",
     "geo:build": "node scripts/build-geo-data.mjs",
-    "verify:touch": "node scripts/verify-text-selection.mjs"
+    "verify:touch": "node scripts/verify-text-selection.mjs",
+    "verify:invite": "tsx scripts/verify-invite.ts"
   },
   "dependencies": {
     "adhan": "^4.4.3",

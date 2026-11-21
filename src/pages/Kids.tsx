@@ -132,7 +132,7 @@ export default function Kids() {
                 <h3 className="section-title" style={{ margin: 0 }}>{m.title}</h3>
                 <label className="switch">
                   <input type="checkbox" checked={progress.manners.includes(m.title)} onChange={() => toggleManner(m.title)} />
-                  <span />
+                  <span className="track" aria-hidden="true" />
                 </label>
               </div>
               <p className="small" style={{ margin: '6px 0 0' }}>{m.detail}</p>

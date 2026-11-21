@@ -96,7 +96,7 @@ export default function Tracker() {
               <span className="small" style={{ textTransform: 'capitalize' }}>{t(p)}</span>
               <label className="switch">
                 <input type="checkbox" checked={Boolean(data.prayers?.[p])} onChange={() => togglePrayer(p)} />
-                <span />
+                <span className="track" aria-hidden="true" />
               </label>
             </div>
           ))}
@@ -111,7 +111,7 @@ export default function Tracker() {
               <span className="small">{t(d.label)}</span>
               <label className="switch">
                 <input type="checkbox" checked={(data.deeds || []).includes(d.id)} onChange={() => toggleDeed(d.id)} />
-                <span />
+                <span className="track" aria-hidden="true" />
               </label>
             </div>
           ))}
@@ -152,7 +152,7 @@ export default function Tracker() {
           <span className="small">{t('Fasting today')}</span>
           <label className="switch">
             <input type="checkbox" checked={Boolean(data.fasting)} onChange={() => void persist({ ...data, fasting: !data.fasting })} />
-            <span />
+            <span className="track" aria-hidden="true" />
           </label>
         </div>
         {saving && <p className="tiny muted">{t('Saving…')}</p>}

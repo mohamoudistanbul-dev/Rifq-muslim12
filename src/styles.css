@@ -497,10 +497,20 @@ html[dir='rtl'] .select {
   gap: 10px;
   cursor: pointer;
   user-select: none;
+  position: relative;
 }
 
+/* Visually hidden, but still focusable and announced, so keyboard and screen
+   reader users can operate the toggle. Hiding it with display:none removed the
+   control from the accessibility tree entirely. */
 .switch input {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
 }
 
 .switch .track {
@@ -538,6 +548,11 @@ html[dir='rtl'] .select {
 
 html[dir='rtl'] .switch input:checked + .track::after {
   transform: translateX(-20px);
+}
+
+.switch input:focus-visible + .track {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
 }
 
 /* -------------------------------- chips -------------------------------- */

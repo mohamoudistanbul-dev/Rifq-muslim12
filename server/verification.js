@@ -268,29 +268,14 @@ verificationRouter.post('/badge/request', requireAuth, rateLimit({ windowMs: 10 
 
 /* ----------------------------- notifications ------------------------------ */
 
-verificationRouter.get('/notifications', requireAuth, (req, res) => {
-  const notifications = db
-    .prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 30')
-    .all(req.user.id);
-  res.json({ notifications, unread: unreadNotifications(req.user.id) });
-});
-
-verificationRouter.post('/notifications/read', requireAuth, (req, res) => {
-  const id = String(req.body?.id || '');
-  if (id) {
-    db.prepare('UPDATE notifications SET read_at = ? WHERE id = ? AND user_id = ?').run(
-      nowIso(),
-      id,
-      req.user.id
-    );
-  } else {
-    db.prepare('UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL').run(
-      nowIso(),
-      req.user.id
-    );
-  }
-  res.json({ ok: true, unread: unreadNotifications(req.user.id) });
-});
+/*
+ * The user inbox lives in server/index.js (GET /api/notifications and
+ * POST /api/notifications/read). It used to be implemented here as well, and
+ * because this router is mounted on /api before those routes, the older copy
+ * silently answered every request with raw database rows — which is why the
+ * inbox and read state did not match what the app expected. Keep exactly one
+ * implementation: the one in index.js.
+ */
 
 /** Used by the admin routes so a decision never silently fails to notify. */
 export function notifyVerificationDecision(userId, { approved, reason = '' }) {

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useLocation } from 'react-router-dom';
 import { Page, Loading, ErrorBox, TopBar } from '../components/Shell';
 import { AppIcon } from '../components/Icons';
 import { useStore } from '../lib/store';
@@ -216,17 +216,23 @@ export function QuranReader() {
   const [startPage, setStartPage] = useState<number | null>(null);
   const [notice, setNotice] = useState('');
 
-  // The Quran index can deep-link a page (Continue reading, a search result, a
-  // surah jump), so an explicit ?page= wins over the surah's first page.
-  const query = new URLSearchParams(window.location.hash.split('?')[1] || '');
-  const requestedPage = Math.min(604, Math.max(0, Number(query.get('page') || 0)));
+  // The app uses BrowserRouter, so deep links arrive in the history search string
+  // (?page=3 from Continue reading, ?ayah=255 from verse search), not in the hash.
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const requestedPage = Math.min(604, Math.max(0, Number(params.get('page') || 0)));
+  const requestedAyah = Math.max(0, Number(params.get('ayah') || 0));
 
   const load = () => {
     setNotice('');
     get<SurahData>(`/quran/surah/${surahNumber}`)
       .then((res) => {
         local.set(`surah.${surahNumber}`, res);
-        setStartPage(res.ayahs[0]?.page || 1);
+        // A verse search result points at an ayah, so open the page holding it.
+        const ayahPage = requestedAyah
+          ? res.ayahs.find((a) => a.number === requestedAyah)?.page
+          : 0;
+        setStartPage(ayahPage || res.ayahs[0]?.page || 1);
       })
       .catch(() => {
         const cached =
@@ -242,7 +248,7 @@ export function QuranReader() {
       });
   };
 
-  useEffect(load, [surahNumber]);
+  useEffect(load, [surahNumber, requestedAyah]);
 
   const page = requestedPage > 0 ? requestedPage : startPage;
 

@@ -384,6 +384,57 @@ CREATE INDEX IF NOT EXISTS idx_badge_requests_status ON badge_requests(status, c
 CREATE INDEX IF NOT EXISTS idx_media_created ON media(created_at);
 
 /*
+ * Private documents attached to a verification request (ID scans, letters from
+ * a mosque or organisation). The row holds metadata only; the file itself is
+ * written outside /uploads and is streamed exclusively by an authenticated
+ * admin route, so a document URL can never be opened by an ordinary visitor.
+ */
+CREATE TABLE IF NOT EXISTS verification_documents (
+  id TEXT PRIMARY KEY,
+  request_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  filename TEXT NOT NULL,
+  original_name TEXT NOT NULL DEFAULT '',
+  mime TEXT NOT NULL DEFAULT '',
+  size INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_verification_docs_request ON verification_documents(request_id);
+
+/*
+ * Append-only history of verification decisions (approve, reject, revoke).
+ * users.badge_* keeps the current state; this table keeps the reasoning and the
+ * administrator responsible, which is what makes a later revoke auditable.
+ */
+CREATE TABLE IF NOT EXISTS verification_decisions (
+  id TEXT PRIMARY KEY,
+  request_id TEXT,
+  user_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  reason TEXT NOT NULL DEFAULT '',
+  actor_id TEXT,
+  actor_email TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_verification_decisions_user ON verification_decisions(user_id, created_at);
+
+/* In-app notifications. Written by the server only (verification decisions). */
+CREATE TABLE IF NOT EXISTS notifications (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'system',
+  title TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  link TEXT NOT NULL DEFAULT '',
+  read_at TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at);
+
+/*
  * Downloads and visitors analytics (Admin -> Analytics).
  *
  * One row per counted event. The visitor column is a salted HMAC of
@@ -558,11 +609,100 @@ ensureColumn('users', 'badge_verified', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('users', 'badge_verified_at', 'TEXT');
 ensureColumn('users', 'badge_verified_by', 'TEXT');
 
+/* Profile picture, stored with the public media uploads. */
+ensureColumn('users', 'avatar_url', 'TEXT');
+
+/*
+ * Full verification request fields. Added through the same guarded ALTER so an
+ * existing database keeps its rows: an older request simply has no documents
+ * or reason and is still readable in the dashboard.
+ */
+ensureColumn('badge_requests', 'full_name', 'TEXT');
+ensureColumn('badge_requests', 'reason', 'TEXT');
+ensureColumn('badge_requests', 'avatar_url', 'TEXT');
+ensureColumn('badge_requests', 'links', "TEXT NOT NULL DEFAULT '[]'");
+ensureColumn('badge_requests', 'documents', "TEXT NOT NULL DEFAULT '[]'");
+ensureColumn('badge_requests', 'decision_reason', 'TEXT');
+ensureColumn('badge_requests', 'revoked_at', 'TEXT');
+ensureColumn('badge_requests', 'revoked_by', 'TEXT');
+ensureColumn('badge_requests', 'revoke_reason', 'TEXT');
+
 /*
  * Kids Academy certificate name. Kept separate from the account name so a
  * parent can print a child's certificate without renaming the account.
  */
 ensureColumn('users', 'kids_name', 'TEXT');
+
+/* ------------------------------ notifications ----------------------------- */
+
+/**
+ * One row per in-app notification. Only the server writes these; a signed-in
+ * user can mark their own rows read and can never touch another account's.
+ */
+export function notify(userId, { kind = 'system', title, body = '', link = '' }) {
+  if (!userId || !title) return null;
+  const id = newId();
+  db.prepare(
+    'INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?,?,?,?,?,?,NULL,?)'
+  ).run(
+    id,
+    userId,
+    String(kind).slice(0, 40),
+    String(title).slice(0, 160),
+    String(body || '').slice(0, 800),
+    String(link || '').slice(0, 300),
+    nowIso()
+  );
+  return id;
+}
+
+export function unreadNotifications(userId) {
+  const row = db.prepare('SELECT COUNT(*) AS c FROM notifications WHERE user_id = ? AND read_at IS NULL').get(userId);
+  return Number(row?.c || 0);
+}
+
+/* ----------------------- verification decision history -------------------- */
+
+export function recordVerificationDecision({ requestId = null, userId, action, reason = '', actor = null }) {
+  if (!userId || !action) return null;
+  const id = newId();
+  db.prepare(
+    'INSERT INTO verification_decisions (id, request_id, user_id, action, reason, actor_id, actor_email, created_at) VALUES (?,?,?,?,?,?,?,?)'
+  ).run(
+    id,
+    requestId,
+    userId,
+    String(action).slice(0, 40),
+    String(reason || '').slice(0, 600),
+    actor?.id || null,
+    actor?.email || null,
+    nowIso()
+  );
+  return id;
+}
+
+/* --------------------------- staff verification --------------------------- */
+
+/**
+ * The Owner (superadmin) and authorized admins carry the blue tick by role
+ * rather than by request. This runs at boot and whenever the dashboard reads
+ * verification data, and it only ever sets the flag: staff verification is
+ * permanent and the dashboard refuses to revoke it.
+ */
+export function syncStaffBadges() {
+  const rows = db
+    .prepare("SELECT id FROM users WHERE role IN ('admin','superadmin') AND COALESCE(badge_verified, 0) = 0")
+    .all();
+  for (const row of rows) {
+    db.prepare(
+      `UPDATE users SET badge_verified = 1,
+         badge_verified_at = COALESCE(badge_verified_at, ?),
+         badge_verified_by = COALESCE(badge_verified_by, 'staff:role')
+       WHERE id = ?`
+    ).run(nowIso(), row.id);
+  }
+  return rows.length;
+}
 
 export function publicUser(row) {
   if (!row) return null;
@@ -582,6 +722,7 @@ export function publicUser(row) {
     badgeVerified: !!row.badge_verified,
     badgeVerifiedAt: row.badge_verified_at || null,
     badgeVerifiedBy: row.badge_verified_by || null,
+    avatarUrl: row.avatar_url || '',
     lang: row.lang,
     theme: row.theme,
     prefs,

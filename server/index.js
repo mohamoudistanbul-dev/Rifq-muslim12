@@ -361,40 +361,18 @@ app.delete('/api/auth/account', requireAuth, (req, res) => {
 
 /* -------------------------- verification requests -------------------------- */
 
-/** The caller's own latest request, so the profile can show its status. */
-app.get('/api/badge/request', requireAuth, (req, res) => {
-  const request = db
-    .prepare('SELECT * FROM badge_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT 1')
-    .get(req.user.id);
-  res.json({ request: request || null });
-});
-
-/**
- * Ask for the blue tick. This never grants anything: only a Super Admin can
- * approve, and the badge columns are written by the admin route.
+/*
+ * Verification requests, their private documents and in-app notifications live
+ * in server/verification.js so the validation rules sit next to the storage
+ * they protect. Approval itself stays in the admin routes.
  */
-app.post('/api/badge/request', requireAuth, (req, res) => {
-  const me = db.prepare('SELECT badge_verified FROM users WHERE id = ?').get(req.user.id);
-  if (me?.badge_verified) {
-    return res.status(400).json({ error: 'This account already has the verified badge.' });
-  }
-  const pending = db
-    .prepare("SELECT id FROM badge_requests WHERE user_id = ? AND status = 'pending'")
-    .get(req.user.id);
-  if (pending) {
-    return res.status(409).json({ error: 'You already have a verification request waiting for review.' });
-  }
-  const note = String(req.body?.note || '').slice(0, 500);
-  const id = newId();
-  db.prepare('INSERT INTO badge_requests (id, user_id, note, status, created_at) VALUES (?, ?, ?, ?, ?)').run(
-    id,
-    req.user.id,
-    note,
-    'pending',
-    nowIso()
-  );
-  res.status(201).json({ request: db.prepare('SELECT * FROM badge_requests WHERE id = ?').get(id) });
-});
+import { verificationRouter } from './verification.js';
+import { syncStaffBadges } from './db.js';
+
+/* The Owner and authorized admins carry the tick by role, not by request. */
+syncStaffBadges();
+
+app.use('/api', verificationRouter);
 
 /* -------------------------------- bookmarks -------------------------------- */
 

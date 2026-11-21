@@ -403,12 +403,18 @@ adminRouter.patch('/users/:id', requireSuperAdmin, (req, res) => {
 
 /* ------------------------------ verified badge ----------------------------- */
 
+import { notify, recordVerificationDecision, syncStaffBadges } from './db.js';
+import { VERIFY_DIR, shapeRequest, notifyVerificationDecision } from './verification.js';
+
 /**
- * Granting the blue tick is a Super Admin action only. The permission check is
- * server-side (requireSuperAdmin), an account can never verify itself, and every
- * change is written to the audit log with the acting administrator.
+ * Direct grant or revoke of the blue tick from the user list.
+ *
+ * Permissions are checked here, on the server, and never in the browser: only
+ * an administrator role reaches this handler, nobody can change their own
+ * badge, and staff verification (Owner and admins) is permanent. A revoke must
+ * carry a reason, and every decision is written to the history table.
  */
-adminRouter.patch('/users/:id/badge', requireSuperAdmin, (req, res) => {
+adminRouter.patch('/users/:id/badge', requireAdmin, (req, res) => {
   const target = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!target) return res.status(404).json({ error: 'User not found.' });
   if (target.id === req.user.id) {
@@ -418,24 +424,42 @@ adminRouter.patch('/users/:id/badge', requireSuperAdmin, (req, res) => {
     return res.status(400).json({ error: 'Send verified: true or verified: false.' });
   }
   const grant = req.body.verified === true;
-  const at = grant ? nowIso() : null;
-  const by = grant ? req.user.email : null;
+  const reason = String(req.body?.reason || '').trim().slice(0, 600);
+  if (!grant && ['admin', 'superadmin'].includes(String(target.role))) {
+    return res.status(403).json({
+      error: 'The Owner and administrator accounts are verified by role and cannot be unverified.',
+    });
+  }
+  if (!grant && reason.length < 4) {
+    return res.status(400).json({ error: 'Please record a short reason for removing verification.' });
+  }
+  const at = nowIso();
   db.prepare('UPDATE users SET badge_verified = ?, badge_verified_at = ?, badge_verified_by = ? WHERE id = ?').run(
     grant ? 1 : 0,
-    at,
-    by,
+    grant ? at : null,
+    grant ? req.user.email : null,
     target.id
   );
+  recordVerificationDecision({
+    userId: target.id,
+    action: grant ? 'grant' : 'revoke',
+    reason,
+    actor: req.user,
+  });
   auditLog(req.user, grant ? 'admin.badge.grant' : 'admin.badge.revoke', {
     userId: target.id,
     email: target.email,
     by: req.user.email,
+    reason,
   });
+  notifyVerificationDecision(target.id, { approved: grant, reason });
   res.json({ ok: true, user: publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(target.id)) });
 });
 
 /** Verified accounts plus the badge audit trail, for the admin dashboard. */
 adminRouter.get('/verifications', requireAdmin, (_req, res) => {
+  /* Cheap and idempotent: staff always carry the tick, even after a role change. */
+  syncStaffBadges();
   const verified = db
     .prepare('SELECT * FROM users WHERE badge_verified = 1 ORDER BY badge_verified_at DESC LIMIT 200')
     .all()
@@ -444,13 +468,21 @@ adminRouter.get('/verifications', requireAdmin, (_req, res) => {
       name: u.name,
       email: u.email,
       role: u.role,
+      avatarUrl: u.avatar_url || '',
       verifiedAt: u.badge_verified_at,
       verifiedBy: u.badge_verified_by,
     }));
+  const decisions = db
+    .prepare(
+      `SELECT d.*, u.name, u.email FROM verification_decisions d
+         LEFT JOIN users u ON u.id = d.user_id
+        ORDER BY d.created_at DESC LIMIT 100`
+    )
+    .all();
   const history = db
     .prepare("SELECT * FROM audit WHERE action IN ('admin.badge.grant','admin.badge.revoke') ORDER BY created_at DESC LIMIT 100")
     .all();
-  res.json({ verified, history });
+  res.json({ verified, decisions, history });
 });
 
 /**
@@ -459,33 +491,31 @@ adminRouter.get('/verifications', requireAdmin, (_req, res) => {
  * entry as a direct grant. A Super Admin can never decide their own request.
  */
 adminRouter.get('/badge-requests', requireAdmin, (req, res) => {
+  syncStaffBadges();
   const status = String(req.query.status || 'pending');
   const rows = db
     .prepare(
-      `SELECT r.*, u.name, u.email, u.role, u.badge_verified
+      `SELECT r.*, u.name, u.email, u.role, u.badge_verified, u.avatar_url AS user_avatar
          FROM badge_requests r JOIN users u ON u.id = r.user_id
         WHERE (? = 'all' OR r.status = ?)
         ORDER BY r.created_at DESC LIMIT 200`
     )
     .all(status, status);
+  const counts = db.prepare('SELECT status, COUNT(*) AS c FROM badge_requests GROUP BY status').all();
   res.json({
+    counts: Object.fromEntries(counts.map((row) => [row.status, Number(row.c)])),
     requests: rows.map((r) => ({
-      id: r.id,
-      userId: r.user_id,
+      ...shapeRequest(r, { includeDocuments: true }),
       name: r.name,
       email: r.email,
       role: r.role,
-      note: r.note,
-      status: r.status,
-      createdAt: r.created_at,
-      decidedAt: r.decided_at,
-      decidedBy: r.decided_by,
+      accountAvatar: r.user_avatar || '',
       badgeVerified: !!r.badge_verified,
     })),
   });
 });
 
-adminRouter.patch('/badge-requests/:id', requireSuperAdmin, (req, res) => {
+adminRouter.patch('/badge-requests/:id', requireAdmin, (req, res) => {
   const request = db.prepare('SELECT * FROM badge_requests WHERE id = ?').get(req.params.id);
   if (!request) return res.status(404).json({ error: 'Request not found.' });
   if (request.status !== 'pending') {
@@ -502,6 +532,7 @@ adminRouter.patch('/badge-requests/:id', requireSuperAdmin, (req, res) => {
   if (!target) return res.status(404).json({ error: 'User not found.' });
 
   const approve = action === 'approve';
+  const reason = String(req.body?.reason || '').trim().slice(0, 600);
   const at = nowIso();
   if (approve) {
     db.prepare('UPDATE users SET badge_verified = 1, badge_verified_at = ?, badge_verified_by = ? WHERE id = ?').run(
@@ -510,24 +541,49 @@ adminRouter.patch('/badge-requests/:id', requireSuperAdmin, (req, res) => {
       target.id
     );
   }
-  db.prepare('UPDATE badge_requests SET status = ?, decided_at = ?, decided_by = ? WHERE id = ?').run(
-    approve ? 'approved' : 'rejected',
-    at,
-    req.user.email,
-    request.id
-  );
+  db.prepare(
+    'UPDATE badge_requests SET status = ?, decided_at = ?, decided_by = ?, decision_reason = ? WHERE id = ?'
+  ).run(approve ? 'approved' : 'rejected', at, req.user.email, reason, request.id);
+  recordVerificationDecision({
+    requestId: request.id,
+    userId: target.id,
+    action: approve ? 'approve' : 'reject',
+    reason,
+    actor: req.user,
+  });
   auditLog(req.user, approve ? 'admin.badge.grant' : 'admin.badge.request.reject', {
     userId: target.id,
     email: target.email,
     by: req.user.email,
     requestId: request.id,
     source: 'request',
+    reason,
   });
+  notifyVerificationDecision(target.id, { approved: approve, reason });
   res.json({
     ok: true,
     status: approve ? 'approved' : 'rejected',
     user: publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(target.id)),
   });
+});
+
+/**
+ * A private supporting document. Only an administrator session can read it, the
+ * file is never under /uploads, and the response is marked private/no-store so
+ * no shared cache keeps a copy.
+ */
+adminRouter.get('/badge-requests/:id/documents/:docId', requireAdmin, (req, res) => {
+  const doc = db
+    .prepare('SELECT * FROM verification_documents WHERE id = ? AND request_id = ?')
+    .get(req.params.docId, req.params.id);
+  if (!doc) return res.status(404).json({ error: 'That document no longer exists.' });
+  const file = path.join(VERIFY_DIR, path.basename(doc.filename));
+  if (!fs.existsSync(file)) return res.status(404).json({ error: 'That document is no longer stored.' });
+  const safeName = String(doc.original_name || 'document').replace(/[^\w.\- ]/g, '_').slice(0, 80) || 'document';
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
+  res.type(doc.mime || 'application/octet-stream');
+  fs.createReadStream(file).pipe(res);
 });
 
 adminRouter.delete('/users/:id', requireSuperAdmin, (req, res) => {

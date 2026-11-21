@@ -57,7 +57,7 @@ function check(name, condition, detail = '') {
 
 /* ------------------------------- http helpers ------------------------------ */
 
-async function req(method, route, { body, cookie, ua, headers = {} } = {}) {
+async function req(method, route, { body, cookie, ua, headers = {}, binary = false } = {}) {
   const h = { ...headers };
   if (body !== undefined) h['content-type'] = 'application/json';
   if (cookie) h.cookie = cookie;
@@ -68,6 +68,12 @@ async function req(method, route, { body, cookie, ua, headers = {} } = {}) {
     body: body === undefined ? undefined : JSON.stringify(body),
     redirect: 'manual',
   });
+  // An APK is binary: decoding it as text would corrupt the byte count, so the
+  // download assertions measure the real payload length instead.
+  if (binary) {
+    const buf = Buffer.from(await res.arrayBuffer());
+    return { status: res.status, json: null, raw: '', headers: res.headers, bytes: buf.length };
+  }
   const raw = await res.text();
   let json = null;
   try {
@@ -239,6 +245,7 @@ try {
 
   const rangeRes = await req('GET', '/download/RIFQ-Muslim.apk', {
     ua: UA_ANDROID,
+    binary: true,
     headers: { range: 'bytes=0-1023' },
   });
   const afterRange = await report(adminCookie);
@@ -248,7 +255,7 @@ try {
     `HTTP ${rangeRes.status}, downloads ${afterRange.data.totals.downloads}`
   );
 
-  const fullRes = await req('GET', '/download/RIFQ-Muslim.apk', { ua: UA_ANDROID });
+  const fullRes = await req('GET', '/download/RIFQ-Muslim.apk', { ua: UA_ANDROID, binary: true });
   const afterFull = await report(adminCookie);
   check(
     'a completed APK transfer is counted as a download',
@@ -257,8 +264,13 @@ try {
   );
   check(
     'the APK bytes really arrived',
-    fullRes.bytes === APK_BYTES.length,
-    `${fullRes.bytes} bytes`
+    fullRes.bytes === APK_BYTES.length && fullRes.headers.get('content-length') === String(APK_BYTES.length),
+    `${fullRes.bytes} bytes, content-length ${fullRes.headers.get('content-length')}`
+  );
+  check(
+    'the resumed request received only the requested slice',
+    rangeRes.bytes === 1024 && rangeRes.headers.get('content-range') === `bytes 0-1023/${APK_BYTES.length}`,
+    `${rangeRes.bytes} bytes, ${rangeRes.headers.get('content-range')}`
   );
 
   await req('GET', '/download/RIFQ-Muslim.apk', { ua: UA_ANDROID });

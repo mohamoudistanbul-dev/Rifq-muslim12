@@ -96,7 +96,23 @@ check('right-to-left text direction', mushafSrc.includes('rtl') || mushafSrc.inc
 check('pages are cached for offline reading', mushafSrc.includes('local.set') && mushafSrc.includes('mushaf.'));
 
 const quranSrc = read('src/pages/Quran.tsx');
-check('Quran reading screen renders the Mushaf component', /<MushafReader/.test(quranSrc));
+check('Quran reading screen renders the continuous Mushaf', /<MushafScroll/.test(quranSrc));
+const scrollSrc = read('src/components/MushafScroll.tsx');
+check(
+  'the next Mushaf page is appended below the previous one',
+  scrollSrc.includes('data-mushaf-page') && scrollSrc.includes('IntersectionObserver')
+);
+check('every Mushaf page is reachable by scrolling', scrollSrc.includes('MUSHAF_TOTAL_PAGES'));
+check('the reading screen has no audio player', !/<audio/.test(quranSrc));
+check(
+  'the reading screen has no reciter picker, translation or page button',
+  !/reciter/i.test(quranSrc.slice(quranSrc.indexOf('export function QuranReader'))) &&
+    !/<button/.test(scrollSrc)
+);
+check(
+  'the saved Mushaf position is restored on return',
+  scrollSrc.includes("'mushaf.pos'") && scrollSrc.includes('mushaf.page.')
+);
 check('audio section untouched by the reading redesign', !/MushafReader/.test(read('src/pages/QuranAudio.tsx')));
 
 const contentSrc = read('server/content.js');

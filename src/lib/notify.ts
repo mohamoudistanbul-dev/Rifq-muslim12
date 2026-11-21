@@ -559,6 +559,8 @@ export interface LoopState {
     prayerAlerts: Record<string, boolean>;
     preReminder: number;
     athanSound: string;
+    notifySound: string;
+    adhanAudio: Record<string, boolean>;
     vibration: boolean;
     categories: CategoryPrefs;
     custom: CustomReminder[];

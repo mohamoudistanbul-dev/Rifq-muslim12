@@ -235,7 +235,7 @@ export default function MushafReader({
     go(n);
   };
 
-  const jumpToAyah = () => {
+  const goToAyah = () => {
     const n = Number(ayahInput);
     const target = ayahs.find((a) => a.number === n);
     if (!target) {
@@ -389,9 +389,9 @@ export default function MushafReader({
             aria-label="Jump to ayah"
             value={ayahInput}
             onChange={(e) => setAyahInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && jumpToAyah()}
+            onKeyDown={(e) => e.key === 'Enter' && goToAyah()}
           />
-          <button type="button" className="btn btn-soft btn-sm" onClick={jumpToAyah}>
+          <button type="button" className="btn btn-soft btn-sm" onClick={goToAyah}>
             Go
           </button>
         </label>

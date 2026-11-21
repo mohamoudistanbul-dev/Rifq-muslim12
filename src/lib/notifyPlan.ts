@@ -177,28 +177,8 @@ export function normalizeNotifySound(id: string | undefined): NotifySoundId {
   return id === 'silent' ? 'silent' : 'beep';
 }
 
-/**
- * Sound for a prayer-time alert. When the user has switched the Adhan recording
- * off for that prayer the alert still appears, with the general sound instead.
- */
-export function prayerSound(adhanSound: string, adhanAudioEnabled: boolean): string {
-  return adhanAudioEnabled ? adhanSound : 'beep';
-}
-
-/**
- * Sound for anything that is not a prayer time. A reminder can never play the
- * Adhan recording, even if an older saved preference named an Adhan sound.
- */
-export function reminderSound(
-  categorySound: string | undefined,
-  notifySound: string | undefined
-): NotifySoundId {
-  if (categorySound === 'silent') return 'silent';
-  return normalizeNotifySound(notifySound);
-}
-
 /** Sound for a daily reminder, user reminder or admin message. */
-export function reminderSound(prefSound: string, general: string | undefined): string {
+export function reminderSound(prefSound: string | undefined, general: string | undefined): string {
   const g = normalizeNotifySound(general);
   if (prefSound === 'default') return g;
   if ((NOTIFY_SOUND_IDS as readonly string[]).includes(prefSound)) return prefSound;

@@ -79,6 +79,14 @@ app.get('/api/config', (req, res) => {
     downloadUrl: publicBaseUrl(req),
     publicUrl: publicBaseUrl(req),
     siteUrl: publicBaseUrl(req),
+    // The real published address of this app, used by Invite Friends and every
+    // share button. It is this deployment's own URL — never a referral link.
+    shareUrl: publicBaseUrl(req),
+    // Official store listings, set by the Super Admin in Website settings.
+    // Empty means "not configured yet"; the client says so instead of inventing
+    // a download address.
+    playStoreUrl: getSetting('play_store_url', ''),
+    appStoreUrl: getSetting('app_store_url', ''),
     // The APK is streamed by our own route so the saved file is always named
     // RIFQ-Muslim.apk, even though the file itself lives in Cloudflare R2.
     apkUrl: APK_PATH,

@@ -192,6 +192,8 @@ const SETTING_FIELDS: { key: string; label: string; kind?: 'text' | 'email' | 'u
   { key: 'contact_phone', label: 'Contact phone' },
   { key: 'whatsapp', label: 'WhatsApp number' },
   { key: 'download_url', label: 'APK download URL (Cloudflare R2)', kind: 'url' },
+  { key: 'play_store_url', label: 'Google Play Store link (Android app)', kind: 'url' },
+  { key: 'app_store_url', label: 'App Store link (iPhone and iPad app)', kind: 'url' },
   { key: 'paypal_donate_url', label: 'PayPal donation link (paypal.me/handle or paypal.com/donate)', kind: 'url' },
   { key: 'paypal_currency', label: 'PayPal donation currency (USD, EUR, GBP…)' },
   { key: 'announcement_text', label: 'Announcement banner', kind: 'textarea' },
@@ -312,6 +314,10 @@ export default function Admin() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [settings, setSettings] = useState<Record<string, string>>({});
+  const [settingsState, setSettingsState] = useState<{
+    kind: 'idle' | 'saving' | 'ok' | 'error';
+    message: string;
+  }>({ kind: 'idle', message: '' });
   const [apk, setApk] = useState<ApkStatus | null>(null);
   const [apkBusy, setApkBusy] = useState(false);
   const [apkProgress, setApkProgress] = useState(0);
@@ -529,7 +535,31 @@ export default function Admin() {
     }
   };
 
-  const saveSettings = () => run(() => put('/admin/settings', settings), t('Settings saved and live.'));
+  /**
+   * Saves Website settings to the server database and reports the real result.
+   * The form is never treated as the source of truth: the values echoed back by
+   * the server are what the admin sees afterwards, so a rejected field cannot
+   * look saved.
+   */
+  const saveSettings = async () => {
+    setSettingsState({ kind: 'saving', message: t('Saving settings…') });
+    try {
+      const res = await put<{ ok: boolean; settings: Record<string, string> }>('/admin/settings', settings);
+      if (res?.settings) setSettings({ ...res.settings });
+      setSettingsState({
+        kind: 'ok',
+        message: `${t('Settings saved to the database.')} ${new Date().toLocaleTimeString()}`,
+      });
+      toast(t('Settings saved and live.'), 'success');
+      setReload((r) => r + 1);
+      return true;
+    } catch (err) {
+      const text = (err as Error).message || t('Settings could not be saved. Please try again.');
+      setSettingsState({ kind: 'error', message: text });
+      toast(text, 'error');
+      return false;
+    }
+  };
 
   const changePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1289,12 +1319,47 @@ export default function Admin() {
           </div>
         );
       })}
-      <button className="btn btn-primary btn-sm" onClick={() => void saveSettings()}>
-        {t('Save settings')}
+      <button
+        className="btn btn-primary btn-sm"
+        onClick={() => void saveSettings()}
+        disabled={settingsState.kind === 'saving'}
+      >
+        {settingsState.kind === 'saving' ? t('Saving…') : t('Save settings')}
       </button>
-      <p className="admin-note" style={{ marginTop: 8 }}>
-        {t('Saved settings update the live application immediately.')}
+      <p
+        role="status"
+        aria-live="polite"
+        className="admin-note"
+        style={{ marginTop: 8, color: settingsState.kind === 'error' ? '#ffb4b4' : undefined }}
+      >
+        {settingsState.message || t('Saved settings update the live application immediately.')}
       </p>
+
+      <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,.08)' }}>
+        <h4 className="admin-card-title" style={{ fontSize: 14, marginBottom: 6 }}>
+          {t('Invite Friends links')}
+        </h4>
+        <ul className="small" style={{ margin: 0, paddingLeft: 18, lineHeight: 1.65 }}>
+          <li>
+            {t('App link')}: <strong>{liveUrl}</strong>
+          </li>
+          <li>
+            {t('Google Play Store')}:{' '}
+            {settings.play_store_url ? <strong>{settings.play_store_url}</strong> : <em>{t('not configured — add it above so Android users can install from Play')}</em>}
+          </li>
+          <li>
+            {t('App Store (iOS)')}:{' '}
+            {settings.app_store_url ? <strong>{settings.app_store_url}</strong> : <em>{t('not configured — iPhone and iPad installation is unavailable until you add it')}</em>}
+          </li>
+          <li>
+            {t('Android APK file')}:{' '}
+            {apk?.configured ? <strong>{t('configured')}</strong> : <em>{t('not uploaded — Invite Friends will share the app link only')}</em>}
+          </li>
+        </ul>
+        <p className="admin-note" style={{ marginTop: 8 }}>
+          {t('Invite Friends shares the app link above, so it works even before the store listings exist. Add the store links here to point Android and iOS users to the official listings.')}
+        </p>
+      </div>
     </div>
     {renderApkPanel()}
     </>

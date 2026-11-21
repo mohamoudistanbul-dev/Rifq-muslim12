@@ -38,6 +38,7 @@ import QuranAudio from './pages/QuranAudio';
 import DownloadPortal from './pages/DownloadPortal';
 import Premium from './pages/Premium';
 import { PlayerProvider, PlayerBar, NowPlayingSheet } from './lib/quranPlayer';
+import ForegroundAlerts from './components/ForegroundAlerts';
 
 export default function App() {
   return (
@@ -112,6 +113,7 @@ function AppBody() {
           <NowPlayingSheet />
           <BottomNav />
         </div>
+        <ForegroundAlerts />
         <Toasts />
     </>
   );

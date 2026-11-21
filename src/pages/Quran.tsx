@@ -16,7 +16,7 @@ interface SurahMeta {
   revelationType: string;
 }
 
-interface Ayah {
+export interface Ayah {
   number: number;
   text: string;
   juz: number;
@@ -26,7 +26,7 @@ interface Ayah {
   translation: string;
 }
 
-interface SurahData {
+export interface SurahData {
   number: number;
   name: string;
   englishName: string;
@@ -38,15 +38,7 @@ interface SurahData {
   source: string;
 }
 
-const TRANSLATIONS = [
-  { id: 'en.sahih', label: 'English — Saheeh International' },
-  { id: 'en.pickthall', label: 'English — Pickthall' },
-  { id: 'so.abduh', label: 'Somali — Abduh' },
-  { id: 'fr.hamidullah', label: 'French — Hamidullah' },
-  { id: 'tr.diyanet', label: 'Turkish — Diyanet' },
-];
-
-const RECITERS = [
+export const RECITERS = [
   { id: 'ar.alafasy', label: 'Mishary al-Afasy' },
   { id: 'ar.abdulbasitmurattal', label: 'Abdul Basit (Murattal)' },
   { id: 'ar.husary', label: 'Mahmoud al-Husary' },
@@ -55,14 +47,17 @@ const RECITERS = [
 ];
 
 export default function QuranList() {
-  const { t, user, toast } = useStore();
+  const { t, toast } = useStore();
   const [surahs, setSurahs] = useState<SurahMeta[] | null>(null);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('');
   const [verseQuery, setVerseQuery] = useState('');
   const [matches, setMatches] = useState<{ surah: number; surahName: string; ayah: number; text: string }[]>([]);
   const [searching, setSearching] = useState(false);
-  const lastRead = local.get<{ surah: number; ayah: number; name: string } | null>('lastRead', null);
+  const lastRead = local.get<{ surah: number; ayah: number; page?: number; name: string } | null>(
+    'lastRead',
+    null
+  );
 
   const load = () => {
     setError('');
@@ -113,14 +108,20 @@ export default function QuranList() {
   };
 
   return (
-    <Page title="Quran" subtitle={t('114 surahs · Uthmani script · audio and translations')} back={false}>
+    <Page title="Quran" subtitle={t('114 surahs · Uthmani Mushaf · audio')} back={false}>
       {lastRead && (
-        <Link to={`/quran/${lastRead.surah}`} className="card row" style={{ justifyContent: 'space-between', textDecoration: 'none' }}>
+        <Link
+          to={`/quran/${lastRead.surah}?page=${lastRead.page || 1}`}
+          className="card row"
+          style={{ justifyContent: 'space-between', textDecoration: 'none' }}
+        >
           <span className="row" style={{ gap: 10 }}>
             <AppIcon name="book" size={18} />
             <span>
               <span className="small" style={{ display: 'block' }}>{t('Continue reading')}</span>
-              <span className="tiny muted">{lastRead.name} · {t('Ayah')} {lastRead.ayah}</span>
+              <span className="tiny muted">
+                {lastRead.name} · {t('Page')} {lastRead.page || 1} · {t('Ayah')} {lastRead.ayah}
+              </span>
             </span>
           </span>
           <AppIcon name="chevron" size={16} />
@@ -173,36 +174,54 @@ export default function QuranList() {
         ))}
       </div>
       <p className="tiny muted center">
-        {t('Quran text and translations are provided by AlQuran Cloud. RIFQ never alters the scripture.')}
+        {t('Quran text is provided by AlQuran Cloud. RIFQ never alters the scripture.')}
       </p>
     </Page>
   );
 }
 
+/**
+ * Quran reading.
+ *
+ * Arabic only: this screen is a Mushaf. It renders the verified Uthmani text in
+ * printed page order and never mixes in a translation, transliteration or tafsir
+ * — those stay on the separate Translations screen (link in the header card).
+ * Audio is the existing per-surah recitation player.
+ */
 export function QuranReader() {
   const { number } = useParams();
   const surahNumber = Math.min(114, Math.max(1, Number(number) || 1));
   const { t, prefs, setPrefs, user, toast } = useStore();
   const [data, setData] = useState<SurahData | null>(null);
   const [error, setError] = useState('');
-  const [translation, setTranslation] = useState(() => local.get('translation', 'en.sahih'));
   const [reciter, setReciter] = useState(() => local.get('reciter', 'ar.alafasy'));
   const [playing, setPlaying] = useState(false);
-  const [bookmarked, setBookmarked] = useState<Record<number, boolean>>({});
+  const [savedAyahs, setSavedAyahs] = useState<Record<number, boolean>>({});
+  const [savedPages, setSavedPages] = useState<Record<number, boolean>>({});
+  const [selectMode, setSelectMode] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const query = new URLSearchParams(window.location.hash.split('?')[1] || '');
   const jumpTo = Number(query.get('ayah') || 0);
+  const initialPage = Number(query.get('page') || 0);
 
   const load = () => {
     setError('');
-    get<SurahData>(`/quran/surah/${surahNumber}?translation=${translation}`)
+    // No translation parameter: the reading screen is Arabic only.
+    get<SurahData>(`/quran/surah/${surahNumber}`)
       .then((res) => {
         setData(res);
-        local.set(`surah.${surahNumber}.${translation}`, res);
-        local.set('lastRead', { surah: res.number, ayah: 1, name: res.englishName });
+        local.set(`surah.${surahNumber}`, res);
+        local.set('lastRead', {
+          surah: res.number,
+          ayah: 1,
+          page: res.ayahs[0]?.page || 1,
+          name: res.englishName,
+        });
       })
       .catch(() => {
-        const cached = local.get<SurahData | null>(`surah.${surahNumber}.${translation}`, null);
+        const cached =
+          local.get<SurahData | null>(`surah.${surahNumber}`, null) ||
+          local.get<SurahData | null>(`surah.${surahNumber}.en.sahih`, null);
         if (cached) {
           setData(cached);
           setError(t('Offline copy — saved on this device.'));
@@ -212,31 +231,82 @@ export function QuranReader() {
       });
   };
 
-  useEffect(load, [surahNumber, translation]);
+  useEffect(load, [surahNumber]);
 
   useEffect(() => {
-    if (!data) return;
-    const el = document.getElementById(`ayah-${jumpTo || 1}`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [data, jumpTo]);
-
-  useEffect(() => {
-    local.set('translation', translation);
     local.set('reciter', reciter);
-  }, [translation, reciter]);
+  }, [reciter]);
 
-  const toggleBookmark = async (ayah: Ayah) => {
+  // Saved verses and saved pages come from the server, so the markers show the
+  // real stored state instead of an optimistic guess.
+  useEffect(() => {
+    if (!user) {
+      setSavedAyahs({});
+      setSavedPages({});
+      return;
+    }
+    let alive = true;
+    get<{ bookmarks: { kind: string; ref: string }[] }>('/bookmarks')
+      .then((res) => {
+        if (!alive) return;
+        const ayahs: Record<number, boolean> = {};
+        const pages: Record<number, boolean> = {};
+        for (const bookmark of res.bookmarks || []) {
+          if (bookmark.kind !== 'quran') continue;
+          const verse = /^quran:(\d+):(\d+)$/.exec(bookmark.ref);
+          if (verse && Number(verse[1]) === surahNumber) ayahs[Number(verse[2])] = true;
+          const pageRef = /^quran:page:(\d+)$/.exec(bookmark.ref);
+          if (pageRef) pages[Number(pageRef[1])] = true;
+        }
+        setSavedAyahs(ayahs);
+        setSavedPages(pages);
+      })
+      .catch(() => {
+        /* signed-in bookmarks are a convenience; reading still works without them */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [user, surahNumber]);
+
+  const rememberAyah = (ayahNo: number, page?: number) => {
+    if (!data) return;
+    local.set('lastRead', {
+      surah: data.number,
+      ayah: ayahNo,
+      page: page || data.ayahs[0]?.page || 1,
+      name: data.englishName,
+    });
+  };
+
+  const toggleAyah = async (ayahNo: number) => {
     if (!user) return toast(t('Sign in to save bookmarks'), 'error');
     try {
       const res = await post<{ removed?: boolean }>('/bookmarks', {
         kind: 'quran',
-        ref: `quran:${surahNumber}:${ayah.number}`,
+        ref: `quran:${surahNumber}:${ayahNo}`,
         surah: surahNumber,
-        ayah: ayah.number,
-        label: `${data?.englishName} ${surahNumber}:${ayah.number}`,
+        ayah: ayahNo,
+        label: `${data?.englishName} ${surahNumber}:${ayahNo}`,
       });
-      setBookmarked((b) => ({ ...b, [ayah.number]: !res.removed }));
+      setSavedAyahs((current) => ({ ...current, [ayahNo]: !res.removed }));
       toast(res.removed ? t('Bookmark removed') : t('Bookmark saved'), 'success');
+    } catch {
+      toast(t('The bookmark could not be saved'), 'error');
+    }
+  };
+
+  const togglePage = async (page: number) => {
+    if (!user) return toast(t('Sign in to save bookmarks'), 'error');
+    try {
+      const res = await post<{ removed?: boolean }>('/bookmarks', {
+        kind: 'quran',
+        ref: `quran:page:${page}`,
+        surah: surahNumber,
+        label: `Page ${page}`,
+      });
+      setSavedPages((current) => ({ ...current, [page]: !res.removed }));
+      toast(res.removed ? t('Bookmark removed') : t('Page bookmarked'), 'success');
     } catch {
       toast(t('The bookmark could not be saved'), 'error');
     }
@@ -255,42 +325,16 @@ export function QuranReader() {
     }
   };
 
-  /** Deliberate opt-in: the only way Quran text becomes selectable. */
-  const [selectMode, setSelectMode] = useState(false);
-
   // Leaving the reader must never leave the native selection toolbar unlocked.
   useEffect(() => () => setReadingSelection(false), []);
 
   const audioUrl = `https://cdn.islamic.network/quran/audio-surah/128/${reciter}/${surahNumber}.mp3`;
-
-  // Reading view. 'mushaf' is the continuous Arabic page; 'study' keeps the
-  // verse cards with translation. Both render the same fetched text.
-  const [view, setView] = useState<'mushaf' | 'study'>(() => local.get('quranView', 'study'));
-  const [jumpValue, setJumpValue] = useState('');
-  useEffect(() => local.set('quranView', view), [view]);
 
   const juzRange = data && data.ayahs.length
     ? data.ayahs[0].juz === data.ayahs[data.ayahs.length - 1].juz
       ? `Juz ${data.ayahs[0].juz}`
       : `Juz ${data.ayahs[0].juz}–${data.ayahs[data.ayahs.length - 1].juz}`
     : '';
-
-  /** Resume point: the verse the reader is actually at, not always the first. */
-  const rememberAyah = (ayahNo: number) => {
-    if (!data) return;
-    local.set('lastRead', { surah: data.number, ayah: ayahNo, name: data.englishName });
-  };
-
-  const goToAyah = (raw: string) => {
-    const n = Number(raw);
-    if (!Number.isFinite(n) || n < 1 || (data && n > data.ayahCount)) {
-      toast(t('Enter an ayah number from this surah'), 'error');
-      return;
-    }
-    const el = document.getElementById(`ayah-${n}`) || document.getElementById(`m-ayah-${n}`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    rememberAyah(n);
-  };
 
   return (
     <>
@@ -347,28 +391,9 @@ export function QuranReader() {
                 >
                   {t('Select text')}
                 </button>
-              </div>
-              <div className="row" style={{ gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                <button
-                  className={`btn btn-sm ${view === 'mushaf' ? 'btn-primary' : 'btn-soft'}`}
-                  aria-pressed={view === 'mushaf'}
-                  onClick={() => setView(view === 'mushaf' ? 'study' : 'mushaf')}
-                >
-                  {view === 'mushaf' ? t('Verse view') : t('Mushaf view')}
-                </button>
-                <input
-                  className="input"
-                  inputMode="numeric"
-                  style={{ maxWidth: 120 }}
-                  placeholder={t('Go to ayah')}
-                  aria-label={t('Go to ayah')}
-                  value={jumpValue}
-                  onChange={(e) => setJumpValue(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && goToAyah(jumpValue)}
-                />
-                <button className="btn btn-soft btn-sm" onClick={() => goToAyah(jumpValue)}>
-                  {t('Go')}
-                </button>
+                <Link className="btn btn-soft btn-sm" to={`/quran/${surahNumber}/translation`}>
+                  <AppIcon name="book" size={15} /> {t('Translations')}
+                </Link>
               </div>
               <audio ref={audioRef} src={audioUrl} onEnded={() => setPlaying(false)} preload="none" />
               <div className="field" style={{ marginTop: 12 }}>
@@ -379,88 +404,31 @@ export function QuranReader() {
                   ))}
                 </select>
               </div>
-              <div className="field">
-                <label>{t('Translation')}</label>
-                <select className="select" value={translation} onChange={(e) => setTranslation(e.target.value)}>
-                  {TRANSLATIONS.map((tr) => (
-                    <option key={tr.id} value={tr.id}>{tr.label}</option>
-                  ))}
-                </select>
-              </div>
               <p className="tiny muted" style={{ marginBottom: 0 }}>{data.source}</p>
             </div>
 
-            {view !== 'mushaf' && surahNumber !== 1 && surahNumber !== 9 && (
-              <p className="arabic center" dir="rtl" lang="ar" style={{ fontSize: 26, margin: '14px 0' }}>
-                بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
-              </p>
-            )}
-
-            {view === 'mushaf' && (
-              <MushafReader
-                surahNumber={surahNumber}
-                surahArabicName={data.name}
-                surahEnglishName={data.englishName}
-                startPage={data.ayahs[0]?.page || 1}
-                ayahs={data.ayahs}
-                translation={translation}
-                fontSize={prefs.quranFontSize}
-                selectMode={selectMode}
-                onFontSize={(delta) =>
-                  setPrefs({
-                    quranFontSize: Math.max(18, Math.min(46, prefs.quranFontSize + delta)),
-                  })
-                }
-                onRemember={(ayahNo) => rememberAyah(ayahNo)}
-                onBookmarkAyah={(ayahNo) => {
-                  const ayah = data.ayahs.find((a) => a.number === ayahNo);
-                  if (ayah) void toggleBookmark(ayah);
-                }}
-                jumpToAyah={jumpTo || undefined}
-                toast={toast}
-              />
-            )}
-
-            <div
-              className={`stack${selectMode ? ' selection-enabled' : ''}`}
-              style={{ gap: 10, display: view === 'mushaf' ? 'none' : undefined }}
-            >
-              {data.ayahs.map((ayah) => (
-                <article
-                  key={ayah.number}
-                  id={`ayah-${ayah.number}`}
-                  className="card"
-                  style={{ scrollMarginTop: 90 }}
-                  onClick={() => rememberAyah(ayah.number)}
-                >
-                  <div className="row" style={{ justifyContent: 'space-between' }}>
-                    <span className="ayah-num">{surahNumber}:{ayah.number}</span>
-                    <span className="tiny muted">Juz {ayah.juz} · {t('Page')} {ayah.page}</span>
-                  </div>
-                  <p className="arabic" data-selectable dir="rtl" lang="ar" style={{ fontSize: prefs.quranFontSize, lineHeight: 2.1, margin: '10px 0' }}>
-                    {ayah.text}
-                  </p>
-                  <p className="small" data-selectable style={{ margin: 0 }}>{ayah.translation}</p>
-                  <div className="ayah-actions">
-                    <button className="icon-btn" onClick={() => void toggleBookmark(ayah)} aria-label={t('Bookmark')}>
-                      <AppIcon name="bookmark" size={17} />
-                    </button>
-                    <button
-                      className="icon-btn"
-                      aria-label={t('Share')}
-                      onClick={() => {
-                        const text = `${ayah.text}\n\n${ayah.translation}\n— Quran ${surahNumber}:${ayah.number}`;
-                        if (navigator.share) void navigator.share({ title: data.englishName, text });
-                        else void navigator.clipboard.writeText(text).then(() => toast(t('Copied'), 'success'));
-                      }}
-                    >
-                      <AppIcon name="share" size={17} />
-                    </button>
-                    {bookmarked[ayah.number] && <span className="tiny" style={{ color: 'var(--gold-deep)' }}>{t('Saved')}</span>}
-                  </div>
-                </article>
-              ))}
-            </div>
+            <MushafReader
+              surahNumber={surahNumber}
+              surahArabicName={data.name}
+              surahEnglishName={data.englishName}
+              startPage={data.ayahs[0]?.page || 1}
+              initialPage={initialPage || undefined}
+              ayahs={data.ayahs}
+              fontSize={prefs.quranFontSize}
+              selectMode={selectMode}
+              onFontSize={(delta) =>
+                setPrefs({
+                  quranFontSize: Math.max(18, Math.min(46, prefs.quranFontSize + delta)),
+                })
+              }
+              onRemember={(ayahNo, page) => rememberAyah(ayahNo, page)}
+              savedAyahs={savedAyahs}
+              savedPage={Boolean(savedPages[initialPage || data.ayahs[0]?.page || 1])}
+              onToggleAyah={(ayahNo) => void toggleAyah(ayahNo)}
+              onTogglePage={(page) => void togglePage(page)}
+              jumpToAyah={jumpTo || undefined}
+              toast={toast}
+            />
 
             <div className="btn-row" style={{ marginTop: 14 }}>
               {surahNumber > 1 && (

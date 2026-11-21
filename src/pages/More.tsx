@@ -56,6 +56,7 @@ const GROUPS: Group[] = [
       { to: '/settings', icon: 'settings', label: 'Settings', desc: 'Language, theme, audio' },
       { to: '/profile', icon: 'user', label: 'Profile', desc: 'Your account', authOnly: true },
       { to: '/about', icon: 'star', label: 'About RIFQ Muslim', desc: 'Version and credits' },
+      { to: '/rate', icon: 'star', label: 'Rate Us', desc: 'Rate the app' },
       { to: '/privacy', icon: 'shield', label: 'Privacy', desc: 'How data is handled' },
     ],
   },

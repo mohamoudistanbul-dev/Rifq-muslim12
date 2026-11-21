@@ -4,6 +4,7 @@ import { StoreProvider } from './lib/store';
 import { BottomNav, Toasts } from './components/Shell';
 import Home from './pages/Home';
 import QuranList, { QuranReader } from './pages/Quran';
+import QuranTranslation from './pages/QuranTranslation';
 import Prayer from './pages/Prayer';
 import Tasbih from './pages/Tasbih';
 import More from './pages/More';
@@ -27,6 +28,7 @@ import Contact from './pages/Contact';
 import Settings from './pages/Settings';
 import About from './pages/About';
 import Privacy from './pages/Privacy';
+import RateUs from './pages/RateUs';
 import Profile from './pages/Profile';
 import Admin from './pages/Admin';
 import Design from './pages/Design';
@@ -72,6 +74,7 @@ function AppBody() {
               <Route path="/quran" element={<QuranList />} />
               <Route path="/quran/audio" element={<QuranAudio />} />
               <Route path="/quran/:number" element={<QuranReader />} />
+              <Route path="/quran/:number/translation" element={<QuranTranslation />} />
               <Route path="/prayer" element={<Prayer />} />
               <Route path="/tasbih" element={<Tasbih />} />
               <Route path="/more" element={<More />} />
@@ -95,6 +98,7 @@ function AppBody() {
               <Route path="/settings" element={<Settings />} />
               <Route path="/about" element={<About />} />
               <Route path="/privacy" element={<Privacy />} />
+              <Route path="/rate" element={<RateUs />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/admin" element={<Admin />} />
               <Route path="/design" element={<Design />} />

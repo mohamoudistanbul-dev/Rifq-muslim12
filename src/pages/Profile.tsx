@@ -77,10 +77,11 @@ export default function Profile() {
     get<{ request: VerificationRequest | null }>('/badge/request')
       .then((r) => {
         if (!alive) return;
-        setBadgeReq(r.request);
-        if (r.request?.fullName) setFullName((prev) => prev || r.request.fullName);
-        if (r.request?.reason) setReason((prev) => prev || r.request.reason);
-        if (r.request?.links?.length) setLinks((prev) => prev || r.request.links.join('\n'));
+        const req = r.request;
+        setBadgeReq(req);
+        if (req?.fullName) setFullName((prev) => prev || req.fullName);
+        if (req?.reason) setReason((prev) => prev || req.reason);
+        if (req?.links?.length) setLinks((prev) => prev || req.links.join('\n'));
       })
       .catch(() => {
         /* the card stays in its default state */

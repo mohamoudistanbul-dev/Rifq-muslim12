@@ -1,40 +1,42 @@
 /**
- * RIFQ Muslim — proves the Invite Friends section sends everyone to one link.
+ * RIFQ Muslim — proves the Invite Friends section shares the real APK file.
  *
- * The Download App button, the QR code and every share action on /invite must
- * all use INVITE_URL (src/lib/inviteLink.ts). This check runs the real server
- * (so the page renders exactly as deployed) and asserts:
+ * The section must deal in the installation file only: no QR code, no printed
+ * address, a Download App button that transfers the actual bytes with progress,
+ * and an Invite Friends button that hands that same file to the system share
+ * sheet (WhatsApp, Telegram, Bluetooth, ...). iPhones must never be offered an
+ * Android APK.
  *
- *   - the rendered QR image, decoded pixel by pixel, reproduces exactly the QR
- *     module matrix of INVITE_URL (computed here with the same library), so a
- *     scan cannot open anything else. Byte comparison would be wrong: the
- *     browser renders the PNG through canvas while Node uses pngjs.
- *   - the official URL is printed under the QR
- *   - the Download App button is an anchor whose href is INVITE_URL, opening a
- *     new tab with rel=noopener (works on Android and iOS without JS)
- *   - WhatsApp, Facebook and Telegram each receive INVITE_URL in their share URL
- *   - "Copy link" copies INVITE_URL, and the native-share fallback copies it too
- *   - the APK status line (which could say "not available yet") is not shown on
- *     this page, because the button no longer depends on the APK endpoint
- *   - other routes still serve, so nothing else was disturbed
+ * How the file is supplied to the test:
+ *   A small APK-shaped fixture is served by a throwaway HTTP server inside this
+ *   script and the app server is pointed at it with APK_DOWNLOAD_URL — the same
+ *   remote-proxy path production uses for the Cloudflare R2 file. Nothing is
+ *   written into the repository.
  *
  * Usage: npm run verify:invite   (needs `npm run build` first — serves dist)
  * Exits non-zero if any assertion fails.
  */
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { join } from 'node:path';
-import { INVITE_URL, INVITE_QR_OPTIONS } from '../src/lib/inviteLink';
+import http from 'node:http';
+import path from 'node:path';
 
 const repo = process.cwd();
-const req = createRequire(join(repo, 'package.json'));
-const QRCode = req('qrcode');
+const req = createRequire(path.join(repo, 'package.json'));
 const pw = req('/opt/appjet/browser/node_modules/playwright/index.js');
 const chromium = pw.chromium ?? pw.default?.chromium;
 
-const PORT = 4187;
-const BASE = `http://127.0.0.1:${PORT}`;
-const MARGIN = Number(INVITE_QR_OPTIONS.margin);
+const APP_PORT = 4187;
+const FIXTURE_PORT = 4191;
+const BASE = `http://127.0.0.1:${APP_PORT}`;
+const APK_NAME = 'RIFQ-Muslim.apk';
+const APK_MIME = 'application/vnd.android.package-archive';
+const FIXTURE_BYTES = 3 * 1024 * 1024;
+
+const ANDROID_UA =
+  'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36';
+const IOS_UA =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1';
 
 const failures: string[] = [];
 
@@ -57,31 +59,96 @@ async function waitForServer(url: string, timeoutMs = 30000) {
   throw new Error(`server did not answer on ${url}`);
 }
 
-async function main() {
-  console.log(`Invite Friends link: ${INVITE_URL}\n`);
+/** A byte-identical stand-in for the APK: real ZIP signature, real length. */
+function apkFixture(): Buffer {
+  const buf = Buffer.alloc(FIXTURE_BYTES);
+  Buffer.from([0x50, 0x4b, 0x03, 0x04]).copy(buf, 0); // "PK\x03\x04"
+  for (let i = 4; i < buf.length; i++) buf[i] = i % 251;
+  return buf;
+}
 
-  const server = spawn('node', ['server/index.js'], {
-    cwd: repo,
-    env: { ...process.env, PORT: String(PORT) },
-    stdio: 'ignore',
+async function main() {
+  const apk = apkFixture();
+
+  const fixtureServer = http.createServer((_req, res) => {
+    res.writeHead(200, {
+      'Content-Type': APK_MIME,
+      'Content-Length': String(apk.length),
+      'Accept-Ranges': 'bytes',
+    });
+    res.end(apk);
   });
+  await new Promise<void>((resolve) => fixtureServer.listen(FIXTURE_PORT, '127.0.0.1', resolve));
+
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PORT: String(APP_PORT),
+    APK_DOWNLOAD_URL: `http://127.0.0.1:${FIXTURE_PORT}/${APK_NAME}`,
+  };
+  const server = spawn('node', ['server/index.js'], { cwd: repo, env, stdio: 'ignore' });
 
   let browser: any;
   try {
     await waitForServer(`${BASE}/invite`);
-    browser = await chromium.launch();
-    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
 
-    // Injected as a raw string on purpose: a transpiled function would be
-    // rewritten with helpers (__name) that do not exist inside the page.
+    // The server really does serve an APK, under the fixed filename.
+    const infoRes = await fetch(`${BASE}/api/download/info`);
+    const info: any = await infoRes.json();
+    check('APK source is configured on the server', info.configured === true, JSON.stringify(info));
+
+    const apkRes = await fetch(`${BASE}/download/${APK_NAME}`);
+    const disposition = String(apkRes.headers.get('content-disposition') || '');
+    check('APK route answers with the file', apkRes.ok, String(apkRes.status));
+    check(
+      'APK route declares the Android package type',
+      (apkRes.headers.get('content-type') || '') === APK_MIME,
+      String(apkRes.headers.get('content-type'))
+    );
+    check(
+      'APK route attaches RIFQ-Muslim.apk',
+      /attachment/i.test(disposition) && /RIFQ-Muslim\.apk/.test(disposition),
+      disposition
+    );
+
+    browser = await chromium.launch();
+
+    /* ------------------------------ Android ------------------------------- */
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      userAgent: ANDROID_UA,
+      acceptDownloads: true,
+    });
+
+    // Raw string: a transpiled function would carry __name helpers that do not
+    // exist inside the page and would silently break these stubs.
     await context.addInitScript({
       content: `
-        window.__opened = [];
-        window.__copied = [];
-        window.open = function (u) { window.__opened.push(String(u)); return null; };
-        Object.defineProperty(navigator, 'clipboard', {
+        window.__pct = [];
+        window.__shares = [];
+        const record = () => {
+          const el = document.querySelector('[role="progressbar"]');
+          if (!el) return;
+          const v = Number(el.getAttribute('aria-valuenow'));
+          if (!Number.isNaN(v)) window.__pct.push(v);
+        };
+        new MutationObserver(record).observe(document.documentElement, {
+          subtree: true, childList: true, attributes: true, attributeFilter: ['aria-valuenow']
+        });
+        Object.defineProperty(navigator, 'canShare', {
           configurable: true,
-          value: { writeText: function (s) { window.__copied.push(String(s)); return Promise.resolve(); } }
+          value: function (data) { return !!(data && data.files && data.files.length); }
+        });
+        Object.defineProperty(navigator, 'share', {
+          configurable: true,
+          value: function (data) {
+            const files = (data && data.files) || [];
+            window.__shares.push({
+              title: data && data.title,
+              text: data && data.text,
+              files: files.map(function (f) { return { name: f.name, type: f.type, size: f.size }; })
+            });
+            return Promise.resolve();
+          }
         });
       `,
     });
@@ -91,103 +158,90 @@ async function main() {
     page.on('pageerror', (e: any) => pageErrors.push(String(e)));
 
     await page.goto(`${BASE}/invite`, { waitUntil: 'networkidle' });
-    await page.waitForSelector('img[data-qr-target]', { timeout: 20000 });
+    await page.getByText('Invite Friends').first().waitFor({ timeout: 20000 });
 
     check('Invite Friends page renders', await page.getByText('Invite Friends').first().isVisible());
 
-    // 2. The QR code encodes exactly the official URL.
-    const qrSrc = await page.getAttribute('img[data-qr-target]', 'src');
-    const declared = await page.getAttribute('img[data-qr-target]', 'data-qr-target');
-    check('QR code declares the official URL', declared === INVITE_URL, String(declared));
-    check('QR image is a PNG data URL', String(qrSrc).startsWith('data:image/png;base64,'));
-
-    // Expected matrix, straight from the same library the page uses.
-    const expected = QRCode.create(INVITE_URL, { errorCorrectionLevel: 'M' });
-    const size: number = expected.modules.size;
-    const expectedBits: number[] = Array.from(expected.modules.data as Uint8Array);
-
-    // Decode the rendered image back into a module matrix by sampling pixels.
-    const sampled: number[] = await page.evaluate(
-      ({ qrSize, margin }) => {
-        const img = document.querySelector('img[data-qr-target]') as HTMLImageElement | null;
-        if (!img) return [];
-        const width = img.naturalWidth || 320;
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = img.naturalHeight || 320;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return [];
-        ctx.drawImage(img, 0, 0);
-        const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-        const scale = width / (qrSize + margin * 2);
-        const out: number[] = [];
-        for (let row = 0; row < qrSize; row++) {
-          for (let col = 0; col < qrSize; col++) {
-            const x = Math.round((margin + col + 0.5) * scale);
-            const y = Math.round((margin + row + 0.5) * scale);
-            const i = (y * width + x) * 4;
-            const lum = pixels[i] * 0.299 + pixels[i + 1] * 0.587 + pixels[i + 2] * 0.114;
-            out.push(lum < 128 ? 1 : 0);
-          }
-        }
-        return out;
-      },
-      { qrSize: size, margin: MARGIN }
-    );
-
-    check('QR image decoded to a full module grid', sampled.length === expectedBits.length,
-      `${sampled.length} sampled vs ${expectedBits.length} expected (${size}x${size})`);
-    const differing = sampled.reduce((n, bit, i) => n + (bit === expectedBits[i] ? 0 : 1), 0);
-    check('QR code encodes exactly the official URL', differing === 0, `${differing} modules differ`);
-
+    // 1. No QR code, no address.
     check(
-      'official URL printed under the QR',
-      (await page.getByText(INVITE_URL, { exact: true }).count()) >= 1
+      'no QR image is rendered',
+      (await page.locator('img[data-qr-target], [data-qr], [data-invite-qr]').count()) === 0
     );
+    check('no QR canvas is rendered', (await page.locator('canvas').count()) === 0);
 
-    // 1. Download App button.
-    const dl = page.locator('a[data-download-url]');
-    check('Download App button present', (await dl.count()) === 1);
-    const href = await dl.getAttribute('href');
-    check('Download App href is the official URL', href === INVITE_URL, String(href));
-    const target = await dl.getAttribute('target');
-    const rel = String(await dl.getAttribute('rel'));
-    check('Download App opens a new tab safely', target === '_blank' && /noopener/.test(rel), `${target} / ${rel}`);
-    check('Download App keeps its label', /DOWNLOAD RIFQ MUSLIM/i.test(String(await dl.textContent())));
-    check(
-      'no "not available yet" status on this page',
-      (await page.getByText(/not available yet/i).count()) === 0
-    );
+    const bodyText: string = await page.locator('body').innerText();
+    check('no website URL is displayed', !/https?:\/\//i.test(bodyText), bodyText.match(/https?:\/\/\S+/i)?.[0] ?? '');
+    check('no median share address is displayed', !/median\.co/i.test(bodyText));
+    check('no QR wording remains', !/\bQR\b/i.test(bodyText));
+    check('no copyable address remains', !/\bwww\./i.test(bodyText));
 
-    // 3. Every invite/share action carries the same link.
-    for (const label of ['WhatsApp', 'Facebook', 'Telegram']) {
-      await page.getByRole('button', { name: new RegExp(label, 'i') }).first().click();
-    }
-    const opened: string[] = await page.evaluate(() => (window as any).__opened);
-    check('three share targets opened', opened.length === 3, JSON.stringify(opened));
-    check(
-      'every share target carries the official URL',
-      opened.every((u) => decodeURIComponent(u).includes(INVITE_URL)),
-      JSON.stringify(opened)
-    );
+    // 2. The two actions.
+    const inviteBtn = page.getByRole('button', { name: /^INVITE FRIENDS$/i });
+    const downloadBtn = page.getByRole('button', { name: /^DOWNLOAD APP$/i });
+    check('Invite Friends button present', (await inviteBtn.count()) === 1);
+    check('Download App button present', (await downloadBtn.count()) === 1);
+    check('no APK link is shown instead of a file action', (await page.locator('a[href$=".apk"]').count()) === 0);
 
-    await page.getByRole('button', { name: /Copy link/i }).first().click();
-    await page.waitForTimeout(300);
-    const copied: string[] = await page.evaluate(() => (window as any).__copied);
-    check('Copy link copies the official URL', copied[0] === INVITE_URL, JSON.stringify(copied));
+    // 3. Download App transfers the real file, with progress.
+    const downloadPromise = page.waitForEvent('download', { timeout: 90000 });
+    await downloadBtn.click();
+    const download = await downloadPromise;
 
-    await page.getByRole('button', { name: /More apps/i }).first().click();
+    check('download saves the file as RIFQ-Muslim.apk', download.suggestedFilename() === APK_NAME, download.suggestedFilename());
+    const savedPath = await download.path();
+    const savedSize = savedPath ? (await import('node:fs')).statSync(savedPath).size : 0;
+    check('downloaded file contains every byte of the APK', savedSize === FIXTURE_BYTES, `${savedSize} vs ${FIXTURE_BYTES}`);
+
+    const pct: number[] = await page.evaluate(() => (window as any).__pct);
+    check('download progress was shown', pct.length > 0, JSON.stringify(pct.slice(0, 6)));
+    check('progress reached 100%', pct.some((v) => v === 100), JSON.stringify(pct.slice(-4)));
+
     await page.waitForTimeout(400);
-    const copiedAgain: string[] = await page.evaluate(() => (window as any).__copied);
+    const afterDownload: string = await page.locator('body').innerText();
+    check('download success message is shown', /Downloaded/i.test(afterDownload), afterDownload.slice(-160));
+
+    // 4. Invite Friends shares the actual file.
+    await inviteBtn.click();
+    await page.waitForTimeout(600);
+    const shares: any[] = await page.evaluate(() => (window as any).__shares);
+    check('the share sheet was opened once', shares.length === 1, JSON.stringify(shares.length));
+    const shared = shares[0] ?? {};
+    check('exactly one file was shared', (shared.files?.length ?? 0) === 1, JSON.stringify(shared.files));
     check(
-      'native-share fallback copies the official URL',
-      copiedAgain[copiedAgain.length - 1] === INVITE_URL,
-      JSON.stringify(copiedAgain)
+      'the shared file is RIFQ-Muslim.apk of the APK type',
+      shared.files?.[0]?.name === APK_NAME && shared.files?.[0]?.type === APK_MIME,
+      JSON.stringify(shared.files?.[0])
     );
+    check('the shared file carries every byte of the APK', shared.files?.[0]?.size === FIXTURE_BYTES, String(shared.files?.[0]?.size));
+    check(
+      'the invitation message introduces the app',
+      /RIFQ Muslim/.test(String(shared.text)) && /Made by Eng Mohamud Yusuf/.test(String(shared.text)),
+      String(shared.text)
+    );
+    check('the invitation message contains no URL', !/https?:\/\//i.test(String(shared.text)), String(shared.text));
 
     check('no page errors', pageErrors.length === 0, pageErrors.join(' | '));
 
-    // Everything else still serves.
+    // 5. iPhones are never offered the Android file.
+    const iosContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      userAgent: IOS_UA,
+    });
+    const iosPage = await iosContext.newPage();
+    await iosPage.goto(`${BASE}/invite`, { waitUntil: 'networkidle' });
+    await iosPage.waitForTimeout(600);
+    const iosText: string = await iosPage.locator('body').innerText();
+
+    check('iOS: no Download App button', (await iosPage.getByRole('button', { name: /DOWNLOAD APP/i }).count()) === 0);
+    check('iOS: no Invite Friends button', (await iosPage.getByRole('button', { name: /INVITE FRIENDS/i }).count()) === 0);
+    check('iOS: no APK link', (await iosPage.locator('a[href$=".apk"]').count()) === 0);
+    check(
+      'iOS: explains that the Android file is not offered',
+      /not available yet/i.test(iosText) && /App Store/i.test(iosText),
+      iosText.slice(0, 200)
+    );
+
+    // 6. Nothing else was disturbed.
     for (const route of ['/', '/more', '/quran/1']) {
       const res = await page.goto(`${BASE}${route}`, { waitUntil: 'domcontentloaded' });
       check(`${route} still serves`, (res?.status() ?? 0) === 200, String(res?.status()));
@@ -197,6 +251,7 @@ async function main() {
   } finally {
     if (browser) await browser.close();
     server.kill('SIGTERM');
+    fixtureServer.close();
   }
 
   console.log(`\n${failures.length ? `${failures.length} FAILED` : 'all assertions passed'}`);

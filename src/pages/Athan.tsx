@@ -344,10 +344,34 @@ export default function Athan() {
           />
         ))}
 
+        <div className="athan-subhead">
+          <h3 className="athan-subtitle">Adhan sound at prayer time</h3>
+          <p className="athan-meta">
+            The Adhan recording plays only when the prayer time arrives. Pre-prayer notices and
+            daily reminders use the general notification sound instead.
+          </p>
+        </div>
+
+        {FIVE.map((key, index) => (
+          <Toggle
+            key={`adhan-${key}`}
+            checked={prefs.adhanAudio[key] !== false}
+            onChange={(v) => setPrefs({ adhanAudio: { ...prefs.adhanAudio, [key]: v } })}
+            label={`Adhan audio · ${cap(key)}`}
+            sub={
+              prefs.adhanAudio[key] === false
+                ? 'Notification only — no Adhan recording'
+                : 'Plays the selected Adhan at prayer time'
+            }
+            last={index === FIVE.length - 1}
+            testId={`adhan-audio-${key}`}
+          />
+        ))}
+
         <div className="athan-row is-last">
           <div className="athan-row-main">
             <div className="athan-label">Pre-prayer reminder</div>
-            <div className="athan-meta">A quiet chime before the adhan</div>
+            <div className="athan-meta">A quiet chime before the adhan — never the Adhan recording</div>
           </div>
           <select
             className="select"

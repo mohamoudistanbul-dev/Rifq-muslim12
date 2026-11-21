@@ -6,6 +6,18 @@ This document records exactly what the automated dependency scan covers, what it
 reports, what it **cannot** cover in this environment, and how to close the rest.
 It is **not** a statement that the application is secure.
 
+Latest revision (Quran Mushaf reading, Adhan audio control and offline mode, rev 31 of this
+task): the scan was re-run at this revision and reported **457 packages, 0 advisories,
+0 blocking, status `incomplete`** — the same figures as the revision before it. This feature
+added **no dependency**: `package.json` gained only the `verify:mushaf` script
+(`scripts/verify-mushaf-offline.ts`) and `package-lock.json` is unchanged, so the resolved set
+the scan read is identical to the previously scanned one. The three Maven lockfiles were
+re-read and still carry every advisory-named fixed version (§1). `incomplete` remains only the
+attribution gap of §3: `android/build.gradle.kts` owns no dependency file because it declares
+no dependencies of its own — **not** an unscanned package, **not** a finding, and still not a
+clean scan. The capability that would close it is named in §3.3 and has not changed: native
+Gradle execution with the Android SDK.
+
 Latest revision (advanced rich prayer notifications, rev 19 of this task): the scan was re-run
 at this revision and reported **457 packages, 0 advisories, 0 blocking, status `incomplete`**.
 This feature added no dependency — `package.json` gained only the `verify:rich` script
@@ -65,7 +77,7 @@ resolved dependency set itself is unchanged.
 | --- | --- |
 | Scanner | OSV-Scanner 2.7.0 |
 | Policy | `workspace-dependencies-v1` |
-| Packages checked | **457** (rev 19) |
+| Packages checked | **457** (rev 31) |
 | Known advisories | **0** |
 | Blocking (high/critical) | **0** |
 | Reported status | `incomplete` |
@@ -248,6 +260,13 @@ Gradle cannot be executed here, and hand-writing the file would be fabrication.
 
 The dependency graph is unchanged and fully locked by the three committed files in §2;
 what is missing is one scanner association, not evidence about any package.
+
+**Missing capability, stated plainly:** native Gradle execution together with a JDK and the
+Android SDK. This workspace has a JDK, and the Gradle wrapper is committed, but running it is
+outside the supported execution scope here (`web-builds-only-v1`), and no Android SDK is
+installed. So no scan of revision 31 can close this item from inside AppJet. Nothing about the
+packages themselves is unknown: the plugin classpath is locked in
+`android/buildscript-gradle.lockfile`, which the scan did read and attribute.
 
 **Who can close it, and how.** On any machine with the Android SDK (or on the
 GitHub Actions runner that already builds the APK), run:

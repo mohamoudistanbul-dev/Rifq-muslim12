@@ -6,10 +6,18 @@ This document records exactly what the automated dependency scan covers, what it
 reports, what it **cannot** cover in this environment, and how to close the rest.
 It is **not** a statement that the application is secure.
 
-Last updated: 2026-11-20 — scan re-run on the current application revision
+Last updated: 2026-11-21 — coverage audit at revision 18 re-checked the build scripts and
+confirmed the remaining warning is an **attribution** gap, not an unscanned package (§3):
+`android/build.gradle.kts` owns a buildscript classpath configuration but no dependencies
+of its own, so Gradle emits `android/buildscript-gradle.lockfile` and never a
+project-level `android/gradle.lockfile`. A CI scan that targets each lockfile explicitly
+was added (`.github/workflows/dependency-scan.yml`, §2.2) but has **not been executed**
+here, so the AppJet-side scan status is still `incomplete` (§3.4).
+
+Previous scan re-run: 2026-11-20 on the application revision
 (AGP 8.13.2 / Gradle 8.14.4 / Kotlin 2.4.21). The remaining coverage warning was
-re-investigated for this revision and confirmed to be unclosable from inside AppJet
-(§3.3); the resolved dependency set itself is unchanged.
+re-investigated then as well and confirmed unclosable from inside AppJet (§3.3); the
+resolved dependency set itself is unchanged.
 
 ---
 
@@ -88,6 +96,14 @@ ecosystem for `/android` (which reads both `android/app/gradle.lockfile` and
 remains is a repository setting only the owner can change — **Settings → Code security →
 Dependabot alerts** on GitHub. Until that is switched on, the automated scan below stays
 `incomplete`, and this document does not claim otherwise.
+
+**Committed CI scan (added 2026-11-21, not yet executed).** `.github/workflows/dependency-scan.yml`
+hands each of the four lockfiles to OSV-Scanner as an **explicit target** (`-L`), one job per
+file, so the packages are reported without the scanner having to attribute a build script at
+all. A second, deliberately non-gating job runs
+`./android/gradlew -p android buildEnvironment --write-locks` on a runner that has a JDK and
+uploads `android/gradle.lockfile` if Gradle ever emits one — which is the only honest way to
+test that hypothesis. Neither job has run yet: AppJet cannot execute GitHub Actions (§3.4).
 
 Reconciliation against the report itself (`packages_checked: 444`,
 `ecosystems: ["Maven", "npm"]`, `unmatched_packages: 0`):
@@ -208,6 +224,26 @@ alternative that needs no SDK at all is already configured here: enable Dependab
 alerts (Settings → Code security), which reads the committed buildscript lockfile
 directly (§2.2).
 
+### 3.4 Status of the CI route at revision 18
+
+`.github/workflows/dependency-scan.yml` is committed but **has not been executed**. AppJet
+cannot run GitHub Actions, and this environment has neither Gradle nor the Android SDK, so no
+CI result exists to report. Everything stated in §1–§2 therefore still describes the AppJet
+scan of revision 18 (444 packages, 0 advisories, status `incomplete`) — not a CI run.
+
+When the owner triggers it from the repository's **Actions** tab:
+
+| Job | What it establishes |
+| --- | --- |
+| `Scan package-lock.json` | npm bundle, explicitly targeted |
+| `Scan android/app/gradle.lockfile` | the APK's library graph, explicitly targeted |
+| `Scan android/buildscript-gradle.lockfile` | the AGP / Kotlin plugin classpath, explicitly targeted — the file the repository scan could not attribute |
+| `Scan deps-audit/gradle.lockfile` | the AAR audit graph, explicitly targeted |
+| `Try to emit android/gradle.lockfile` | non-gating; reports whether Gradle can produce the file the scanner asks for, and uploads it if it can |
+
+A failing `Scan …` job means advisories were found in that lockfile — the intended gate. It
+does not mean the build is broken.
+
 ## 4. How the AAR graph is resolved without the SDK
 
 AndroidX publishes AAR variants, which a stock `java-library` consumer cannot select;
@@ -239,6 +275,11 @@ project-level `android/gradle.lockfile` that Gradle cannot produce for a
 plugin-free root project. No lockfile was fabricated and no finding was suppressed.
 Unknown: anything the advisory database has not yet published, the Gradle
 distribution and SDK components themselves, and everything in §5.
+
+The route to a fully attributed scan exists in two forms (§2.2): the committed CI workflow,
+which has not been executed here, and Dependabot alerts, which is a repository setting only
+the owner can enable. Until one of them runs, `incomplete` is the accurate status of the scan
+this environment produced, and this document does not claim otherwise.
 
 ## 7. Runtime external resources (outside dependency scanning)
 

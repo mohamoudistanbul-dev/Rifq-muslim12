@@ -1,0 +1,112 @@
+# Dependency coverage scan for RIFQ Muslim.
+#
+# Why this exists: the repository-wide scan reports `incomplete` for one bookkeeping
+# reason — it cannot attribute android/buildscript-gradle.lockfile to
+# android/build.gradle.kts, because that root project declares no dependencies of its
+# own (the plugin versions are declared `apply false` and applied in :app, and the only
+# resolvable configuration there is the buildscript classpath). See
+# docs/SECURITY_COVERAGE.md §3 for the evidence. The packages themselves are locked and
+# scanned; what is missing is the scanner's association, not evidence.
+#
+# This workflow removes the ambiguity instead of hiding it: every committed lockfile is
+# handed to OSV-Scanner as an explicit target (`-L`), one job per file, so coverage does
+# not depend on the scanner discovering and attributing a build script. Nothing is
+# installed into the repository, no lockfile is hand-written, and no finding is
+# suppressed.
+#
+# Run it from the Actions tab (workflow_dispatch) or let the weekly schedule do it.
+name: Dependency scan (explicit lockfiles)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * 1" # Mondays, 04:00 UTC
+  push:
+    branches: [main, appjet]
+    paths:
+      - "package-lock.json"
+      - "android/app/gradle.lockfile"
+      - "android/buildscript-gradle.lockfile"
+      - "deps-audit/gradle.lockfile"
+      - ".github/workflows/dependency-scan.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  scan-lockfile:
+    name: Scan ${{ matrix.lockfile }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lockfile: package-lock.json
+            what: npm bundle (web client + server)
+          - lockfile: android/app/gradle.lockfile
+            what: APK library graph
+          - lockfile: android/buildscript-gradle.lockfile
+            what: AGP / Kotlin plugin classpath
+          - lockfile: deps-audit/gradle.lockfile
+            what: AAR audit graph
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the lockfile is committed
+        run: |
+          if [ ! -f "${{ matrix.lockfile }}" ]; then
+            echo "::error file=${{ matrix.lockfile }}::Lockfile missing — cannot scan ${{ matrix.what }}."
+            exit 1
+          fi
+          echo "Scanning ${{ matrix.lockfile }} (${{ matrix.what }})"
+
+      - name: OSV-Scanner — ${{ matrix.lockfile }}
+        # A non-zero exit means advisories were found for this lockfile and fails the job
+        # on purpose. The image tag is pinned to the scanner release so results are
+        # reproducible; bump it deliberately, together with docs/SECURITY_COVERAGE.md.
+        run: |
+          docker run --rm -v "$PWD:/src" \
+            ghcr.io/google/osv-scanner:v2.7.1 \
+            -L "/src/${{ matrix.lockfile }}" --verbosity=info
+
+  gradle-lock-attempt:
+    # Documents, by running it, whether Gradle can produce the file the repository scan
+    # asks for. Expected result at revision 18: it cannot, because the root project has no
+    # dependencies of its own. Non-gating: this job never blocks the scan above.
+    name: Try to emit android/gradle.lockfile
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Resolve the buildscript classpath with locking enabled
+        run: |
+          chmod +x android/gradlew
+          ./android/gradlew -p android buildEnvironment --write-locks
+
+      - name: Report what Gradle produced
+        run: |
+          if [ -f android/gradle.lockfile ]; then
+            echo "android/gradle.lockfile was produced."
+            echo "Commit it (never hand-edit) so the repository scan can attribute it to"
+            echo "android/build.gradle.kts."
+          else
+            echo "No android/gradle.lockfile: the root project declares no dependencies of"
+            echo "its own, so Gradle emits only android/buildscript-gradle.lockfile, which the"
+            echo "scan-lockfile jobs above already cover with explicit attribution."
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-gradle-lock-state
+          path: |
+            android/gradle.lockfile
+            android/buildscript-gradle.lockfile
+          if-no-files-found: warn
+          retention-days: 30

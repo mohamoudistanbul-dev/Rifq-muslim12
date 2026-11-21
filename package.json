@@ -18,7 +18,8 @@
     "geo:build": "node scripts/build-geo-data.mjs",
     "verify:touch": "node scripts/verify-text-selection.mjs",
     "verify:invite": "tsx scripts/verify-invite.ts",
-  "verify:settings": "node scripts/verify-settings-persistence.mjs"
+    "verify:settings": "node scripts/verify-settings-persistence.mjs",
+    "verify:workflow": "node scripts/validate-android-workflow.mjs"
   },
   "dependencies": {
     "adhan": "^4.4.3",

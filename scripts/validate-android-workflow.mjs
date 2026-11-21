@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 /**
- * Structural validation for .github/workflows/android-apk.yml
+ * Structural validation for the GitHub workflows that gate delivery:
+ *   .github/workflows/android-apk.yml      - whether an APK actually gets built
+ *   .github/workflows/dependency-scan.yml  - whether the dependency scan keeps
+ *                                            covering every committed lockfile
  *
  * Dependency-free on purpose: it runs anywhere Node is available, including
- * before a GitHub runner ever starts. It asserts the parts of the workflow that
- * decide whether an APK actually gets built, so a regression fails loudly here
- * instead of silently in CI.
+ * before a GitHub runner ever starts. It asserts the parts of each workflow that
+ * decide the outcome, so a regression fails loudly here instead of silently in CI.
+ * It does not execute either workflow, so a green run there is still required.
  *
  * Usage:  node scripts/validate-android-workflow.mjs
  * Exits non-zero and lists every problem found.
@@ -80,6 +83,66 @@ if (/[A-Za-z0-9+/]{120,}={0,2}/.test(src)) {
   problems.push('possible embedded base64 blob (inlined keystore?)');
 }
 
+// ---------------------------------------------------------------------------
+// .github/workflows/dependency-scan.yml - the committed route that closes the
+// Gradle attribution gap. It cannot execute inside AppJet, so its shape is
+// asserted here: every committed lockfile must stay an explicit scan target and
+// no step may require a secret.
+const scanWorkflowPath = join(root, '.github/workflows/dependency-scan.yml');
+
+let scanSrc;
+try {
+  scanSrc = readFileSync(scanWorkflowPath, 'utf8');
+} catch (err) {
+  console.error(`workflow validation FAILED: cannot read ${scanWorkflowPath} (${err.message})`);
+  process.exit(1);
+}
+
+const scanRules = [
+  ['workflow name', /^name:\s*\S+/m],
+  ['manual trigger', /workflow_dispatch:/],
+  ['scheduled trigger', /cron:\s*['"][^'"]+['"]/],
+  ['least-privilege permissions', /permissions:[\s\S]*?contents:\s*read/],
+  ['ubuntu runner', /runs-on:\s*ubuntu-latest/],
+  ['checkout action', /actions\/checkout@v4/],
+  ['explicit lockfile target (-L)', /-L\s+"?\/src\//],
+  ['pinned scanner release', /ghcr\.io\/google\/osv-scanner:v\d+\.\d+\.\d+/],
+  ['every lockfile reports', /fail-fast:\s*false/],
+  ['missing-lockfile guard', /Lockfile missing/],
+  ['lock state artifact', /actions\/upload-artifact@v4/],
+  ['write-locks attempt', /buildEnvironment --write-locks/],
+];
+
+for (const [label, re] of scanRules) {
+  if (!re.test(scanSrc)) problems.push(`dependency scan missing or changed: ${label}`);
+}
+
+// Each committed lockfile must stay an explicit matrix target. Dropping one would
+// shrink coverage silently while the workflow still reported green.
+const requiredLockfiles = [
+  'package-lock.json',
+  'android/app/gradle.lockfile',
+  'android/buildscript-gradle.lockfile',
+  'deps-audit/gradle.lockfile',
+];
+for (const lockfile of requiredLockfiles) {
+  if (!scanSrc.includes(`lockfile: ${lockfile}`)) {
+    problems.push(`dependency scan no longer targets ${lockfile}`);
+  }
+}
+
+// Exactly one non-gating job (the write-locks attempt); the scans themselves must
+// fail the run when advisories are found.
+const nonGating = (scanSrc.match(/continue-on-error:\s*true/g) || []).length;
+if (nonGating !== 1) {
+  problems.push(`expected exactly 1 non-gating job, found ${nonGating}`);
+}
+
+// Scanning needs no credentials, so a secret reference would be a design regression.
+if (/secrets\./.test(scanSrc)) {
+  problems.push('dependency scan references repository secrets');
+}
+
 if (problems.length) {
   console.error('workflow validation FAILED:');
   for (const problem of problems) console.error(`  - ${problem}`);
@@ -87,6 +150,8 @@ if (problems.length) {
 }
 
 console.log(
-  `workflow validation passed: ${rules.length} structural rules, ` +
-    `${cacheGuards} build-cache guards, no hardcoded signing values`,
+  `workflow validation passed: android-apk ${rules.length} rules ` +
+    `(${cacheGuards} build-cache guards, no hardcoded signing values), ` +
+    `dependency-scan ${scanRules.length} rules ` +
+    `(${requiredLockfiles.length} explicit lockfiles, ${nonGating} non-gating job)`,
 );

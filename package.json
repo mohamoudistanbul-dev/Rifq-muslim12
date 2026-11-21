@@ -21,7 +21,8 @@
     "verify:invite": "tsx scripts/verify-invite.ts",
     "verify:settings": "node scripts/verify-settings-persistence.mjs",
     "verify:workflow": "node scripts/validate-android-workflow.mjs",
-    "verify:analytics": "node scripts/verify-analytics.mjs"
+    "verify:analytics": "node scripts/verify-analytics.mjs",
+    "verify:geo": "tsx scripts/verify-geo.ts"
   },
   "dependencies": {
     "adhan": "^4.4.3",

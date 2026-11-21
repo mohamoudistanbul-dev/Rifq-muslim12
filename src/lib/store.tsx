@@ -331,6 +331,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     await post('/auth/logout');
+    // Never leave another account's cached responses behind on this device.
+    local.clearApiCache();
     setUser(null);
     toast('Signed out');
   }, [toast]);

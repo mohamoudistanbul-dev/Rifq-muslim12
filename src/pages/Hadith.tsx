@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Page } from '../components/Shell';
 import { get } from '../lib/api';
 
@@ -8,10 +8,13 @@ import { get } from '../lib/api';
  * Every field shown here comes from the hadith-api dataset (see
  * server/hadith.js). Nothing is generated in the client: when the dataset has
  * no Somali edition, the item says so instead of showing invented text.
+ *
+ * Layout note: this screen is styled entirely from the RIFQ design tokens
+ * (src/screens.css). It previously used an inline `var(--card, #fff)` fallback
+ * with inherited text colour, which rendered white cards with invisible text
+ * in the dark theme.
  */
 
-const GOLD = '#d4af37';
-const EMERALD = '#0f5132';
 const BOOKMARK_KEY = 'rifq.hadith.bookmarks.v1';
 
 interface Collection {
@@ -80,100 +83,6 @@ interface SavedHadith {
   savedAt: number;
 }
 
-const S: Record<string, React.CSSProperties> = {
-  h1: { fontSize: 22, margin: '0 0 4px', color: EMERALD, fontWeight: 700 },
-  sub: { margin: '0 0 14px', fontSize: 13, opacity: 0.75 },
-  tabs: { display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' },
-  tab: {
-    padding: '8px 14px',
-    borderRadius: 999,
-    border: `1px solid ${GOLD}77`,
-    background: 'transparent',
-    color: 'inherit',
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: 'pointer',
-  },
-  tabActive: { background: EMERALD, color: '#fff', borderColor: EMERALD },
-  card: {
-    background: 'var(--card, #fff)',
-    border: `1px solid ${GOLD}55`,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-  },
-  badge: {
-    display: 'inline-block',
-    padding: '3px 9px',
-    borderRadius: 999,
-    background: 'rgba(212,175,55,0.16)',
-    color: '#8a6d1f',
-    fontSize: 11,
-    fontWeight: 700,
-  },
-  arabic: {
-    direction: 'rtl',
-    textAlign: 'right',
-    fontSize: 24,
-    lineHeight: 2,
-    fontFamily: "'Amiri', 'Scheherazade New', 'Traditional Arabic', serif",
-    margin: '10px 0',
-  },
-  english: { fontSize: 14, lineHeight: 1.6, margin: '8px 0 0' },
-  somali: { fontSize: 13, lineHeight: 1.6, margin: '6px 0 0', opacity: 0.85, fontStyle: 'italic' },
-  section: { fontSize: 12, opacity: 0.7, marginTop: 8 },
-  gradeRow: { display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 },
-  grade: {
-    fontSize: 11,
-    padding: '2px 8px',
-    borderRadius: 999,
-    background: 'rgba(15,81,50,0.10)',
-    color: EMERALD,
-    fontWeight: 600,
-  },
-  row: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' },
-  input: {
-    flex: 1,
-    minWidth: 180,
-    padding: '11px 13px',
-    borderRadius: 12,
-    border: `1px solid ${GOLD}88`,
-    background: 'transparent',
-    color: 'inherit',
-    fontSize: 14,
-  },
-  select: {
-    padding: '11px 13px',
-    borderRadius: 12,
-    border: `1px solid ${GOLD}88`,
-    background: 'transparent',
-    color: 'inherit',
-    fontSize: 14,
-  },
-  button: {
-    padding: '11px 16px',
-    borderRadius: 12,
-    border: 'none',
-    background: EMERALD,
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 700,
-    cursor: 'pointer',
-  },
-  ghost: {
-    padding: '10px 14px',
-    borderRadius: 12,
-    border: `1px solid ${GOLD}`,
-    background: 'transparent',
-    color: EMERALD,
-    fontSize: 13,
-    fontWeight: 700,
-    cursor: 'pointer',
-  },
-  small: { fontSize: 12, opacity: 0.75, margin: '8px 0 0' },
-  error: { color: '#b3261e', fontSize: 13 },
-};
-
 function readSaved(): SavedHadith[] {
   try {
     const raw = localStorage.getItem(BOOKMARK_KEY);
@@ -206,14 +115,14 @@ function Item({
   onToggleSave: () => void;
 }) {
   return (
-    <div style={S.card}>
-      <div style={S.row}>
-        <span style={S.badge}>{collection}</span>
-        <span style={{ ...S.badge, background: 'rgba(15,81,50,0.10)', color: EMERALD }}>No. {item.number}</span>
-        <div style={{ flex: 1 }} />
+    <article className="card hadith-card">
+      <div className="hadith-head">
+        <span className="badge-gold">{collection}</span>
+        <span className="badge-soft">No. {item.number}</span>
+        <span className="spacer" />
         <button
           type="button"
-          style={{ ...S.ghost, padding: '6px 12px', fontSize: 12 }}
+          className="btn btn-ghost btn-sm"
           onClick={onToggleSave}
           aria-pressed={saved}
           aria-label={saved ? `Remove hadith ${item.number} from saved` : `Save hadith ${item.number}`}
@@ -221,27 +130,42 @@ function Item({
           {saved ? '★ Saved' : '☆ Save'}
         </button>
       </div>
-      <p style={S.arabic} dir="rtl" lang="ar">
+
+      <p className="hadith-arabic" dir="rtl" lang="ar">
         {item.arabic}
       </p>
+
       {item.english ? (
-        <p style={S.english}>{item.english}</p>
+        <p className="hadith-text" lang="en">
+          {item.english}
+        </p>
       ) : (
-        <p style={{ ...S.small, color: '#8a6d1f' }}>English translation is not available in the dataset for this hadith.</p>
+        <p className="hadith-missing">English translation is not available in the dataset for this hadith.</p>
       )}
-      {item.somali ? <p style={S.somali}>{item.somali}</p> : null}
-      {item.section ? <div style={S.section}>Book {item.book} · {item.section}</div> : null}
+
+      {item.somali ? (
+        <p className="hadith-somali" lang="so">
+          {item.somali}
+        </p>
+      ) : null}
+
+      {item.section ? (
+        <p className="hadith-ref tiny muted">
+          Book {item.book} · {item.section}
+        </p>
+      ) : null}
+
       {item.grades.length ? (
-        <div style={S.gradeRow}>
+        <div className="hadith-grades">
           {item.grades.map((g, i) => (
-            <span key={`${g.scholar}-${i}`} style={S.grade}>
+            <span key={`${g.scholar}-${i}`} className="hadith-grade">
               {g.grade}
               {g.scholar ? ` — ${g.scholar}` : ''}
             </span>
           ))}
         </div>
       ) : null}
-    </div>
+    </article>
   );
 }
 
@@ -268,24 +192,21 @@ export default function Hadith() {
       .catch(() => setDaily(null));
   }, []);
 
-  const loadCollection = useCallback(
-    async (key: string, pageNo: number, sectionNo: number | '') => {
-      setLoading(true);
-      setError('');
-      try {
-        const params = new URLSearchParams({ page: String(pageNo), pageSize: '20' });
-        if (sectionNo !== '') params.set('section', String(sectionNo));
-        const r = await get<CollectionResponse>(`/hadith/${key}?${params.toString()}`);
-        setData(r);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'This collection could not be loaded.');
-        setData(null);
-      } finally {
-        setLoading(false);
-      }
-    },
-    []
-  );
+  const loadCollection = useCallback(async (key: string, pageNo: number, sectionNo: number | '') => {
+    setLoading(true);
+    setError('');
+    try {
+      const params = new URLSearchParams({ page: String(pageNo), pageSize: '20' });
+      if (sectionNo !== '') params.set('section', String(sectionNo));
+      const r = await get<CollectionResponse>(`/hadith/${key}?${params.toString()}`);
+      setData(r);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'This collection could not be loaded.');
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (tab !== 'read') return;
@@ -343,11 +264,11 @@ export default function Hadith() {
 
   return (
     <Page title="Hadith">
-      <p style={S.sub}>
-        Six canonical collections, Arabic text with published translations, references and gradings.
+      <p className="muted small" style={{ margin: '0 0 12px' }}>
+        Six canonical collections — Arabic text with published translations, references and gradings.
       </p>
 
-      <div style={S.tabs}>
+      <div className="chips" style={{ marginBottom: 14 }}>
         {(
           [
             ['daily', 'Daily'],
@@ -359,7 +280,7 @@ export default function Hadith() {
           <button
             key={id}
             type="button"
-            style={{ ...S.tab, ...(tab === id ? S.tabActive : {}) }}
+            className={`chip${tab === id ? ' is-active' : ''}`}
             onClick={() => setTab(id)}
             aria-pressed={tab === id}
           >
@@ -368,7 +289,11 @@ export default function Hadith() {
         ))}
       </div>
 
-      {error ? <p style={S.error} role="alert">{error}</p> : null}
+      {error ? (
+        <p className="notice" role="alert">
+          {error}
+        </p>
+      ) : null}
 
       {tab === 'daily' ? (
         daily ? (
@@ -380,18 +305,20 @@ export default function Hadith() {
               saved={isSaved(daily.collectionKey, daily.number)}
               onToggleSave={() => toggleSave(daily.collectionKey, daily.collection, daily)}
             />
-            <p style={S.small}>Source: {daily.source}</p>
+            <p className="tiny muted">Source: {daily.source}</p>
           </>
         ) : (
-          <p style={S.small}>{loading ? 'Loading the hadith of the day…' : 'The hadith of the day is unavailable right now.'}</p>
+          <p className="empty">
+            {loading ? 'Loading the hadith of the day…' : 'The hadith of the day is unavailable right now.'}
+          </p>
         )
       ) : null}
 
       {tab === 'read' ? (
         <>
-          <div style={{ ...S.row, marginBottom: 12 }}>
+          <div className="row" style={{ marginBottom: 12, gap: 10, flexWrap: 'wrap' }}>
             <select
-              style={S.select}
+              className="select"
               value={activeKey}
               onChange={(e) => {
                 setActiveKey(e.target.value);
@@ -399,6 +326,7 @@ export default function Hadith() {
                 setSection('');
               }}
               aria-label="Collection"
+              style={{ flex: 1, minWidth: 170 }}
             >
               {collections.map((c) => (
                 <option key={c.key} value={c.key}>
@@ -407,13 +335,14 @@ export default function Hadith() {
               ))}
             </select>
             <select
-              style={S.select}
+              className="select"
               value={section}
               onChange={(e) => {
                 setSection(e.target.value === '' ? '' : Number(e.target.value));
                 setPage(1);
               }}
               aria-label="Book"
+              style={{ flex: 1, minWidth: 170 }}
             >
               <option value="">All books</option>
               {(data?.sections || []).map((s) => (
@@ -425,13 +354,16 @@ export default function Hadith() {
           </div>
 
           {activeCollection ? (
-            <p style={{ ...S.small, marginBottom: 10 }}>
-              {activeCollection.arabicName} · {data ? `${data.total} hadith` : 'loading…'}
+            <p className="tiny muted" style={{ marginBottom: 10 }}>
+              <span className="arabic" lang="ar">
+                {activeCollection.arabicName}
+              </span>{' '}
+              · {data ? `${data.total} hadith` : 'loading…'}
               {data && !data.somaliAvailable ? ' · Somali edition not published for this collection' : ''}
             </p>
           ) : null}
 
-          {loading && !data ? <p style={S.small}>Loading…</p> : null}
+          {loading && !data ? <p className="empty">Loading…</p> : null}
 
           {(data?.items || []).map((item) => (
             <Item
@@ -445,21 +377,21 @@ export default function Hadith() {
           ))}
 
           {data && data.pages > 1 ? (
-            <div style={{ ...S.row, justifyContent: 'center', margin: '14px 0' }}>
+            <div className="row" style={{ justifyContent: 'center', margin: '14px 0', gap: 10 }}>
               <button
                 type="button"
-                style={S.ghost}
+                className="btn btn-ghost btn-sm"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={data.page <= 1}
               >
                 Previous
               </button>
-              <span style={S.small}>
+              <span className="small muted">
                 Page {data.page} of {data.pages}
               </span>
               <button
                 type="button"
-                style={S.ghost}
+                className="btn btn-ghost btn-sm"
                 onClick={() => setPage((p) => Math.min(data.pages, p + 1))}
                 disabled={data.page >= data.pages}
               >
@@ -468,15 +400,15 @@ export default function Hadith() {
             </div>
           ) : null}
 
-          {data ? <p style={S.small}>Source: {data.source}</p> : null}
+          {data ? <p className="tiny muted">Source: {data.source}</p> : null}
         </>
       ) : null}
 
       {tab === 'search' ? (
         <>
-          <div style={{ ...S.row, marginBottom: 12 }}>
+          <div className="row" style={{ marginBottom: 12, gap: 10, flexWrap: 'wrap' }}>
             <input
-              style={S.input}
+              className="input"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -484,14 +416,16 @@ export default function Hadith() {
               }}
               placeholder="Search Arabic or English text, or a hadith number"
               aria-label="Search hadith"
+              style={{ flex: 1, minWidth: 200 }}
             />
-            <button type="button" style={S.button} onClick={() => void runSearch()} disabled={loading}>
+            <button type="button" className="btn btn-primary" onClick={() => void runSearch()} disabled={loading}>
               {loading ? 'Searching…' : 'Search'}
             </button>
           </div>
+
           {results ? (
             <>
-              <p style={S.small}>
+              <p className="tiny muted">
                 {results.count} match{results.count === 1 ? '' : 'es'}
                 {results.truncated ? ' (first 60 shown)' : ''}
                 {results.failures.length ? ` · ${results.failures.length} collection(s) unavailable` : ''}
@@ -506,10 +440,10 @@ export default function Hadith() {
                   onToggleSave={() => toggleSave(m.collectionKey, m.collection, m)}
                 />
               ))}
-              {results.count === 0 ? <p style={S.small}>No hadith matched that search.</p> : null}
+              {results.count === 0 ? <p className="empty">No hadith matched that search.</p> : null}
             </>
           ) : (
-            <p style={S.small}>Search runs across all six collections on the server.</p>
+            <p className="empty">Search runs across all six collections on the server.</p>
           )}
         </>
       ) : null}
@@ -545,7 +479,7 @@ export default function Hadith() {
             />
           ))
         ) : (
-          <p style={S.small}>No saved hadith yet. Use the ☆ Save button on any hadith.</p>
+          <p className="empty">No saved hadith yet. Use the ☆ Save button on any hadith.</p>
         )
       ) : null}
     </Page>

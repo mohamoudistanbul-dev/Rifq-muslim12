@@ -146,6 +146,11 @@ interface Notice {
   title: string;
   body: string;
   created_at: string;
+  audience?: string;
+  recipients?: number;
+  delivered?: number;
+  failed?: number;
+  delivery_note?: string | null;
 }
 
 interface Overview {
@@ -445,6 +450,28 @@ export default function Admin() {
 
   const [draft, setDraft] = useState<Draft | null>(null);
   const [noticeForm, setNoticeForm] = useState({ title: '', body: '' });
+  const [notifAudience, setNotifAudience] = useState<'all' | 'selected'>('all');
+  const [notifUsers, setNotifUsers] = useState<{ id: string; email: string; name: string }[]>([]);
+  const [notifSelected, setNotifSelected] = useState<string[]>([]);
+  const [notifQuery, setNotifQuery] = useState('');
+
+  /* The recipient list is loaded only when the admin chooses a specific audience. */
+  useEffect(() => {
+    if (notifAudience !== 'selected') return;
+    let alive = true;
+    get<{ users: { id: string; email: string; name: string }[] }>(
+      `/admin/users?q=${encodeURIComponent(notifQuery)}`
+    )
+      .then((res) => {
+        if (alive) setNotifUsers(res.users.map((u) => ({ id: u.id, email: u.email, name: u.name })));
+      })
+      .catch(() => {
+        if (alive) setNotifUsers([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [notifAudience, notifQuery]);
   const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
 
   useEffect(() => {
@@ -1601,14 +1628,86 @@ export default function Admin() {
             onChange={(e) => setNoticeForm({ ...noticeForm, body: e.target.value })}
           />
         </div>
+        <div className="field">
+          <label htmlFor="n-audience">{t('Send to')}</label>
+          <select
+            id="n-audience"
+            className="select"
+            value={notifAudience}
+            onChange={(e) => setNotifAudience(e.target.value === 'selected' ? 'selected' : 'all')}
+          >
+            <option value="all">{t('All users')}</option>
+            <option value="selected">{t('Selected users')}</option>
+          </select>
+        </div>
+        {notifAudience === 'selected' ? (
+          <>
+            <div className="field">
+              <label htmlFor="n-search">{t('Find users')}</label>
+              <input
+                id="n-search"
+                className="input"
+                value={notifQuery}
+                placeholder={t('Search by name or email')}
+                onChange={(e) => setNotifQuery(e.target.value)}
+              />
+            </div>
+            <div className="stack" style={{ gap: 6, maxHeight: 220, overflowY: 'auto' }}>
+              {notifUsers.length === 0 ? (
+                <p className="small muted" style={{ margin: 0 }}>
+                  {t('No accounts matched.')}
+                </p>
+              ) : (
+                notifUsers.map((u) => (
+                  <label key={u.id} className="row" style={{ gap: 8, alignItems: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={notifSelected.includes(u.id)}
+                      onChange={(e) =>
+                        setNotifSelected((list) =>
+                          e.target.checked ? [...list, u.id] : list.filter((id) => id !== u.id)
+                        )
+                      }
+                    />
+                    <span className="small">
+                      {u.name || u.email} · {u.email}
+                    </span>
+                  </label>
+                ))
+              )}
+            </div>
+            <p className="small muted" style={{ margin: 0 }}>
+              {notifSelected.length} {t('selected')}
+            </p>
+          </>
+        ) : null}
         <button
           className="btn btn-primary btn-sm"
+          style={{ marginTop: 10 }}
           onClick={async () => {
-            const ok = await run(() => post('/admin/notifications', noticeForm), t('Notification sent.'));
-            if (ok) setNoticeForm({ title: '', body: '' });
+            if (notifAudience === 'selected' && notifSelected.length === 0) {
+              window.alert(t('Choose at least one user.'));
+              return;
+            }
+            const ok = await run(
+              () =>
+                post('/admin/notifications', {
+                  ...noticeForm,
+                  audience: notifAudience,
+                  userIds: notifSelected,
+                }),
+              t('Notification sent.')
+            );
+            if (ok) {
+              setNoticeForm({ title: '', body: '' });
+              setNotifSelected([]);
+              get<{ notifications: Notice[] }>('/admin/notifications')
+                .then((res) => setNotices(res.notifications))
+                .catch(() => undefined);
+            }
           }}
         >
-          {t('Send to all users')}
+          {notifAudience === 'selected' ? t('Send to selected users') : t('Send to all users')}
         </button>
       </div>
       {notices.length === 0 ? (
@@ -1622,8 +1721,15 @@ export default function Admin() {
                 {n.body}
               </p>
               <p className="small muted" style={{ margin: '2px 0 0' }}>
-                {when(n.created_at)}
+                {when(n.created_at)} · {n.audience === 'selected' ? t('Selected users') : t('All users')} ·{' '}
+                {Number(n.delivered || 0)}/{Number(n.recipients || 0)} {t('delivered')}
+                {Number(n.failed || 0) > 0 ? ` · ${n.failed} ${t('failed')}` : ''}
               </p>
+              {n.delivery_note ? (
+                <p className="small" style={{ margin: '2px 0 0', color: 'var(--gold)' }}>
+                  {n.delivery_note}
+                </p>
+              ) : null}
             </div>
             <div className="admin-item-actions">
               <button

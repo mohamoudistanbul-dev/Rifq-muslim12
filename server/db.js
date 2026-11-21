@@ -448,6 +448,67 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_id, status);
+
+/*
+ * Islamic quiz. Questions live in the database so an administrator can edit
+ * them, and every answer key stays on the server: the client only ever receives
+ * questions and options, never the correct index.
+ */
+CREATE TABLE IF NOT EXISTS quiz_questions (
+  id TEXT PRIMARY KEY,
+  category TEXT NOT NULL DEFAULT 'quran',
+  level INTEGER NOT NULL DEFAULT 1,
+  reference TEXT NOT NULL DEFAULT '',
+  question TEXT NOT NULL DEFAULT '[]',
+  options TEXT NOT NULL DEFAULT '[]',
+  answer INTEGER NOT NULL DEFAULT 0,
+  explanation TEXT NOT NULL DEFAULT '[]',
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS quiz_results (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'mixed',
+  level INTEGER NOT NULL DEFAULT 0,
+  score INTEGER NOT NULL DEFAULT 0,
+  total INTEGER NOT NULL DEFAULT 0,
+  percent INTEGER NOT NULL DEFAULT 0,
+  duration_sec INTEGER NOT NULL DEFAULT 0,
+  mode TEXT NOT NULL DEFAULT 'practice',
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_quiz_results_user ON quiz_results(user_id, created_at);
+
+/* Kid Academy lessons and per-child progress. */
+CREATE TABLE IF NOT EXISTS kids_lessons (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '[]',
+  body TEXT NOT NULL DEFAULT '{}',
+  active INTEGER NOT NULL DEFAULT 1,
+  sort INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS kids_progress (
+  user_id TEXT NOT NULL,
+  lesson_id TEXT NOT NULL,
+  done INTEGER NOT NULL DEFAULT 1,
+  stars INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, lesson_id)
+);
+
+CREATE TABLE IF NOT EXISTS kids_certificates (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  child_name TEXT NOT NULL,
+  stars INTEGER NOT NULL DEFAULT 0,
+  lessons INTEGER NOT NULL DEFAULT 0,
+  issued_at TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_expiry ON subscriptions(expires_at);
 
 /* Quiz and Kid Academy content: seeded from verified banks, then admin-editable. */

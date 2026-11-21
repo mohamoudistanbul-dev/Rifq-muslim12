@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { StoreProvider } from './lib/store';
 import { BottomNav, Toasts } from './components/Shell';
 import Home from './pages/Home';
@@ -34,6 +34,7 @@ import Articles, { ArticleDetail } from './pages/Articles';
 import SiteFooter from './components/SiteFooter';
 import { Login, Register, Forgot, Reset, Verify } from './pages/Auth';
 import QuranAudio from './pages/QuranAudio';
+import DownloadPortal from './pages/DownloadPortal';
 import { PlayerProvider, PlayerBar, NowPlayingSheet } from './lib/quranPlayer';
 
 export default function App() {
@@ -41,6 +42,24 @@ export default function App() {
     <BrowserRouter>
       <StoreProvider>
         <PlayerProvider>
+          <AppBody />
+        </PlayerProvider>
+      </StoreProvider>
+    </BrowserRouter>
+  );
+}
+
+/**
+ * The public download portal (/download) is a standalone landing page: people
+ * arrive from an invitation on WhatsApp, Facebook or Telegram with no account,
+ * so it must not show the in-app bottom navigation or the audio player.
+ */
+function AppBody() {
+  const { pathname } = useLocation();
+  if (pathname === '/download') return <DownloadPortal />;
+
+  return (
+    <>
         <div className="app-shell">
           <main className="app-main">
             <Routes>
@@ -90,8 +109,6 @@ export default function App() {
           <BottomNav />
         </div>
         <Toasts />
-        </PlayerProvider>
-      </StoreProvider>
-    </BrowserRouter>
+    </>
   );
 }

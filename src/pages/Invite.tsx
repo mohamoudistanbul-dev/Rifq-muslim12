@@ -4,25 +4,19 @@ import { AppIcon } from '../components/Icons';
 import { useStore } from '../lib/store';
 import { get } from '../lib/api';
 import { APK_PATH, fetchApkInfo, formatBytes, type ApkInfo } from '../lib/download';
-import {
-  INVITE_MESSAGE,
-  detectPlatform,
-  fetchApkFile,
-  saveApkFile,
-  shareApkFile,
-  type ApkProgress,
-} from '../lib/apkShare';
+import { detectPlatform, fetchApkFile, saveApkFile, shareApkFile, type ApkProgress } from '../lib/apkShare';
+import ShareChannels from '../components/ShareChannels';
+import { inviteMessage, portalUrl } from '../lib/portal';
 
 interface Config {
-  tagline?: string;
+  /** The permanent public download page address (this deployment's own URL). */
+  portalUrl?: string;
   /** The real published address of this deployment (never a referral link). */
   shareUrl?: string;
   /** Official store listings, configured by the Super Admin. Empty = not set. */
   playStoreUrl?: string;
   appStoreUrl?: string;
 }
-
-const DEFAULT_TAGLINE = 'Your Faith, Your Daily Companion';
 
 type Phase = 'idle' | 'loading' | 'saving' | 'done' | 'error';
 
@@ -31,26 +25,31 @@ type Phase = 'idle' | 'loading' | 'saving' | 'done' | 'error';
  *
  * Two independent ways to invite someone:
  *
- *  1. Share App / Copy Link — share the real published address of RIFQ Muslim
- *     (or the official Play Store / App Store listing once the Super Admin
- *     saves it in Website settings). This works on Android and iOS and needs no
- *     installation file, so the buttons never dead-end when the APK is missing.
+ *  1. Share App / Copy Link — share the public download page (/download), which
+ *     then routes each visitor to the right install option for their phone. It
+ *     works on Android and iOS and needs no installation file, so the buttons
+ *     never dead-end when the APK is missing.
  *  2. Invite Friends / Download App — hand over the actual Android installation
  *     file with live byte progress, for devices that can install an APK.
  *
- * No link is ever invented: if a store listing is not configured the app shares
- * its own live address instead, and the admin dashboard says exactly which link
- * still has to be added.
+ * No link is ever invented: the portal address is built from this deployment's
+ * own origin (or PUBLIC_APP_URL), and the admin dashboard shows exactly which
+ * store links still have to be added.
  */
 export default function Invite() {
   const { t, toast } = useStore();
-  const [tagline, setTagline] = useState(DEFAULT_TAGLINE);
   const [info, setInfo] = useState<ApkInfo | null>(null);
   const [phase, setPhase] = useState<Phase>('idle');
   const [progress, setProgress] = useState<ApkProgress | null>(null);
   const [message, setMessage] = useState('');
-  const [links, setLinks] = useState<{ shareUrl: string; playStoreUrl: string; appStoreUrl: string }>({
+  const [links, setLinks] = useState<{
+    shareUrl: string;
+    portalUrl: string;
+    playStoreUrl: string;
+    appStoreUrl: string;
+  }>({
     shareUrl: '',
+    portalUrl: '',
     playStoreUrl: '',
     appStoreUrl: '',
   });
@@ -63,13 +62,11 @@ export default function Invite() {
   const unavailable = !!info && !info.configured;
 
   /**
-   * The link an invitation carries: the official store listing for this
-   * platform when the admin has saved one, otherwise this app's own live URL.
+   * The link every invitation carries: the public download page, which offers
+   * the Android file to Android phones and the App Store listing to iPhones.
+   * One permanent address, so a shared link never goes stale.
    */
-  const shareLink = useMemo(() => {
-    const preferred = ios ? links.appStoreUrl : links.playStoreUrl;
-    return (preferred || links.shareUrl || '').trim();
-  }, [ios, links]);
+  const shareLink = useMemo(() => portalUrl(links.portalUrl), [links.portalUrl]);
 
   useEffect(() => {
     let alive = true;
@@ -81,9 +78,9 @@ export default function Invite() {
     get<Config>('/config')
       .then((res) => {
         if (!alive) return;
-        if (typeof res?.tagline === 'string' && res.tagline.trim()) setTagline(res.tagline);
         setLinks({
           shareUrl: String(res?.shareUrl || ''),
+          portalUrl: String(res?.portalUrl || ''),
           playStoreUrl: String(res?.playStoreUrl || ''),
           appStoreUrl: String(res?.appStoreUrl || ''),
         });
@@ -99,7 +96,8 @@ export default function Invite() {
     };
   }, []);
 
-  const inviteText = useMemo(() => `RIFQ Muslim — ${tagline}\n${INVITE_MESSAGE}`, [tagline]);
+  /** Exact invitation wording, including the public download page address. */
+  const inviteText = useMemo(() => inviteMessage(shareLink), [shareLink]);
 
   /** Clipboard write with a fallback for WebViews that lack the async API. */
   const copyText = async (value: string): Promise<boolean> => {
@@ -137,12 +135,12 @@ export default function Invite() {
     const nav = navigator as Navigator & { share?: (data: { title?: string; text?: string; url?: string }) => Promise<void> };
     if (typeof nav.share === 'function') {
       try {
-        await nav.share({ title: 'RIFQ Muslim', text: inviteText, url: shareLink });
+        await nav.share({ title: 'RIFQ Muslim', text: inviteText });
         setPhase('done');
         setMessage(
-          t('The RIFQ Muslim app link was handed to the share sheet — choose WhatsApp, Telegram, Messenger, Bluetooth or any other app.')
+          t('The RIFQ Muslim download page was handed to the share sheet — choose WhatsApp, Telegram, Messenger, Bluetooth or any other app.')
         );
-        toast(t('App link shared'), 'success');
+        toast(t('Download page shared'), 'success');
         return;
       } catch (err) {
         if ((err as Error)?.name === 'AbortError') {
@@ -152,12 +150,12 @@ export default function Invite() {
         // A browser without a usable share sheet: copy the link instead.
       }
     }
-    const copied = await copyText(`${inviteText}\n${shareLink}`);
+    const copied = await copyText(inviteText);
     setPhase(copied ? 'done' : 'error');
     setMessage(
       copied
-        ? t('This browser has no share sheet, so the app link and invitation were copied. Paste them into WhatsApp, Telegram or any other app.')
-        : t('The app link could not be shared or copied. Please copy it manually.')
+        ? t('This browser has no share sheet, so the invitation and download link were copied. Paste them into WhatsApp, Telegram or any other app.')
+        : t('The invitation could not be shared or copied. Please copy the link manually.')
     );
     if (copied) toast(t('Invitation copied'), 'success');
   };
@@ -172,10 +170,10 @@ export default function Invite() {
     setPhase(copied ? 'done' : 'error');
     setMessage(
       copied
-        ? t('App link copied. Paste it into WhatsApp, Telegram, Messenger, an SMS or anywhere else.')
-        : t('Copying is blocked in this browser. Long-press the app link in your address bar instead.')
+        ? t('Download page link copied. Paste it into WhatsApp, Telegram, Messenger, an SMS or anywhere else.')
+        : t('Copying is blocked in this browser. Long-press the link below instead.')
     );
-    if (copied) toast(t('App link copied'), 'success');
+    if (copied) toast(t('Download link copied'), 'success');
   };
 
   /** Fetches the APK once and reuses those bytes for both file actions. */
@@ -277,14 +275,14 @@ export default function Invite() {
             </h3>
             <p className="tiny muted" style={{ margin: '2px 0 0' }}>
               {ios
-                ? t('Share the official RIFQ Muslim app link')
+                ? t('Share the official RIFQ Muslim download page')
                 : `RIFQ Muslim${size ? ` · Android APK ${size}` : ''}`}
             </p>
           </div>
         </div>
 
         <p className="small" style={{ margin: '12px 0 0', lineHeight: 1.55 }}>
-          {t('Share the official RIFQ Muslim app link with your family and friends. WhatsApp, Telegram, Messenger, Bluetooth, SMS and every other app on your phone appear in the share sheet.')}
+          {t('Share the official RIFQ Muslim download page with your family and friends. WhatsApp, Telegram, Messenger, Facebook, SMS and every other app on your phone appear in the share sheet.')}
         </p>
 
         <button
@@ -299,9 +297,11 @@ export default function Invite() {
           <AppIcon name="copy" size={17} /> {t('COPY LINK')}
         </button>
 
+        <ShareChannels url={shareLink} message={inviteText} />
+
         {ios ? (
           <p className="small" style={{ margin: '14px 0 0', lineHeight: 1.55 }}>
-            {t('The RIFQ Muslim app for iPhone and iPad is not available yet. The link above opens the official RIFQ Muslim app, which works on any phone. An iOS release will use the official App Store distribution.')}
+            {t('The download page opens the App Store listing on iPhone and iPad once the owner adds it, and the Android installation file on Android phones. It never sends an Android file to an iPhone.')}
           </p>
         ) : (
           <>

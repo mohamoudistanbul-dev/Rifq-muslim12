@@ -18,6 +18,7 @@
  */
 import { FIVE } from './prayer';
 import { OCCASIONS, hijriDate } from './hijri';
+import { pushAdhan, pushBanner } from './foreground';
 import {
   categoryLabel,
   localDayKey,
@@ -79,6 +80,9 @@ export const ADHAN_SOUNDS: AdhanSound[] = [
 export function soundById(id: string): AdhanSound {
   return ADHAN_SOUNDS.find((s) => s.id === id) || ADHAN_SOUNDS[0];
 }
+
+/** Categories that are one of the five prayers, i.e. that open the Adhan screen. */
+const PRAYER_CATEGORIES: string[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
 
 /* ------------------------------- permission ------------------------------- */
 
@@ -189,6 +193,17 @@ export interface AlertPayload {
 
 /** Shows a branded notification, preferring the native bridge, then the worker. */
 export async function showAlert(payload: AlertPayload): Promise<boolean> {
+  // A user who is actively using the app must see the alert straight away, even
+  // if the system notification is suppressed or permission was declined. The
+  // banner is deduplicated by the same tag as the notification.
+  pushBanner({
+    title: payload.title || 'RIFQ Muslim',
+    body: payload.body,
+    url: payload.url,
+    tag: payload.tag,
+    kind: /rifq-test/i.test(payload.tag) ? 'test' : 'reminder',
+  });
+
   if (notificationState() !== 'granted') return false;
 
   if (payload.vibrate && typeof navigator !== 'undefined' && 'vibrate' in navigator) {
@@ -672,6 +687,18 @@ export function startAlertLoop(getState: () => LoopState): () => void {
         vibrate: alert.vibrate,
         url: alert.url,
       });
+      // With the app open, a prayer also opens the branded Adhan screen; the
+      // Adhan recording itself is started from there, so it is never played
+      // twice for the same slot.
+      if (PRAYER_CATEGORIES.includes(alert.category)) {
+        pushAdhan({
+          title: alert.title,
+          body: alert.body,
+          prayer: alert.category,
+          sound: alert.sound,
+          tag: alert.slot,
+        });
+      }
       if (alert.sound === 'beep') playChime();
       else if (alert.sound !== 'silent') void playAdhan(alert.sound);
     }

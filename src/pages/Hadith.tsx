@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Page } from '../components/Shell';
-import { get } from '../lib/api';
+import { get, ApiError } from '../lib/api';
+import PremiumGate from '../components/PremiumGate';
 
 /**
  * Hadith browser for the six canonical collections.
@@ -181,6 +182,7 @@ export default function Hadith() {
   const [results, setResults] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [gate, setGate] = useState(false);
   const [saved, setSaved] = useState<SavedHadith[]>(() => readSaved());
 
   useEffect(() => {
@@ -195,14 +197,21 @@ export default function Hadith() {
   const loadCollection = useCallback(async (key: string, pageNo: number, sectionNo: number | '') => {
     setLoading(true);
     setError('');
+    setGate(false);
     try {
       const params = new URLSearchParams({ page: String(pageNo), pageSize: '20' });
       if (sectionNo !== '') params.set('section', String(sectionNo));
       const r = await get<CollectionResponse>(`/hadith/${key}?${params.toString()}`);
       setData(r);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'This collection could not be loaded.');
-      setData(null);
+      if (err instanceof ApiError && err.status === 402) {
+        setGate(true);
+        setError('');
+        setData(null);
+      } else {
+        setError(err instanceof Error ? err.message : 'This collection could not be loaded.');
+        setData(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -288,6 +297,13 @@ export default function Hadith() {
           </button>
         ))}
       </div>
+
+      {gate ? (
+        <PremiumGate
+          title="This Hadith collection is part of Premium"
+          itemTitle={activeKey.replace(/-/g, ' ')}
+        />
+      ) : null}
 
       {error ? (
         <p className="notice" role="alert">

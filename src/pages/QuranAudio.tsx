@@ -64,6 +64,8 @@ export default function QuranAudio() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(() => readBookmarks());
   const [query, setQuery] = useState('');
   const [notice, setNotice] = useState('');
+  const [gate, setGate] = useState('');
+  const { data: accessData } = useAccess('audio');
 
   /* Pick the remembered reciter, otherwise the first one that answered. */
   useEffect(() => {
@@ -85,6 +87,12 @@ export default function QuranAudio() {
   }, [state.surah, state.reciterId]);
 
   const selectReciter = (id: string) => {
+    const lockedReciter = accessData?.items.find((item) => item.key === `audio.reciter.${id}` && item.locked);
+    if (lockedReciter) {
+      setGate(lockedReciter.title);
+      return;
+    }
+    setGate('');
     setReciterId(id);
     try {
       localStorage.setItem(RECITER_KEY, id);
@@ -344,6 +352,16 @@ export default function QuranAudio() {
       </div>
 
       {notice && <p className="tiny qa-notice">{notice}</p>}
+      {gate ? (
+        <div style={{ marginTop: 10 }}>
+          <PremiumGate title="This reciter is part of Premium" itemTitle={gate} compact />
+          <div className="row" style={{ justifyContent: 'center', marginTop: 8 }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setGate('')}>
+              Choose another reciter
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {/* ------------------------------- surahs ------------------------------ */}
       {tab === 'surahs' && (

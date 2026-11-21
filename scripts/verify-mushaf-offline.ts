@@ -65,7 +65,14 @@ check('Adhan list appears exactly once (no Adhan in reminder choices)', (athanSr
 check('old "Same as adhan" reminder behaviour is gone', !/Same as adhan/i.test(athanSrc));
 check(
   'each of the five prayers has its own Adhan toggle',
-  ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'].every((p) => athanSrc.includes(`adhan-audio-${p}`))
+  athanSrc.includes('adhan-audio-${key}') &&
+    /FIVE\.map\(\(key, index\)/.test(athanSrc) &&
+    athanSrc.includes('prefs.adhanAudio[key] !== false') &&
+    /adhanAudio:\s*\{\s*\.\.\.prefs\.adhanAudio,\s*\[key\]: v\s*\}/.test(athanSrc)
+);
+check(
+  'the five toggles cover Fajr through Isha',
+  /FIVE[^=]*=\s*\['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'\]/.test(read('src/lib/prayer.ts'))
 );
 
 /* ------------------------------------------------------------------ */

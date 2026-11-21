@@ -601,6 +601,7 @@ export async function testCategory(category: CategoryId, state: LoopState): Prom
     tag: `rifq-test:${category}:${Date.now()}`,
     vibrate: sample?.vibrate ?? state.prefs.vibration,
     url: sample?.url,
+    prayer: PRAYER_CATEGORIES.includes(category) ? String(category) : undefined,
   });
   const played = await playAdhan(sound);
   return { shown, played, title, body, sound };
@@ -701,6 +702,9 @@ export function startAlertLoop(getState: () => LoopState): () => void {
         tag: alert.slot,
         vibrate: alert.vibrate,
         url: alert.url,
+        // A prayer alert carries its key, so the device renders the expanded
+        // card with the banner image and the three action buttons.
+        prayer: PRAYER_CATEGORIES.includes(alert.category) ? String(alert.category) : undefined,
       });
       // With the app open, a prayer also opens the branded Adhan screen; the
       // Adhan recording itself is started from there, so it is never played

@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { AppIcon } from './Icons';
 import { onAdhan, onBanner, type AdhanCall, type ForegroundBanner } from '../lib/foreground';
 import { audioState, playAdhan, stopAdhan, subscribeAudio, type AudioSnapshot } from '../lib/notify';
+import { confirmPrayer, snoozePrayer } from '../lib/richNotify';
 
 const BANNER_MS = 9000;
 const MAX_BANNERS = 3;
@@ -30,6 +31,7 @@ export default function ForegroundAlerts() {
   const navigate = useNavigate();
   const [banners, setBanners] = useState<ForegroundBanner[]>([]);
   const [call, setCall] = useState<AdhanCall | null>(null);
+  const [ack, setAck] = useState('');
   const [audio, setAudio] = useState<AudioSnapshot>(() => audioState());
   const timers = useRef<number[]>([]);
 
@@ -119,6 +121,50 @@ export default function ForegroundAlerts() {
             </div>
 
             {audio.error && <p className="tiny np-error">{audio.error}</p>}
+
+            {/* The same two actions the notification buttons perform, so the
+                confirmation and the snooze are reachable with the app open. */}
+            <div className="adhan-actions adhan-actions-secondary">
+              <button
+                className="btn"
+                onClick={() => {
+                  if (!call) return;
+                  setAck('Saving…');
+                  void confirmPrayer(call.prayer, 'in-app').then((result) => {
+                    setAck(
+                      result.ok
+                        ? result.already
+                          ? `${prayerName} is already confirmed today.`
+                          : `${prayerName} marked as prayed. JazakAllahu khayran.`
+                        : result.error || 'Could not save the confirmation.'
+                    );
+                  });
+                }}
+              >
+                <AppIcon name="check" size={16} /> Already Prayed
+              </button>
+              <button
+                className="btn btn-ghost"
+                onClick={() => {
+                  if (!call) return;
+                  setAck('Scheduling…');
+                  void snoozePrayer(call.prayer, 15).then((result) => {
+                    if (!result.ok) {
+                      setAck(result.error || 'Could not schedule the reminder.');
+                      return;
+                    }
+                    const at = result.fireAt
+                      ? new Date(result.fireAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+                      : 'in 15 minutes';
+                    setAck(`We will remind you about ${prayerName} ${result.fireAt ? `at ${at}` : at}.`);
+                  });
+                }}
+              >
+                <AppIcon name="bell" size={16} /> Remind in 15 min
+              </button>
+            </div>
+
+            {ack && <p className="tiny adhan-ack">{ack}</p>}
 
             <div className="adhan-footer">
               <button

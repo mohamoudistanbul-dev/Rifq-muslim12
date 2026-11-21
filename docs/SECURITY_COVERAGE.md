@@ -6,6 +6,15 @@ This document records exactly what the automated dependency scan covers, what it
 reports, what it **cannot** cover in this environment, and how to close the rest.
 It is **not** a statement that the application is secure.
 
+Latest revision (Blue Tick verification system, rev 16): the scan was re-run and returned the
+same result — **444 packages, 0 advisories, 0 blocking, status `incomplete`**. This revision
+added **no dependency**: `package.json` only gained the `verify:verification` script
+(`node scripts/verify-verification.mjs`), so the resolved dependency set is unchanged. The
+`incomplete` status is the attribution gap of §3 (`android/build.gradle.kts` has no
+project-level lockfile) — it is **not** an unscanned package and not a finding. The feature
+itself uses only the existing session, upload and audit plumbing; no new package was added
+for the profile-picture, document or decision-history work.
+
 Last updated: 2026-11-21 (Kid Academy / Quiz / Qibla / Near Mosques / Premium revision,
 rev 24) — this revision added **no dependency**: `package.json` and `package-lock.json` are
 unchanged (both last modified in `efcac76`), so the resolved dependency set is identical to

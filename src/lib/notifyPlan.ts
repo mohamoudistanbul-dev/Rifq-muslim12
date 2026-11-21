@@ -181,7 +181,7 @@ export function normalizeNotifySound(id: string | undefined): NotifySoundId {
 export function reminderSound(prefSound: string | undefined, general: string | undefined): string {
   const g = normalizeNotifySound(general);
   if (prefSound === 'default') return g;
-  if ((NOTIFY_SOUND_IDS as readonly string[]).includes(prefSound)) return prefSound;
+  if (prefSound && (NOTIFY_SOUND_IDS as readonly string[]).includes(prefSound)) return prefSound;
   // An Adhan id saved by an older build must never fire on a reminder.
   return g;
 }

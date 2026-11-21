@@ -38,6 +38,8 @@ import { geoRouter } from './geo.js';
 import { adminRouter, UPLOAD_DIR } from './admin.js';
 import { downloadRouter, apkSource, apkStatus, APK_PATH, APK_FILENAME } from './download.js';
 import { analyticsRouter, visitRouter, recordPortalVisit } from './analytics.js';
+import { registerPushRoutes } from './push.js';
+import { startAnnouncementScheduler } from './announcements.js';
 import { seedSuperAdmin, SUPER_ADMIN_EMAIL } from './seed.js';
 import { premiumRouter, premiumAdminRouter } from './premium.js';
 import { quizRouter, quizAdminRouter } from './quiz.js';
@@ -450,6 +452,11 @@ app.post('/api/notifications/read', requireAuth, (req, res) => {
   const changed = all ? markAllNotificationsRead(req.user.id) : markNotificationsRead(req.user.id, ids);
   res.json({ changed, unread: unreadNotifications(req.user.id) });
 });
+
+/* Device delivery: the browser registers here, and the server pushes to it. */
+registerPushRoutes(app, requireAuth);
+/* Scheduled announcements are sent by this process, not by a client timer. */
+startAnnouncementScheduler();
 
 app.get('/api/tasbih', requireAuth, (req, res) => {
   const day = String(req.query.day || new Date().toISOString().slice(0, 10));

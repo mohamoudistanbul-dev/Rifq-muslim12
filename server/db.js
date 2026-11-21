@@ -645,6 +645,12 @@ ensureColumn('broadcasts', 'recipients', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('broadcasts', 'delivered', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('broadcasts', 'failed', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('broadcasts', 'delivery_note', 'TEXT');
+ensureColumn('broadcasts', 'push_sent', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('broadcasts', 'push_failed', 'INTEGER NOT NULL DEFAULT 0');
+/* Device-delivery outcome per recipient, written by server/push.js. */
+ensureColumn('notifications', 'push_status', 'TEXT');
+ensureColumn('notifications', 'push_error', 'TEXT');
+ensureColumn('notifications', 'push_at', 'TEXT');
 
 /* ------------------------------ notifications ----------------------------- */
 
@@ -730,7 +736,7 @@ export function deliverBroadcast({ broadcastId = null, userIds = [], kind = 'adm
   let delivered = 0;
   const failures = [];
   const stmt = db.prepare(
-    'INSERT INTO notifications (id, user_id, kind, title, body, link, broadcast_id, read_at, created_at) VALUES (?,?,?,?,?,?,?,NULL,?)'
+    'INSERT INTO notifications (id, user_id, kind, title, body, link, broadcast_id, push_status, read_at, created_at) VALUES (?,?,?,?,?,?,?,?,NULL,?)'
   );
   for (const userId of targets) {
     try {
@@ -742,6 +748,7 @@ export function deliverBroadcast({ broadcastId = null, userIds = [], kind = 'adm
         String(body || '').slice(0, 800),
         String(link || '').slice(0, 300),
         broadcastId,
+        'pending',
         nowIso()
       );
       delivered += 1;
@@ -756,7 +763,7 @@ export function deliverBroadcast({ broadcastId = null, userIds = [], kind = 'adm
 export function broadcastRecipients(broadcastId) {
   return db
     .prepare(
-      `SELECT n.id, n.user_id, n.read_at, n.created_at, u.email, u.name
+      `SELECT n.id, n.user_id, n.read_at, n.created_at, n.push_status, n.push_error, u.email, u.name
          FROM notifications n LEFT JOIN users u ON u.id = n.user_id
         WHERE n.broadcast_id = ? ORDER BY n.created_at DESC LIMIT 500`
     )
@@ -768,6 +775,8 @@ export function broadcastRecipients(broadcastId) {
       name: r.name || '',
       read: !!r.read_at,
       createdAt: r.created_at,
+      pushStatus: r.push_status || 'in_app',
+      pushError: r.push_error || null,
     }));
 }
 

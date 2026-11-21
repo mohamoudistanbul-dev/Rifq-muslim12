@@ -29,12 +29,130 @@ const cap = (value) => {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : '';
 };
 
-self.addEventListener('install', () => {
-  self.skipWaiting();
+const CACHE_VERSION = 'rifq-v4';
+const SHELL_CACHE = `${CACHE_VERSION}-shell`;
+const DATA_CACHE = `${CACHE_VERSION}-data`;
+const SHELL_ASSETS = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon-192.png'];
+
+/*
+ * Public, read-only content that is worth keeping on the device. User-scoped
+ * endpoints (bookmarks, profile, admin) are deliberately absent: the service
+ * worker cannot tell one signed-in user from the next, so it must never replay
+ * their data. Those are cached by the page itself, which is cleared on logout.
+ */
+const CACHEABLE_API = [
+  '/api/quran',
+  '/api/hadith',
+  '/api/duas',
+  '/api/config',
+  '/api/kids',
+  '/api/quiz',
+  '/api/announcements',
+  '/api/prayer',
+  '/api/mosques',
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    (async () => {
+      const cache = await caches.open(SHELL_CACHE);
+      // One missing optional asset must not fail the whole install.
+      await Promise.all(
+        SHELL_ASSETS.map((url) => cache.add(new Request(url, { cache: 'reload' })).catch(() => null))
+      );
+      await self.skipWaiting();
+    })()
+  );
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((key) => !key.startsWith(CACHE_VERSION)).map((key) => caches.delete(key)));
+      await self.clients.claim();
+    })()
+  );
+});
+
+/* ------------------------------ offline shell ---------------------------- */
+
+const isCacheableApi = (pathname) => CACHEABLE_API.some((prefix) => pathname.startsWith(prefix));
+
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  if (request.method !== 'GET') return;
+
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+
+  // Launching the app without internet must show the app, not a browser error.
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      (async () => {
+        try {
+          const fresh = await fetch(request);
+          if (fresh.ok) {
+            const cache = await caches.open(SHELL_CACHE);
+            cache.put('/index.html', fresh.clone());
+          }
+          return fresh;
+        } catch {
+          const cache = await caches.open(SHELL_CACHE);
+          const shell = (await cache.match('/index.html')) || (await cache.match('/'));
+          if (shell) return shell;
+          return new Response(
+            '<!doctype html><meta charset="utf-8"><title>RIFQ Muslim</title><body style="font-family:system-ui;background:#04291f;color:#f4e6c3;padding:32px"><h1>RIFQ Muslim</h1><p>No internet connection. Reopen the app once you are back online.</p></body>',
+            { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+          );
+        }
+      })()
+    );
+    return;
+  }
+
+  // Quran text, Hadith and Duas: cache-first with a quiet refresh in the
+  // background, so read content keeps working while the device is disconnected.
+  if (isCacheableApi(url.pathname)) {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(DATA_CACHE);
+        const cached = await cache.match(request);
+        const network = fetch(request)
+          .then((res) => {
+            if (res.ok) cache.put(request, res.clone());
+            return res;
+          })
+          .catch(() => null);
+        if (cached) return cached;
+        const res = await network;
+        if (res) return res;
+        return new Response(
+          JSON.stringify({ error: 'offline', message: 'No internet connection' }),
+          { status: 503, headers: { 'Content-Type': 'application/json' } }
+        );
+      })()
+    );
+    return;
+  }
+
+  // Content-hashed build assets and icons are safe to serve from cache first.
+  if (url.pathname.startsWith('/assets/') || /\.(css|js|mjs|woff2?|png|svg|webp|jpe?g|ico)$/.test(url.pathname)) {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(SHELL_CACHE);
+        const cached = await cache.match(request);
+        if (cached) return cached;
+        try {
+          const res = await fetch(request);
+          if (res.ok) cache.put(request, res.clone());
+          return res;
+        } catch {
+          return Response.error();
+        }
+      })()
+    );
+  }
 });
 
 /* ------------------------- offline action queue --------------------------- */

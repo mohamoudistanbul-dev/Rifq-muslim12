@@ -39,7 +39,36 @@ export async function api<T = unknown>(
   return data as T;
 }
 
-export const get = <T,>(path: string, signal?: AbortSignal) => api<T>(path, { signal });
+/** Network failures (as opposed to a real HTTP error) are worth a cached read. */
+function isNetworkError(err: unknown): boolean {
+  if (err instanceof TypeError) return true;
+  return err instanceof Error && /failed to fetch|networkerror|load failed|network request failed/i.test(err.message);
+}
+
+/**
+ * Endpoints whose last successful GET may be replayed offline. Sign-in, admin and
+ * session endpoints are excluded so a stale response can never outlive a logout.
+ */
+function offlineCacheable(path: string): boolean {
+  const clean = path.split('?')[0];
+  return !/^\/(auth|admin|me|session|login|logout|register|password)/.test(clean);
+}
+
+export const get = async <T,>(path: string, signal?: AbortSignal): Promise<T> => {
+  try {
+    const data = await api<T>(path, { signal });
+    if (offlineCacheable(path)) local.set(`api:${path}`, data);
+    return data;
+  } catch (err) {
+    // A dropped connection must not blank a screen the user has already opened:
+    // serve the last real response for this endpoint instead.
+    if (isNetworkError(err) && offlineCacheable(path)) {
+      const cached = local.get<T | null>(`api:${path}`, null);
+      if (cached !== null) return cached;
+    }
+    throw err;
+  }
+};
 export const post = <T,>(path: string, body?: unknown) => api<T>(path, { method: 'POST', body });
 export const patch = <T,>(path: string, body?: unknown) => api<T>(path, { method: 'PATCH', body });
 export const put = <T,>(path: string, body?: unknown) => api<T>(path, { method: 'PUT', body });
@@ -65,6 +94,19 @@ export const local = {
   remove(key: string) {
     try {
       localStorage.removeItem(`rifq:${key}`);
+    } catch {
+      /* ignore */
+    }
+  },
+  /** Drop every cached response, used on logout so nothing survives the session. */
+  clearApiCache() {
+    try {
+      const keys: string[] = [];
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('rifq:api:')) keys.push(key);
+      }
+      keys.forEach((key) => localStorage.removeItem(key));
     } catch {
       /* ignore */
     }

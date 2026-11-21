@@ -94,19 +94,22 @@ export function apkSource() {
   const fromEnv = String(process.env.APK_DOWNLOAD_URL || '').trim();
   if (isHttpUrl(fromEnv)) return { kind: 'url', url: fromEnv, origin: 'environment' };
 
-  const fromSetting = String(getSetting('download_url', '') || '').trim();
-  if (isHttpUrl(fromSetting) && !/\/download\/rifq-muslim\.apk$/i.test(fromSetting)) {
-    // A URL the probe already rejected (an HTML share page, a 404) is not an APK
-    // source: fall through so an uploaded file can still be served.
-    const known = probeCache.get(fromSetting);
-    if (!known || known.ok) return { kind: 'url', url: fromSetting, origin: 'setting' };
-  }
-
+  // An APK uploaded in the admin panel is validated as an APK at upload time and
+  // lives on the persistent disk, so it wins over a saved URL that may only be a
+  // file-hosting page. This also keeps the reported status stable on the first
+  // request after a restart instead of briefly calling the saved URL unusable.
   try {
     const stat = fs.statSync(APK_FILE);
     if (stat.isFile() && stat.size > 0) return { kind: 'file', file: APK_FILE, size: stat.size, origin: 'upload' };
   } catch {
     /* no uploaded file */
+  }
+
+  const fromSetting = String(getSetting('download_url', '') || '').trim();
+  if (isHttpUrl(fromSetting) && !/\/download\/rifq-muslim\.apk$/i.test(fromSetting)) {
+    // A URL the probe already rejected (an HTML share page, a 404) is not an APK source.
+    const known = probeCache.get(fromSetting);
+    if (!known || known.ok) return { kind: 'url', url: fromSetting, origin: 'setting' };
   }
   return null;
 }

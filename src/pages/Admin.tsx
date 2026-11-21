@@ -191,9 +191,11 @@ const SETTING_FIELDS: { key: string; label: string; kind?: 'text' | 'email' | 'u
   { key: 'contact_email', label: 'Official contact email', kind: 'email' },
   { key: 'contact_phone', label: 'Contact phone' },
   { key: 'whatsapp', label: 'WhatsApp number' },
-  { key: 'download_url', label: 'APK download URL (Cloudflare R2)', kind: 'url' },
+  { key: 'download_url', label: 'Android download link (direct .apk URL)', kind: 'url' },
   { key: 'play_store_url', label: 'Google Play Store link (Android app)', kind: 'url' },
   { key: 'app_store_url', label: 'App Store link (iPhone and iPad app)', kind: 'url' },
+  { key: 'portal_headline', label: 'Download portal headline' },
+  { key: 'portal_description', label: 'Download portal description', kind: 'textarea' },
   { key: 'paypal_donate_url', label: 'PayPal donation link (paypal.me/handle or paypal.com/donate)', kind: 'url' },
   { key: 'paypal_currency', label: 'PayPal donation currency (USD, EUR, GBP…)' },
   { key: 'announcement_text', label: 'Announcement banner', kind: 'textarea' },
@@ -220,6 +222,65 @@ const fromItem = (item: ContentItem): Draft => ({
   status: item.status,
   featured: item.featured,
 });
+
+/* ---------------------------- download portal ----------------------------- */
+
+/**
+ * The permanent public download page address, with a copy button.
+ *
+ * Invite Friends and every social button share this one link, so it is shown
+ * here next to the store links instead of being hidden behind the share sheet.
+ */
+function PortalLinkCard() {
+  const { t } = useStore();
+  const [copied, setCopied] = useState(false);
+  const url = typeof window === 'undefined' ? '/download' : `${window.location.origin}/download`;
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt(t('Copy this link'), url);
+    }
+  };
+
+  return (
+    <div className="card">
+      <h3 className="admin-card-title">{t('Public download portal')}</h3>
+      <p className="admin-note" style={{ marginTop: 0 }}>
+        {t('This permanent address is what Invite Friends, WhatsApp, Telegram, Facebook and Copy Link share. It needs no login and sends each visitor to the right install option for their phone.')}
+      </p>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input
+          readOnly
+          value={url}
+          aria-label={t('Public download portal link')}
+          onFocus={(e) => e.currentTarget.select()}
+          style={{
+            flex: 1,
+            minWidth: 220,
+            padding: '10px 12px',
+            borderRadius: 10,
+            border: '1px solid rgba(212,175,55,.35)',
+            background: 'rgba(255,255,255,.06)',
+            color: 'inherit',
+          }}
+        />
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => void copy()}>
+          {copied ? t('Copied') : t('Copy link')}
+        </button>
+        <a className="btn btn-ghost btn-sm" href="/download" target="_blank" rel="noreferrer">
+          {t('Open portal')}
+        </a>
+      </div>
+      <p className="admin-note" style={{ marginTop: 8 }}>
+        {t('Android: upload or replace the APK below. iPhone: add the App Store link above. The portal headline and description are editable in Website settings.')}
+      </p>
+    </div>
+  );
+}
 
 /* ---------------------------------- login ---------------------------------- */
 
@@ -1361,10 +1422,11 @@ export default function Admin() {
           </li>
         </ul>
         <p className="admin-note" style={{ marginTop: 8 }}>
-          {t('Invite Friends shares the app link above, so it works even before the store listings exist. Add the store links here to point Android and iOS users to the official listings.')}
+          {t('Invite Friends shares the public download page (/download), so one link works even before the store listings exist. Add the store links here so the portal can point Android and iOS visitors to the official listings.')}
         </p>
       </div>
     </div>
+    <PortalLinkCard />
     {renderApkPanel()}
     </>
   );

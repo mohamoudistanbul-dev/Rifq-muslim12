@@ -69,6 +69,7 @@ seedSuperAdmin();
 app.get('/api/health', (_req, res) => res.json({ ok: true, app: 'RIFQ Muslim', time: nowIso() }));
 
 app.get('/api/config', async (req, res) => {
+  const apk = await apkStatus();
   res.json({
     appName: getSetting('app_name', 'RIFQ Muslim'),
     tagline: getSetting('tagline', 'Your Faith, Your Daily Companion'),
@@ -83,6 +84,15 @@ app.get('/api/config', async (req, res) => {
     // The real published address of this app, used by Invite Friends and every
     // share button. It is this deployment's own URL — never a referral link.
     shareUrl: publicBaseUrl(req),
+    // The permanent public download page: one address shared by every
+    // invitation, QR code and social button. It routes Android visitors to the
+    // APK and iPhone visitors to the App Store listing.
+    portalUrl: `${publicBaseUrl(req)}/download`,
+    portalHeadline: getSetting('portal_headline', 'RIFQ Muslim — Your Faith, Your Daily Companion'),
+    portalDescription: getSetting(
+      'portal_description',
+      'Prayer times, the Holy Quran, authentic Hadith, Duas, Qibla and daily worship in one app. Install RIFQ Muslim on your Android phone, or open it on any device.'
+    ),
     // Official store listings, set by the Super Admin in Website settings.
     // Empty means "not configured yet"; the client says so instead of inventing
     // a download address.
@@ -92,7 +102,8 @@ app.get('/api/config', async (req, res) => {
     // RIFQ-Muslim.apk, even though the file itself lives in Cloudflare R2.
     apkUrl: APK_PATH,
     apkFilename: APK_FILENAME,
-    apkConfigured: Boolean(await apkStatus()),
+    apkConfigured: Boolean(apk.configured),
+    apkSize: apk.size ?? null,
     communityEnabled: getSetting('community_enabled', 'true') === 'true',
     announcement:
       getSetting('announcement_active', 'false') === 'true'

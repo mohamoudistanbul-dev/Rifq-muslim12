@@ -35,9 +35,9 @@ const FEATURES: { icon: IconName; title: string; text: string }[] = [
 ];
 
 const SHOTS: { src: string; label: string }[] = [
-  { src: '/screenshots/home.png', label: 'Home' },
-  { src: '/screenshots/quran.png', label: 'Quran' },
-  { src: '/screenshots/prayer.png', label: 'Prayer times' },
+  { src: '/screenshots/home.webp', label: 'Home' },
+  { src: '/screenshots/quran.webp', label: 'Quran' },
+  { src: '/screenshots/prayer.webp', label: 'Prayer times' },
 ];
 
 const card: React.CSSProperties = {

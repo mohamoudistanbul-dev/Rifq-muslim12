@@ -49,6 +49,11 @@ const SETTING_DEFAULTS = {
   // inventing a store listing.
   play_store_url: '',
   app_store_url: '',
+  // Public download portal copy, edited in Admin -> Website settings. The page
+  // itself lives at /download and is the one address every invitation shares.
+  portal_headline: 'RIFQ Muslim — Your Faith, Your Daily Companion',
+  portal_description:
+    'Prayer times, the Holy Quran, authentic Hadith, Duas, Qibla and daily worship in one app. Install RIFQ Muslim on your Android phone, or open it on any device.',
 };
 const SETTING_KEYS = Object.keys(SETTING_DEFAULTS);
 

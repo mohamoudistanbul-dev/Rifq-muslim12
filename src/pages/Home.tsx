@@ -33,8 +33,23 @@ function greetingKey(hour: number) {
 }
 
 export default function Home() {
-  const { t, lang, place, detectLocation, times, next, current, countdown, now, localDate, hijri, user } =
-    useStore();
+  const {
+    t,
+    lang,
+    place,
+    refreshLocation,
+    pending,
+    geoPermission,
+    locationHint,
+    times,
+    next,
+    current,
+    countdown,
+    now,
+    localDate,
+    hijri,
+    user,
+  } = useStore();
   const [verse, setVerse] = useState<{ text: string; translation: string; surah: string; ayah: number } | null>(null);
   const [hadith, setHadith] = useState<{ arabic: string; english: string; name: string; number: number } | null>(null);
   const [tracker, setTracker] = useState<Record<string, boolean>>({});
@@ -42,8 +57,10 @@ export default function Home() {
   const idx = dayIndex(now, 100000);
   const reminder = REMINDERS[idx % REMINDERS.length];
 
+  // First run only. Once a grant or a block has been remembered the store
+  // decides for itself, so the permission prompt never repeats on later visits.
   useEffect(() => {
-    if (!place) void detectLocation();
+    if (!place && geoPermission === 'unset') void refreshLocation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -192,9 +209,24 @@ export default function Home() {
               })}
             </div>
           ) : (
-            <button className="btn btn-primary btn-block" onClick={() => void detectLocation()}>
-              <AppIcon name="location" size={17} /> {t('Enable location for accurate times')}
-            </button>
+            <div className="stack" style={{ gap: 8 }}>
+              <button
+                className="btn btn-primary btn-block"
+                onClick={() => void refreshLocation()}
+                disabled={pending}
+              >
+                <AppIcon name="location" size={17} />{' '}
+                {pending ? t('Locating…') : t('Enable location for accurate times')}
+              </button>
+              <Link to="/prayer?pick=1" className="btn btn-soft btn-block">
+                {t('Choose city manually')}
+              </Link>
+            </div>
+          )}
+          {locationHint && (
+            <p className="small" data-testid="home-location-hint" style={{ marginTop: 8, opacity: 0.85 }}>
+              {locationHint}
+            </p>
           )}
           <Link to="/prayer" className="btn btn-soft btn-block" style={{ marginTop: 10 }}>
             {t('Calculation method and mosque comparison')} <AppIcon name="chevron" size={15} />

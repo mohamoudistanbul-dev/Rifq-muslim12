@@ -39,6 +39,7 @@ import DownloadPortal from './pages/DownloadPortal';
 import Premium from './pages/Premium';
 import { PlayerProvider, PlayerBar, NowPlayingSheet } from './lib/quranPlayer';
 import ForegroundAlerts from './components/ForegroundAlerts';
+import OfflineBanner from './components/OfflineBanner';
 
 export default function App() {
   return (
@@ -63,6 +64,7 @@ function AppBody() {
 
   return (
     <>
+        <OfflineBanner />
         <div className="app-shell">
           <main className="app-main">
             <Routes>

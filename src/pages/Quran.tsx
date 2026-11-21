@@ -155,6 +155,23 @@ export default function QuranList() {
         )}
       </div>
 
+      <Link
+        to="/quran/1/translation"
+        className="card row"
+        style={{ justifyContent: 'space-between', textDecoration: 'none' }}
+      >
+        <span className="row" style={{ gap: 10 }}>
+          <AppIcon name="book" size={18} />
+          <span>
+            <span className="small" style={{ display: 'block' }}>{t('Translations')}</span>
+            <span className="tiny muted">
+              {t('Read a surah with translation — kept separate from the Mushaf')}
+            </span>
+          </span>
+        </span>
+        <AppIcon name="chevron" size={16} />
+      </Link>
+
       {error && <ErrorBox message={error} onRetry={load} />}
       {!surahs && !error && <Loading />}
 

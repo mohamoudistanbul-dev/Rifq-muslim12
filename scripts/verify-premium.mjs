@@ -102,6 +102,7 @@ function startServer() {
       NODE_ENV: 'production',
       ADMIN_EMAIL,
       ADMIN_PASSWORD,
+      SEED_BUNDLED_DB: '0',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -205,7 +206,7 @@ async function main() {
     const selfGrant = await user.post('/admin/premium/grant', { email: 'free.premium@example.com', planCode: 'monthly' });
     check('an ordinary user cannot grant itself Premium', selfGrant.status === 403 || selfGrant.status === 401, `status ${selfGrant.status}`);
 
-    const plans = await anon.get('/premium/plans');
+    const plans = await anon.get('/plans');
     const planList = plans.json?.plans || [];
     check('subscription plans are published', planList.length > 0, planList.map((p) => p.code).join(', '));
 

@@ -187,6 +187,29 @@ async function catalogEntries() {
 let seeding = null;
 
 /** Seed once per process; safe to call from any route. */
+/**
+ * Run a write batch atomically.
+ *
+ * The database wrapper exposes exec/prepare only (no transaction helper), so the
+ * batch is wrapped in explicit BEGIN/COMMIT with a rollback on failure — a
+ * half-applied set of owner changes must never be persisted.
+ */
+function tx(fn) {
+  db.exec('BEGIN');
+  try {
+    const result = fn();
+    db.exec('COMMIT');
+    return result;
+  } catch (err) {
+    try {
+      db.exec('ROLLBACK');
+    } catch {
+      /* already rolled back */
+    }
+    throw err;
+  }
+}
+
 export function ensureRegistry() {
   if (!seeding) {
     seeding = (async () => {
@@ -195,12 +218,11 @@ export function ensureRegistry() {
         `INSERT OR IGNORE INTO premium_items (key, category, title, description, tier, enabled, published, source, sort, updated_at, updated_by)
          VALUES (?,?,?,?, 'free', 1, 1, 'catalog', ?, ?, 'system')`
       );
-      const run = db.transaction((rows) => {
-        for (const row of rows) {
+      tx(() => {
+        for (const row of entries) {
           insert.run(row.key, row.category, row.title, row.description, row.sort || 0, nowIso());
         }
       });
-      run(entries);
       const { n } = db.prepare('SELECT COUNT(*) AS n FROM premium_items').get();
       console.log(`[access] registry ready with ${n} controllable items`);
     })().catch((err) => {
@@ -391,7 +413,7 @@ accessAdminRouter.post('/items/bulk', (req, res) => {
       WHERE key = ?`
   );
   let changed = 0;
-  db.transaction(() => {
+  tx(() => {
     for (const key of keys) {
       const result = update.run(
         tier,
@@ -403,7 +425,7 @@ accessAdminRouter.post('/items/bulk', (req, res) => {
       );
       changed += result.changes;
     }
-  })();
+  });
 
   auditLog(
     req.user,

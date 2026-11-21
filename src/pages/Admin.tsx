@@ -13,6 +13,7 @@ type Tab =
   | 'content'
   | 'media'
   | 'users'
+  | 'verification'
   | 'messages'
   | 'community'
   | 'notifications'
@@ -209,7 +210,7 @@ const TABS: { id: Tab; label: string; superOnly?: boolean }[] = [
   { id: 'analytics', label: 'Analytics' },
   { id: 'content', label: 'Content' },
   { id: 'media', label: 'Media library' },
-  { id: 'users', label: 'Users', superOnly: true },
+  { id: 'verification', label: 'Verification' },
   { id: 'messages', label: 'Contact messages' },
   { id: 'community', label: 'Community' },
   { id: 'notifications', label: 'Notifications' },

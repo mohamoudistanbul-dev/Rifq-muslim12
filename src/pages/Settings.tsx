@@ -8,7 +8,7 @@ import { HIGH_LAT, METHODS, type CalcOptions, type HighLat, type MethodId } from
 import { local } from '../lib/api';
 
 export default function Settings() {
-  const { t, lang, setLang, theme, toggleTheme, calc, setCalc, prefs, setPrefs, place, clearPlace, detectLocation, user, logout, toast } = useStore();
+  const { t, lang, setLang, theme, toggleTheme, calc, setCalc, prefs, setPrefs, place, clearPlace, refreshLocation, locState, locationHint, geoPermission, lastFixAt, pending, user, logout, toast } = useStore();
   const navigate = useNavigate();
 
   const set = (patch: Partial<CalcOptions>) => setCalc({ ...calc, ...patch });
@@ -89,11 +89,33 @@ export default function Settings() {
           {place?.manual ? ` · ${t('manually selected')}` : place ? ` · ${t('from GPS')}` : ''}
         </p>
         <div className="grid grid-2">
-          <button className="btn btn-primary" onClick={() => void detectLocation()}>
-            <AppIcon name="location" size={16} /> {t('Use GPS')}
+          <button
+            className="btn btn-primary"
+            onClick={() => void refreshLocation()}
+            disabled={pending}
+            data-testid="refresh-location"
+          >
+            <AppIcon name="location" size={16} />{' '}
+            {pending ? t('Refreshing location…') : t('Refresh My Location')}
           </button>
           <button className="btn btn-soft" onClick={() => navigate('/prayer?pick=1')}>{t('Choose manually')}</button>
         </div>
+        <p className="small" data-testid="location-status" style={{ marginTop: 8 }}>
+          {pending || locState === 'locating'
+            ? t('Contacting GPS…')
+            : geoPermission === 'blocked'
+              ? t(
+                  'Location permission is blocked. Choose a city manually, or allow location in your device settings.'
+                )
+              : lastFixAt
+                ? `${t('Last GPS update')}: ${new Date(lastFixAt).toLocaleTimeString()}${place && !place.manual ? ` · ${t('updates automatically')}` : ''}`
+                : t('No GPS update yet')}
+        </p>
+        {locationHint && (
+          <p className="small" data-testid="location-hint" style={{ opacity: 0.85 }}>
+            {locationHint}
+          </p>
+        )}
         {place && (
           <button className="btn btn-ghost btn-block" style={{ marginTop: 8 }} onClick={clearPlace}>
             {t('Clear saved location')}

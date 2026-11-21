@@ -471,7 +471,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         setLocState('denied');
         setLocError('Location permission denied');
       } else {
-        // GPS off or a slow fix must never look like a permission problem.
+        // GPS off or a slow fix must never look like a permission problem. The
+        // platform only reaches here after access was granted, so remember that
+        // and let later visits refresh silently instead of asking again.
+        remember({ permission: 'allowed' });
         setLocState('error');
         setLocError('Location unavailable');
       }
@@ -595,7 +598,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // countdown, so a notification can never disagree with the clock on screen,
   // and every slot is deduplicated in localStorage (see lib/notify.ts).
   useEffect(() => {
-    const stop = startAlertLoop(() => ({
+    const build = () => ({
       times,
       city: place?.city || 'your city',
       prefs: {
@@ -608,7 +611,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         custom: prefs.customReminders,
       },
       occasions: upcomingOccasionAlerts(new Date()),
-    }));
+    });
+    const stop = startAlertLoop(build);
+    // The native alarm clock must agree with the screen: a new city or timezone
+    // reschedules every pending athan alarm through the same planner.
+    try {
+      syncNativeSchedule(planFor(build(), new Date()), new Date());
+    } catch {
+      /* a failed native sync must never break the in-app reminders */
+    }
     return stop;
   }, [prefs, times, place]);
 

@@ -84,6 +84,15 @@ export function soundById(id: string): AdhanSound {
 /** Categories that are one of the five prayers, i.e. that open the Adhan screen. */
 const PRAYER_CATEGORIES: string[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
 
+/**
+ * The one gate that decides whether a sound id may start the Adhan recording.
+ * Only a prayer-time alert qualifies; everything else gets the chime.
+ */
+function isPrayerAudio(category: string | undefined, sound: string | undefined): boolean {
+  if (!sound || sound === 'beep' || sound === 'silent') return false;
+  return !!category && PRAYER_CATEGORIES.includes(category);
+}
+
 /* ------------------------------- permission ------------------------------- */
 
 export type PermissionState = NotificationPermission | 'unsupported';

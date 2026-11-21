@@ -116,11 +116,11 @@ relation(around:${radius},${lat},${lon})[amenity=place_of_worship][religion=musl
   for (const url of OVERPASS) {
     // Keep the whole search responsive: a mobile page must not wait on a slow
     // mirror. Each mirror gets 8s and the loop gives up after 12s total.
-    const left = 12000 - (Date.now() - started);
+    const left = 8000 - (Date.now() - started);
     if (left < 1500) break;
     try {
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), Math.min(8000, left));
+      const timer = setTimeout(() => ctrl.abort(), Math.min(5000, left));
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA, Accept: 'application/json' },

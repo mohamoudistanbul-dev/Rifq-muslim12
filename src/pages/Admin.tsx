@@ -5,6 +5,7 @@ import VerifiedBadge from '../components/VerifiedBadge';
 import { useStore } from '../lib/store';
 import { get, patch, post, put, del } from '../lib/api';
 import { PremiumAdmin, QuizAdmin, KidsAdmin } from './AdminPanels';
+import AnnouncementsPanel from '../components/AnnouncementsPanel';
 import '../admin.css';
 
 type Tab =
@@ -1710,6 +1711,7 @@ export default function Admin() {
           {notifAudience === 'selected' ? t('Send to selected users') : t('Send to all users')}
         </button>
       </div>
+      <AnnouncementsPanel />
       {notices.length === 0 ? (
         <p className="small muted">{t('No notifications sent yet.')}</p>
       ) : (

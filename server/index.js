@@ -2,7 +2,19 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { db, newId, nowIso, auditLog, publicUser, getSetting, setSetting } from './db.js';
+import {
+  db,
+  newId,
+  nowIso,
+  auditLog,
+  publicUser,
+  getSetting,
+  setSetting,
+  listNotifications,
+  markNotificationsRead,
+  markAllNotificationsRead,
+  unreadNotifications,
+} from './db.js';
 import {
   attachUser,
   requireAuth,
@@ -417,6 +429,27 @@ app.delete('/api/bookmarks/:id', requireAuth, (req, res) => {
 });
 
 /* ---------------------------------- tasbih --------------------------------- */
+
+/* ------------------------------ notifications ----------------------------- */
+
+/**
+ * The signed-in user's real inbox. Every row is written by the server (admin
+ * messages, verification decisions, account notices), and a user can only ever
+ * read or mark their own rows.
+ */
+app.get('/api/notifications', requireAuth, (req, res) => {
+  res.json({
+    notifications: listNotifications(req.user.id, Number(req.query.limit) || 60),
+    unread: unreadNotifications(req.user.id),
+  });
+});
+
+app.post('/api/notifications/read', requireAuth, (req, res) => {
+  const all = req.body?.all === true;
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+  const changed = all ? markAllNotificationsRead(req.user.id) : markNotificationsRead(req.user.id, ids);
+  res.json({ changed, unread: unreadNotifications(req.user.id) });
+});
 
 app.get('/api/tasbih', requireAuth, (req, res) => {
   const day = String(req.query.day || new Date().toISOString().slice(0, 10));

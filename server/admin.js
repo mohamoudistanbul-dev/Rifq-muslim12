@@ -1,7 +1,19 @@
 import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
-import { db, newId, nowIso, auditLog, publicUser, getSetting, setSetting, DATA_DIR } from './db.js';
+import {
+  db,
+  newId,
+  nowIso,
+  auditLog,
+  publicUser,
+  getSetting,
+  setSetting,
+  DATA_DIR,
+  deliverBroadcast,
+  allUserIds,
+  broadcastRecipients,
+} from './db.js';
 import {
   requireAdmin,
   requireSuperAdmin,
@@ -682,21 +694,63 @@ adminRouter.get('/notifications', requireAdmin, (_req, res) => {
   res.json({ notifications: db.prepare('SELECT * FROM broadcasts ORDER BY created_at DESC LIMIT 100').all() });
 });
 
+/**
+ * Sends a real message: one broadcast row for the dashboard, plus one inbox row
+ * per recipient. `audience` is `all` or `selected` (with `userIds`), and the
+ * stored counts are what actually happened, not an assumption.
+ */
 adminRouter.post('/notifications', requireAdmin, (req, res) => {
   const title = String(req.body?.title || '').trim().slice(0, 120);
   const body = String(req.body?.body || '').trim().slice(0, 1000);
+  const link = String(req.body?.link || '').trim().slice(0, 300);
+  const audience = String(req.body?.audience || 'all') === 'selected' ? 'selected' : 'all';
   if (title.length < 3 || body.length < 3) return res.status(400).json({ error: 'Title and message are required.' });
+
+  const known = new Set(allUserIds());
+  const requested = Array.isArray(req.body?.userIds)
+    ? [...new Set(req.body.userIds.map((v) => String(v || '')).filter(Boolean))]
+    : [];
+  const targets = audience === 'all' ? [...known] : requested;
+  const valid = targets.filter((id) => known.has(id));
+  const unknown = targets.filter((id) => !known.has(id));
+
+  if (!valid.length) {
+    return res
+      .status(400)
+      .json({ error: audience === 'selected' ? 'Choose at least one existing user.' : 'There are no user accounts yet.' });
+  }
+
   const id = newId();
-  db.prepare('INSERT INTO broadcasts (id, title, body, audience, admin_id, created_at) VALUES (?,?,?,?,?,?)').run(
-    id,
-    title,
-    body,
-    'all',
-    req.user.id,
-    nowIso()
+  db.prepare(
+    'INSERT INTO broadcasts (id, title, body, audience, audience_ids, admin_id, recipients, delivered, failed, delivery_note, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+  ).run(id, title, body, audience, JSON.stringify(valid), req.user.id, 0, 0, 0, null, nowIso());
+
+  const result = deliverBroadcast({ broadcastId: id, userIds: valid, kind: 'admin', title, body, link });
+  const note = unknown.length ? `${unknown.length} selected account(s) no longer exist and were skipped.` : null;
+  db.prepare('UPDATE broadcasts SET recipients = ?, delivered = ?, failed = ?, delivery_note = ? WHERE id = ?').run(
+    result.recipients,
+    result.delivered,
+    result.failed,
+    note,
+    id
   );
-  auditLog(req.user, 'admin.notification.create', title);
-  res.status(201).json({ item: db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(id) });
+  auditLog(
+    req.user,
+    'admin.notification.create',
+    `${title} -> ${audience} (${result.delivered}/${result.recipients} delivered)`
+  );
+  res.status(201).json({
+    item: db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(id),
+    delivery: result,
+    skipped: unknown.length,
+  });
+});
+
+/** Who received one message, and whether they have opened it. */
+adminRouter.get('/notifications/:id', requireAdmin, (req, res) => {
+  const item = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(req.params.id);
+  if (!item) return res.status(404).json({ error: 'Notification not found.' });
+  res.json({ item, recipients: broadcastRecipients(req.params.id) });
 });
 
 adminRouter.delete('/notifications/:id', requireAdmin, (req, res) => {

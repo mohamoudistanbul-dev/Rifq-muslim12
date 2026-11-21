@@ -633,6 +633,19 @@ ensureColumn('badge_requests', 'revoke_reason', 'TEXT');
  */
 ensureColumn('users', 'kids_name', 'TEXT');
 
+/*
+ * Notification delivery tracking. An admin message is one broadcast row plus
+ * one notification row per recipient, so the inbox shows real history and the
+ * dashboard can report who actually received it. Existing rows keep working:
+ * an older notification simply has no broadcast_id.
+ */
+ensureColumn('notifications', 'broadcast_id', 'TEXT');
+ensureColumn('broadcasts', 'audience_ids', "TEXT NOT NULL DEFAULT '[]'");
+ensureColumn('broadcasts', 'recipients', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('broadcasts', 'delivered', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('broadcasts', 'failed', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('broadcasts', 'delivery_note', 'TEXT');
+
 /* ------------------------------ notifications ----------------------------- */
 
 /**
@@ -659,6 +672,103 @@ export function notify(userId, { kind = 'system', title, body = '', link = '' })
 export function unreadNotifications(userId) {
   const row = db.prepare('SELECT COUNT(*) AS c FROM notifications WHERE user_id = ? AND read_at IS NULL').get(userId);
   return Number(row?.c || 0);
+}
+
+/** One inbox row as the app consumes it. */
+export function shapeNotification(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    kind: row.kind || 'system',
+    title: row.title || '',
+    body: row.body || '',
+    link: row.link || '',
+    read: !!row.read_at,
+    readAt: row.read_at || null,
+    createdAt: row.created_at,
+    broadcastId: row.broadcast_id || null,
+  };
+}
+
+/** The signed-in user's inbox, newest first. Scoped to that user only. */
+export function listNotifications(userId, limit = 60) {
+  const take = Math.min(200, Math.max(1, Number(limit) || 60));
+  const rows = db
+    .prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ?')
+    .all(userId, take);
+  return rows.map(shapeNotification);
+}
+
+/** Marks the given rows read; rows belonging to another account are ignored. */
+export function markNotificationsRead(userId, ids) {
+  const list = (Array.isArray(ids) ? ids : []).filter((v) => typeof v === 'string' && v.length > 0);
+  if (!list.length) return 0;
+  const stmt = db.prepare('UPDATE notifications SET read_at = ? WHERE id = ? AND user_id = ? AND read_at IS NULL');
+  let changed = 0;
+  for (const id of list.slice(0, 200)) {
+    changed += Number(stmt.run(nowIso(), id, userId).changes || 0);
+  }
+  return changed;
+}
+
+export function markAllNotificationsRead(userId) {
+  return Number(
+    db.prepare('UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL').run(nowIso(), userId).changes || 0
+  );
+}
+
+export function allUserIds() {
+  return db.prepare('SELECT id FROM users').all().map((r) => r.id);
+}
+
+/**
+ * Delivers one admin message into every targeted user's inbox and reports the
+ * real outcome, including per-recipient failures, instead of assuming success.
+ */
+export function deliverBroadcast({ broadcastId = null, userIds = [], kind = 'admin', title, body = '', link = '' }) {
+  const targets = [...new Set((userIds || []).filter(Boolean))];
+  let delivered = 0;
+  const failures = [];
+  const stmt = db.prepare(
+    'INSERT INTO notifications (id, user_id, kind, title, body, link, broadcast_id, read_at, created_at) VALUES (?,?,?,?,?,?,?,NULL,?)'
+  );
+  for (const userId of targets) {
+    try {
+      stmt.run(
+        newId(),
+        userId,
+        String(kind).slice(0, 40),
+        String(title).slice(0, 160),
+        String(body || '').slice(0, 800),
+        String(link || '').slice(0, 300),
+        broadcastId,
+        nowIso()
+      );
+      delivered += 1;
+    } catch (error) {
+      failures.push({ userId, error: String(error?.message || error).slice(0, 160) });
+    }
+  }
+  return { recipients: targets.length, delivered, failed: failures.length, failures };
+}
+
+/** Per-recipient delivery state for one admin message. */
+export function broadcastRecipients(broadcastId) {
+  return db
+    .prepare(
+      `SELECT n.id, n.user_id, n.read_at, n.created_at, u.email, u.name
+         FROM notifications n LEFT JOIN users u ON u.id = n.user_id
+        WHERE n.broadcast_id = ? ORDER BY n.created_at DESC LIMIT 500`
+    )
+    .all(broadcastId)
+    .map((r) => ({
+      id: r.id,
+      userId: r.user_id,
+      email: r.email || '',
+      name: r.name || '',
+      read: !!r.read_at,
+      createdAt: r.created_at,
+    }));
 }
 
 /* ----------------------- verification decision history -------------------- */

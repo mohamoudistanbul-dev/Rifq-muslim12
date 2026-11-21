@@ -6,6 +6,19 @@ This document records exactly what the automated dependency scan covers, what it
 reports, what it **cannot** cover in this environment, and how to close the rest.
 It is **not** a statement that the application is secure.
 
+Latest revision (advanced rich prayer notifications, rev 19 of this task): the scan was re-run
+at this revision and reported **457 packages, 0 advisories, 0 blocking, status `incomplete`**.
+This feature added no dependency — `package.json` gained only the `verify:rich` script
+(`node scripts/verify-rich-notify.mjs`) and the feature reuses the existing `web-push`,
+session and SQLite plumbing. The package count is higher than the 444 recorded at earlier
+revisions because the resolved npm and Maven sets have changed since then; the figure above is
+reported by the scan, not asserted here. `incomplete` remains the attribution gap of §3:
+`android/build.gradle.kts` declares no dependencies of its own, so Gradle emits no
+project-level lockfile for it. That is **not** an unscanned package and **not** a finding,
+and it is still not a clean scan. The four resolved files that do exist are present and
+unchanged: `package-lock.json`, `android/app/gradle.lockfile`,
+`android/buildscript-gradle.lockfile`, `deps-audit/gradle.lockfile`.
+
 Latest revision (notification system fix, rev 12 of this task): the scan was re-run and
 returned the same result — **444 packages, 0 advisories, 0 blocking, status `incomplete`**.
 This revision added **no dependency**: `package-lock.json` is unchanged and `package.json`
@@ -52,7 +65,7 @@ resolved dependency set itself is unchanged.
 | --- | --- |
 | Scanner | OSV-Scanner 2.7.0 |
 | Policy | `workspace-dependencies-v1` |
-| Packages checked | **444** |
+| Packages checked | **457** (rev 19) |
 | Known advisories | **0** |
 | Blocking (high/critical) | **0** |
 | Reported status | `incomplete` |

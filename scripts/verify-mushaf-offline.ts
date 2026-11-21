@@ -90,7 +90,7 @@ check('pages are cached for offline reading', mushafSrc.includes('local.set') &&
 
 const quranSrc = read('src/pages/Quran.tsx');
 check('Quran reading screen renders the Mushaf component', /<MushafReader/.test(quranSrc));
-check('audio section untouched by the reading redesign', !/MushafReader/.test(read('src/pages/AudioQuran.tsx')));
+check('audio section untouched by the reading redesign', !/MushafReader/.test(read('src/pages/QuranAudio.tsx')));
 
 const contentSrc = read('server/content.js');
 check('server exposes verified page text', /\/quran\/page\/:page/.test(contentSrc));

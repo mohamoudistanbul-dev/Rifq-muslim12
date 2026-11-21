@@ -376,7 +376,6 @@ export async function playAdhan(id: string): Promise<boolean> {
   try {
     const el = new Audio(sound.url);
     el.preload = 'auto';
-    el.crossOrigin = 'anonymous';
     currentAudio = el;
 
     el.addEventListener('loadedmetadata', () => {

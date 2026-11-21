@@ -490,7 +490,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const stop = startAlertLoop(() => ({
       times,
       city: place?.city || 'your city',
-      prefs,
+      prefs: {
+        notifyEnabled: prefs.notifyEnabled,
+        prayerAlerts: prefs.prayerAlerts,
+        preReminder: prefs.preReminder,
+        athanSound: prefs.athanSound,
+        vibration: prefs.vibration,
+        categories: prefs.categories,
+        custom: prefs.customReminders,
+      },
       occasions: upcomingOccasionAlerts(new Date()),
     }));
     return stop;

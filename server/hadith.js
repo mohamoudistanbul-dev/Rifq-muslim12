@@ -20,13 +20,72 @@ const BASE = 'https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions';
 const DAY = 24 * 60 * 60 * 1000;
 
 export const HADITH_COLLECTIONS = [
-  { key: 'bukhari', name: 'Sahih al-Bukhari', arabicName: 'صحيح البخاري', order: 1 },
-  { key: 'muslim', name: 'Sahih Muslim', arabicName: 'صحيح مسلم', order: 2 },
-  { key: 'abudawud', name: 'Sunan Abu Dawud', arabicName: 'سنن أبي داود', order: 3 },
-  { key: 'tirmidhi', name: "Jami' at-Tirmidhi", arabicName: 'جامع الترمذي', order: 4 },
-  { key: 'nasai', name: "Sunan an-Nasa'i", arabicName: 'سنن النسائي', order: 5 },
-  { key: 'ibnmajah', name: 'Sunan Ibn Majah', arabicName: 'سنن ابن ماجه', order: 6 },
+  {
+    key: 'bukhari',
+    name: 'Sahih al-Bukhari',
+    arabicName: 'صحيح البخاري',
+    order: 1,
+    imam: 'Imam Muhammad ibn Ismaʿil al-Bukhari (d. 256 AH)',
+    imamArabic: 'الإمام محمد بن إسماعيل البخاري',
+  },
+  {
+    key: 'muslim',
+    name: 'Sahih Muslim',
+    arabicName: 'صحيح مسلم',
+    order: 2,
+    imam: 'Imam Muslim ibn al-Hajjaj al-Naysaburi (d. 261 AH)',
+    imamArabic: 'الإمام مسلم بن الحجاج النيسابوري',
+  },
+  {
+    key: 'abudawud',
+    name: 'Sunan Abu Dawud',
+    arabicName: 'سنن أبي داود',
+    order: 3,
+    imam: 'Imam Abu Dawud al-Sijistani (d. 275 AH)',
+    imamArabic: 'الإمام أبو داود السجستاني',
+  },
+  {
+    key: 'tirmidhi',
+    name: "Jami' at-Tirmidhi",
+    arabicName: 'جامع الترمذي',
+    order: 4,
+    imam: 'Imam Abu ʿIsa Muhammad al-Tirmidhi (d. 279 AH)',
+    imamArabic: 'الإمام أبو عيسى محمد الترمذي',
+  },
+  {
+    key: 'nasai',
+    name: "Sunan an-Nasa'i",
+    arabicName: 'سنن النسائي',
+    order: 5,
+    imam: "Imam Ahmad ibn Shu'ayb al-Nasa'i (d. 303 AH)",
+    imamArabic: 'الإمام أحمد بن شعيب النسائي',
+  },
+  {
+    key: 'ibnmajah',
+    name: 'Sunan Ibn Majah',
+    arabicName: 'سنن ابن ماجه',
+    order: 6,
+    imam: 'Imam Muhammad ibn Yazid Ibn Majah (d. 273 AH)',
+    imamArabic: 'الإمام محمد بن يزيد ابن ماجه',
+  },
 ];
+
+/**
+ * The dataset publishes the Arabic matn and translations but no separate
+ * narrator column. The published English translation of Bukhari/Muslim and the
+ * Sunan begins with the isnad, e.g. "Narrated 'Umar bin Al-Khattab: …". The
+ * narrator is therefore read out of that published sentence, never inferred or
+ * guessed; when the sentence is absent the field stays empty and the UI says the
+ * narrator is not stated in this dataset.
+ */
+const NARRATOR_RE = /^\s*(?:narrated|narrated by|it was narrated that)\s+([^:]{2,140}?)\s*:/i;
+
+export function narratorFromEnglish(english) {
+  const text = String(english || '').replace(/\s+/g, ' ').trim();
+  const match = NARRATOR_RE.exec(text);
+  if (!match) return '';
+  return match[1].replace(/\s+/g, ' ').trim();
+}
 
 const cache = new Map();
 
@@ -81,6 +140,12 @@ async function loadCollection(key) {
       grades: (h.grades || [])
         .filter((g) => g && g.grade)
         .map((g) => ({ grade: g.grade, scholar: g.name || '' })),
+      collection: meta.name,
+      collectionArabicName: meta.arabicName,
+      imam: meta.imam || '',
+      imamArabic: meta.imamArabic || '',
+      narrator: narratorFromEnglish(engMap.get(h.hadithnumber) || ''),
+      narratorSource: 'Narrator as stated in the published English translation',
     };
   });
 

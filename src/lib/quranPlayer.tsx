@@ -43,6 +43,8 @@ export interface PlayerState {
   position: number;
   duration: number;
   speed: number;
+  /** Keep playing while the app is in the background (default on). */
+  background: boolean;
   repeat: RepeatMode;
   offline: boolean;
   error: string;
@@ -68,12 +70,15 @@ interface PlayerApi {
   prev: () => void;
   seek: (seconds: number) => void;
   setSpeed: (speed: number) => void;
+  setBackground: (enabled: boolean) => void;
   cycleRepeat: () => void;
   close: () => void;
 }
 
 const LAST_KEY = 'rifq.quranAudio.last';
 const SPEED_KEY = 'rifq.quranAudio.speed';
+/** 'off' pauses recitation when the app goes to the background. */
+const BACKGROUND_KEY = 'rifq.quranAudio.background';
 /** Shared with the Quran Audio page so the chosen reciter survives a reload. */
 export const RECITER_KEY = 'rifq.quranAudio.reciter';
 
@@ -106,6 +111,14 @@ function initialSpeed(): number {
   return 1;
 }
 
+function readBackground(): boolean {
+  try {
+    return localStorage.getItem(BACKGROUND_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
 const PlayerContext = createContext<PlayerApi | null>(null);
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
@@ -130,6 +143,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     position: 0,
     duration: 0,
     speed: initialSpeed(),
+    background: readBackground(),
     repeat: 'off',
     offline: false,
     error: '',
@@ -512,6 +526,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setState((prev) => ({ ...prev, repeat: prev.repeat === 'off' ? 'all' : prev.repeat === 'all' ? 'one' : 'off' }));
   }, []);
 
+  const setBackground = useCallback((enabled: boolean) => {
+    try {
+      localStorage.setItem(BACKGROUND_KEY, enabled ? 'on' : 'off');
+    } catch {
+      /* storage may be blocked */
+    }
+    setState((prev) => ({ ...prev, background: enabled }));
+    // Turning it off takes effect immediately if the app is already hidden.
+    if (!enabled && typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+      audioRef.current?.pause();
+    }
+  }, []);
+
   const close = useCallback(() => {
     const el = audioRef.current;
     if (el) {
@@ -578,9 +605,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     };
   }, [seek]);
 
-  /* Persist the position when the app is closed or hidden. */
+  /* Persist the position when the app is closed or hidden. Background playback
+     stays on by default — leaving the app must not stop the recitation — and a
+     user who turns it off gets the audio paused here instead. */
   useEffect(() => {
-    const onHide = () => persist();
+    const onHide = () => {
+      persist();
+      const el = audioRef.current;
+      if (el && !el.paused && document.visibilityState === 'hidden' && !stateRef.current.background) {
+        el.pause();
+      }
+    };
     window.addEventListener('pagehide', onHide);
     document.addEventListener('visibilitychange', onHide);
     return () => {
@@ -607,6 +642,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       prev,
       seek,
       setSpeed,
+      setBackground,
       cycleRepeat,
       close,
     }),
@@ -627,6 +663,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       prev,
       seek,
       setSpeed,
+      setBackground,
       cycleRepeat,
       close,
     ]
@@ -671,7 +708,7 @@ function Headphones({ size = 18 }: { size?: number }) {
  * Downloads go through the same DownloadManager as the rest of the page.
  */
 export function NowPlayingSheet() {
-  const { state, toggle, next, prev, seek, setSpeed, cycleRepeat, close, closeNowPlaying } = usePlayer();
+  const { state, toggle, next, prev, seek, setSpeed, setBackground, cycleRepeat, close, closeNowPlaying } = usePlayer();
   const manager = useDownloads();
   const open = state.nowPlaying && state.surah > 0;
 
@@ -804,6 +841,14 @@ export function NowPlayingSheet() {
           >
             <AppIcon name={stored ? 'trash' : 'download'} size={16} />
             {stored ? 'Saved' : busy ? `${percent}%` : 'Download'}
+          </button>
+          <button
+            className={`btn btn-ghost btn-sm np-background${state.background ? ' is-active' : ''}`}
+            onClick={() => setBackground(!state.background)}
+            aria-pressed={state.background}
+            aria-label={`Background playback ${state.background ? 'on' : 'off'}`}
+          >
+            Background {state.background ? 'on' : 'off'}
           </button>
         </div>
 

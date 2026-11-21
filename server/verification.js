@@ -8,7 +8,6 @@ import {
   nowIso,
   auditLog,
   notify,
-  unreadNotifications,
 } from './db.js';
 import { requireAuth, rateLimit } from './auth.js';
 

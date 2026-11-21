@@ -466,6 +466,32 @@ CREATE INDEX IF NOT EXISTS idx_analytics_day ON analytics_events(day);
  * never sends an expiry date and never grants access by itself: entitlement is
  * derived from these rows on every request.
  */
+/*
+ * Free/Premium control for existing content and features.
+ *
+ * One row per eligible item, seeded from the real catalogues (Quran surahs,
+ * reciters, hadith collections, Kid Academy lessons, quiz categories) with
+ * INSERT OR IGNORE so an administrator's decision is never overwritten when new
+ * content appears. Defaults are free + enabled + published, so adding this table
+ * changes nobody's access until the owner flips an item.
+ */
+CREATE TABLE IF NOT EXISTS premium_items (
+  key TEXT PRIMARY KEY,
+  category TEXT NOT NULL DEFAULT 'general',
+  title TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  tier TEXT NOT NULL DEFAULT 'free',
+  enabled INTEGER NOT NULL DEFAULT 1,
+  published INTEGER NOT NULL DEFAULT 1,
+  source TEXT NOT NULL DEFAULT 'catalog',
+  sort INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  updated_by TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_premium_items_category ON premium_items(category, tier);
+CREATE INDEX IF NOT EXISTS idx_premium_items_tier ON premium_items(tier, enabled);
+
 CREATE TABLE IF NOT EXISTS premium_plans (
   id TEXT PRIMARY KEY,
   code TEXT UNIQUE NOT NULL,

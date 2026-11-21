@@ -353,7 +353,7 @@ export function QuranReader() {
                   aria-pressed={view === 'mushaf'}
                   onClick={() => setView(view === 'mushaf' ? 'study' : 'mushaf')}
                 >
-                  {view === 'mushaf' ? t('Mushaf view') : t('Verse view')}
+                  {view === 'mushaf' ? t('Verse view') : t('Mushaf view')}
                 </button>
                 <input
                   className="input"

@@ -131,7 +131,7 @@ export default function Settings() {
         </div>
         <div className="grid grid-2" style={{ marginTop: 10 }}>
           <Link to="/athan" className="btn btn-soft">{t('Athan settings')}</Link>
-          <Link to="/athan" className="btn btn-soft">{t('Reminders')}</Link>
+          <Link to="/notifications/settings" className="btn btn-soft">{t('Notification settings')}</Link>
         </div>
       </div>
 

@@ -308,6 +308,7 @@ export default function MushafScroll({
     page: opening,
     offset: saved && saved.page === opening ? Math.max(0, saved.offset || 0) : 0,
   });
+  const openedRecorded = useRef(false);
 
   const writePosition = useCallback(
     (record: Position) => {
@@ -385,6 +386,17 @@ export default function MushafScroll({
   }, [entries, opening, saved, writePosition]);
 
   useEffect(() => {
+    // A reader can leave the moment the page appears, and a page that has not
+    // loaded yet cannot report its surah. Record the place as soon as the
+    // opening page's data exists, so "Continue reading" is always filled in.
+    if (openedRecorded.current) return;
+    if (entries[opening]?.status !== 'ready') return;
+    openedRecorded.current = true;
+    const keep = positionRef.current.page === opening ? positionRef.current.offset : 0;
+    writePosition({ page: opening, offset: keep });
+  }, [entries, opening, writePosition]);
+
+  useEffect(() => {
     // Write synchronously. A deferred write is lost when the reader leaves the
     // screen right after scrolling, which is exactly how people read.
     let lastWrite = 0;
@@ -398,8 +410,10 @@ export default function MushafScroll({
     // Scroll events do not bubble, so listen in the capture phase on the
     // document: that hears the page and every inner scrolling pane.
     document.addEventListener('scroll', onScroll, { capture: true, passive: true });
-    // Leaving the app or switching tabs must not lose the place.
-    const flush = () => remember();
+    // Leaving the app or switching tabs must not lose the place. Flush what the
+    // reader last actually saw: the DOM is already collapsing here, so
+    // re-measuring would record the wrong page.
+    const flush = () => writePosition(positionRef.current);
     window.addEventListener('pagehide', flush);
     document.addEventListener('visibilitychange', flush);
     return () => {
@@ -408,7 +422,7 @@ export default function MushafScroll({
       window.removeEventListener('pagehide', flush);
       document.removeEventListener('visibilitychange', flush);
     };
-  }, [remember]);
+  }, [remember, writePosition]);
 
   const pages = useMemo(() => {
     const list: number[] = [];

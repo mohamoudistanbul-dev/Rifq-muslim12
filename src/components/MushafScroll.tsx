@@ -300,20 +300,6 @@ export default function MushafScroll({
     if (grown > 0) window.scrollBy(0, grown);
   }, [range.from]);
 
-  /* ------------------------------------------------------ open where asked */
-  useEffect(() => {
-    if (anchored.current) return;
-    if (entries[opening]?.status !== 'ready') return;
-    anchored.current = true;
-    const el = document.querySelector<HTMLElement>(`[data-mushaf-page="${opening}"]`);
-    if (!el) return;
-    const offset = saved && saved.page === opening ? Math.max(0, saved.offset || 0) : 0;
-    scrollPageIntoPlace(el, offset);
-    // Type and chrome can settle a frame later, so align once more.
-    const frame = requestAnimationFrame(() => scrollPageIntoPlace(el, offset));
-    return () => cancelAnimationFrame(frame);
-  }, [entries, opening, saved]);
-
   /* --------------------------------------------------- remember the place */
   const remember = useCallback(() => {
     const blocks = Array.from(
@@ -354,43 +340,51 @@ export default function MushafScroll({
     }
   }, []);
 
+  /* ------------------------------------------------------ open where asked */
   useEffect(() => {
-    let frame = 0;
+    if (anchored.current) return;
+    if (entries[opening]?.status !== 'ready') return;
+    anchored.current = true;
+    const el = document.querySelector<HTMLElement>(`[data-mushaf-page="${opening}"]`);
+    if (!el) return;
+    const offset = saved && saved.page === opening ? Math.max(0, saved.offset || 0) : 0;
+    scrollPageIntoPlace(el, offset);
+    // Record the opening page straight away: a reader who never scrolls still
+    // gets a "Continue reading" entry on the Quran index.
+    remember();
+    // Type and chrome can settle a frame later, so align once more.
+    const frame = requestAnimationFrame(() => {
+      scrollPageIntoPlace(el, offset);
+      remember();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [entries, opening, saved, remember]);
+
+  useEffect(() => {
+    // Write synchronously. A deferred write is lost when the reader leaves the
+    // screen right after scrolling, which is exactly how people read.
+    let lastWrite = 0;
     const onScroll = () => {
-      if (frame) return;
-      frame = requestAnimationFrame(() => {
-        frame = 0;
-        remember();
-      });
+      const now = Date.now();
+      if (lastWrite && now - lastWrite < 150) return;
+      lastWrite = now;
+      remember();
     };
     window.addEventListener('scroll', onScroll, { passive: true });
     // Scroll events do not bubble, so listen in the capture phase on the
     // document: that hears the page and every inner scrolling pane.
     document.addEventListener('scroll', onScroll, { capture: true, passive: true });
     // Leaving the app or switching tabs must not lose the place.
-    const onLeave = () => remember();
-    window.addEventListener('pagehide', onLeave);
-    document.addEventListener('visibilitychange', onLeave);
+    const flush = () => remember();
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', flush);
     return () => {
       window.removeEventListener('scroll', onScroll);
       document.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('pagehide', onLeave);
-      document.removeEventListener('visibilitychange', onLeave);
-      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', flush);
     };
   }, [remember]);
-
-  /* Record the opening page as soon as it is on screen, so a reader who never
-     scrolls still gets a "Continue reading" entry on the Quran index. */
-  const readyPages = useMemo(
-    () => Object.values(entries).filter((entry) => entry.status === 'ready').length,
-    [entries]
-  );
-
-  useEffect(() => {
-    if (!anchored.current || !readyPages) return;
-    remember();
-  }, [readyPages, remember]);
 
   const pages = useMemo(() => {
     const list: number[] = [];

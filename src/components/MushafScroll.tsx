@@ -53,6 +53,37 @@ function hizbLabel(quarter: number): string {
   return String(Math.max(1, Math.ceil(quarter / 4)));
 }
 
+/** The element that really scrolls the reader: the page, or an inner pane. */
+function scrollContainerFor(el: HTMLElement): HTMLElement {
+  const page = (document.scrollingElement as HTMLElement | null) ?? document.documentElement;
+  let node: HTMLElement | null = el.parentElement;
+  while (node) {
+    const style = getComputedStyle(node);
+    if (/(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 4) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return page;
+}
+
+function isPageScroller(el: HTMLElement): boolean {
+  return el === document.scrollingElement || el === document.documentElement || el === document.body;
+}
+
+/** How far the element's top sits below the visible top of its scroll pane. */
+function topWithinContainer(el: HTMLElement, container: HTMLElement): number {
+  const base = isPageScroller(container) ? 0 : container.getBoundingClientRect().top;
+  return el.getBoundingClientRect().top - base;
+}
+
+/** Put a page at the top of the reading pane, honouring a saved offset. */
+function scrollPageIntoPlace(el: HTMLElement, offset: number): void {
+  const container = scrollContainerFor(el);
+  const delta = topWithinContainer(el, container) - offset - 8;
+  container.scrollTop = Math.max(0, container.scrollTop + delta);
+}
+
 async function loadPage(page: number): Promise<PageData | null> {
   const memorised = pageMemory.get(page);
   if (memorised) return memorised;
@@ -277,8 +308,10 @@ export default function MushafScroll({
     const el = document.querySelector<HTMLElement>(`[data-mushaf-page="${opening}"]`);
     if (!el) return;
     const offset = saved && saved.page === opening ? Math.max(0, saved.offset || 0) : 0;
-    const top = el.getBoundingClientRect().top + window.scrollY - offset - 8;
-    window.scrollTo({ top: Math.max(0, top), behavior: 'auto' });
+    scrollPageIntoPlace(el, offset);
+    // Type and chrome can settle a frame later, so align once more.
+    const frame = requestAnimationFrame(() => scrollPageIntoPlace(el, offset));
+    return () => cancelAnimationFrame(frame);
   }, [entries, opening, saved]);
 
   /* --------------------------------------------------- remember the place */
@@ -304,8 +337,9 @@ export default function MushafScroll({
 
     const page = Number(chosen.dataset.mushafPage);
     if (!Number.isFinite(page)) return;
-    const rect = chosen.getBoundingClientRect();
-    local.set(POSITION_KEY, { page, offset: Math.max(0, -rect.top) } satisfies Position);
+    const container = scrollContainerFor(chosen);
+    const offset = Math.max(0, -topWithinContainer(chosen, container));
+    local.set(POSITION_KEY, { page, offset } satisfies Position);
 
     const surah = Number(chosen.dataset.mushafSurah || 0);
     const ayah = Number(chosen.dataset.mushafAyah || 1);
@@ -330,12 +364,33 @@ export default function MushafScroll({
       });
     };
     window.addEventListener('scroll', onScroll, { passive: true });
-    remember();
+    // Scroll events do not bubble, so listen in the capture phase on the
+    // document: that hears the page and every inner scrolling pane.
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    // Leaving the app or switching tabs must not lose the place.
+    const onLeave = () => remember();
+    window.addEventListener('pagehide', onLeave);
+    document.addEventListener('visibilitychange', onLeave);
     return () => {
       window.removeEventListener('scroll', onScroll);
+      document.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('pagehide', onLeave);
+      document.removeEventListener('visibilitychange', onLeave);
       if (frame) cancelAnimationFrame(frame);
     };
   }, [remember]);
+
+  /* Record the opening page as soon as it is on screen, so a reader who never
+     scrolls still gets a "Continue reading" entry on the Quran index. */
+  const readyPages = useMemo(
+    () => Object.values(entries).filter((entry) => entry.status === 'ready').length,
+    [entries]
+  );
+
+  useEffect(() => {
+    if (!anchored.current || !readyPages) return;
+    remember();
+  }, [readyPages, remember]);
 
   const pages = useMemo(() => {
     const list: number[] = [];

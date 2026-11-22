@@ -39,6 +39,8 @@ import { adminRouter, UPLOAD_DIR } from './admin.js';
 import { downloadRouter, apkSource, apkStatus, APK_PATH, APK_FILENAME } from './download.js';
 import { analyticsRouter, visitRouter, recordPortalVisit } from './analytics.js';
 import { registerPushRoutes } from './push.js';
+import { registerFcmRoutes } from './push-fcm.js';
+import { registerNotifyCenterRoutes } from './notify-center.js';
 import { registerRichNotifyRoutes, startSnoozeScheduler } from './rich-notify.js';
 import { startAnnouncementScheduler } from './announcements.js';
 import { seedSuperAdmin, SUPER_ADMIN_EMAIL } from './seed.js';
@@ -459,6 +461,8 @@ app.post('/api/notifications/read', requireAuth, (req, res) => {
 
 /* Device delivery: the browser registers here, and the server pushes to it. */
 registerPushRoutes(app, requireAuth);
+registerFcmRoutes(app, requireAuth, requireAdmin);
+registerNotifyCenterRoutes(app, requireAuth, requireAdmin);
 /* Prayer confirmations, 15-minute snoozes and the rich notification payload. */
 registerRichNotifyRoutes(app, requireAuth, requireAdmin);
 /* Scheduled announcements are sent by this process, not by a client timer. */

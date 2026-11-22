@@ -11,6 +11,7 @@
  */
 import { db, newId, nowIso, auditLog, deliverBroadcast, broadcastRecipients } from './db.js';
 import { sendPushToUsers } from './push.js';
+import { allowedUserIds, isCategory, normalizeLang, routeFor } from './notify-center.js';
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS announcements (
@@ -34,6 +35,21 @@ CREATE TABLE IF NOT EXISTS announcements (
 );
 CREATE INDEX IF NOT EXISTS idx_announcements_due ON announcements(status, scheduled_at);
 `);
+
+/* Columns added after the first release. ALTER keeps existing rows and data. */
+function ensureColumn(table, column, definition) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (columns.some((entry) => entry.name === column)) return;
+  db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`).run();
+}
+
+ensureColumn('announcements', 'category', "TEXT NOT NULL DEFAULT 'announcements'");
+ensureColumn('announcements', 'lang', "TEXT NOT NULL DEFAULT 'en'");
+ensureColumn('announcements', 'title_so', 'TEXT');
+ensureColumn('announcements', 'body_so', 'TEXT');
+ensureColumn('announcements', 'title_ar', 'TEXT');
+ensureColumn('announcements', 'body_ar', 'TEXT');
+ensureColumn('announcements', 'skipped', 'INTEGER NOT NULL DEFAULT 0');
 
 const allUserIds = () => db.prepare('SELECT id FROM users').all().map((row) => row.id);
 
@@ -61,6 +77,13 @@ export function shapeAnnouncement(row) {
     failed: Number(row.failed || 0),
     pushSent: Number(row.push_sent || 0),
     pushFailed: Number(row.push_failed || 0),
+    category: row.category || 'announcements',
+    lang: normalizeLang(row.lang),
+    translations: {
+      so: { title: row.title_so || '', body: row.body_so || '' },
+      ar: { title: row.title_ar || '', body: row.body_ar || '' },
+    },
+    skipped: Number(row.skipped || 0),
     note: row.note || null,
   };
 }
@@ -90,15 +113,24 @@ export function createAnnouncement(actor, input) {
   const audience = String(input?.audience || 'all') === 'selected' ? 'selected' : 'all';
   const scheduledAt = normalizeWhen(input?.scheduledAt) || nowIso();
   const audienceIds = Array.isArray(input?.userIds) ? [...new Set(input.userIds.map(String).filter(Boolean))] : [];
+  const category = isCategory(input?.category) ? String(input.category) : 'announcements';
+  const lang = normalizeLang(input?.lang);
 
   if (title.length < 3 || body.length < 3) return { error: 'Title and message are required.' };
   if (audience === 'selected' && !audienceIds.length) return { error: 'Choose at least one recipient.' };
 
+  /* Optional Somali/Arabic wording. Empty means "fall back to the main text". */
+  const pick = (code, field) => String(input?.translations?.[code]?.[field] || '').trim().slice(0, 1000);
+  const titleSo = pick('so', 'title').slice(0, 120);
+  const bodySo = pick('so', 'body');
+  const titleAr = pick('ar', 'title').slice(0, 120);
+  const bodyAr = pick('ar', 'body');
+
   const id = newId();
-  const due = new Date(scheduledAt).getTime() <= Date.now();
   db.prepare(
-    `INSERT INTO announcements (id, title, body, link, audience, audience_ids, status, scheduled_at, created_at, created_by)
-     VALUES (?,?,?,?,?,?,?,?,?,?)`
+    `INSERT INTO announcements (id, title, body, link, audience, audience_ids, status, scheduled_at, created_at, created_by,
+       category, lang, title_so, body_so, title_ar, body_ar)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).run(
     id,
     title,
@@ -106,12 +138,18 @@ export function createAnnouncement(actor, input) {
     link,
     audience,
     JSON.stringify(audienceIds),
-    due ? 'scheduled' : 'scheduled',
+    'scheduled',
     scheduledAt,
     nowIso(),
-    actor?.id || null
+    actor?.id || null,
+    category,
+    lang,
+    titleSo || null,
+    bodySo || null,
+    titleAr || null,
+    bodyAr || null
   );
-  auditLog(actor || { id: null, email: 'system' }, 'admin.announcement.create', `${title} at ${scheduledAt}`);
+  auditLog(actor || { id: null, email: 'system' }, 'admin.announcement.create', `${category}: ${title} at ${scheduledAt}`);
   return { item: getAnnouncement(id) };
 }
 
@@ -133,9 +171,33 @@ export function updateAnnouncement(actor, id, patch) {
 
   if (title.length < 3 || body.length < 3) return { error: 'Title and message are required.', status: 400 };
 
+  const category = patch?.category === undefined ? row.category : isCategory(patch.category) ? String(patch.category) : row.category;
+  const lang = patch?.lang === undefined ? row.lang : normalizeLang(patch.lang);
+  const translation = (code, field) => {
+    const value = patch?.translations?.[code]?.[field];
+    if (value === undefined) return field === 'title' ? row[`title_${code}`] : row[`body_${code}`];
+    return String(value).trim().slice(0, 1000) || null;
+  };
+
   db.prepare(
-    'UPDATE announcements SET title = ?, body = ?, link = ?, audience = ?, audience_ids = ?, scheduled_at = ?, status = ? WHERE id = ?'
-  ).run(title, body, link, audience, audienceIds, scheduledAt, 'scheduled', id);
+    `UPDATE announcements SET title = ?, body = ?, link = ?, audience = ?, audience_ids = ?, scheduled_at = ?, status = ?,
+       category = ?, lang = ?, title_so = ?, body_so = ?, title_ar = ?, body_ar = ? WHERE id = ?`
+  ).run(
+    title,
+    body,
+    link,
+    audience,
+    audienceIds,
+    scheduledAt,
+    'scheduled',
+    category,
+    lang,
+    translation('so', 'title'),
+    translation('so', 'body'),
+    translation('ar', 'title'),
+    translation('ar', 'body'),
+    id
+  );
   auditLog(actor || { id: null, email: 'system' }, 'admin.announcement.update', id);
   return { item: getAnnouncement(id) };
 }
@@ -163,9 +225,10 @@ export async function sendAnnouncement(actor, id) {
   } catch {
     audienceIds = [];
   }
-  const targets = row.audience === 'all' ? [...known] : audienceIds.filter((uid) => known.has(uid));
+  const requested = row.audience === 'all' ? [...known] : audienceIds.filter((uid) => known.has(uid));
+  const category = isCategory(row.category) ? row.category : 'announcements';
 
-  if (!targets.length) {
+  if (!requested.length) {
     db.prepare('UPDATE announcements SET status = ?, note = ? WHERE id = ?').run(
       'failed',
       'No matching user accounts exist.',
@@ -174,44 +237,108 @@ export async function sendAnnouncement(actor, id) {
     return { item: getAnnouncement(id), delivery: { recipients: 0, delivered: 0, failed: 0 }, push: null };
   }
 
-  const delivery = deliverBroadcast({
-    broadcastId: row.id,
-    userIds: targets,
-    kind: 'announcement',
-    title: row.title,
-    body: row.body,
-    link: row.link || '',
-  });
+  /* Each recipient's own switches decide first: a category they turned off is
+   * never written to their inbox and never pushed to their devices. */
+  const gate = allowedUserIds(requested, category);
+  const targets = gate.allowed;
 
-  const push = await sendPushToUsers(targets, {
-    title: row.title,
-    body: row.body,
-    link: row.link || '/notifications',
-    broadcastId: row.id,
-    tag: `announce-${row.id}`,
-  });
+  if (!targets.length) {
+    db.prepare('UPDATE announcements SET status = ?, note = ?, skipped = ? WHERE id = ?').run(
+      'skipped',
+      'Every recipient has this notification category switched off in their settings.',
+      gate.blocked.length,
+      id
+    );
+    auditLog(actor || { id: null, email: 'system' }, 'admin.announcement.skipped', `${row.title}: all recipients opted out`);
+    return {
+      item: getAnnouncement(id),
+      delivery: { recipients: 0, delivered: 0, failed: 0 },
+      push: { users: 0, devices: 0, sent: 0, failed: 0, deferred: 0 },
+      blocked: gate.blocked.length,
+    };
+  }
+
+  /* One wording per language, sent to the recipients who chose that language. */
+  const wording = {
+    en: { title: row.title, body: row.body },
+    so: { title: row.title_so || row.title, body: row.body_so || row.body },
+    ar: { title: row.title_ar || row.title, body: row.body_ar || row.body },
+  };
+  const byLanguage = new Map();
+  for (const userId of targets) {
+    const lang = gate.languages.get(userId) || 'en';
+    if (!byLanguage.has(lang)) byLanguage.set(lang, []);
+    byLanguage.get(lang).push(userId);
+  }
+
+  const link = row.link || routeFor(category);
+  const totals = { recipients: 0, delivered: 0, failed: 0, pushSent: 0, pushFailed: 0, devices: 0, deferred: 0 };
+  let lastPush = null;
+
+  for (const [lang, group] of byLanguage) {
+    const text = wording[lang] || wording.en;
+    const delivery = deliverBroadcast({
+      broadcastId: row.id,
+      userIds: group,
+      kind: 'announcement',
+      title: text.title,
+      body: text.body,
+      link,
+    });
+    const push = await sendPushToUsers(group, {
+      title: text.title,
+      body: text.body,
+      link,
+      broadcastId: row.id,
+      tag: `announce-${row.id}`,
+      category,
+      lang,
+    });
+    totals.recipients += delivery.recipients;
+    totals.delivered += delivery.delivered;
+    totals.failed += delivery.failed;
+    totals.pushSent += push.sent;
+    totals.pushFailed += push.failed;
+    totals.devices += push.devices || 0;
+    totals.deferred += push.deferred || 0;
+    lastPush = push;
+  }
+
+  const note = totals.deferred
+    ? 'Native push is waiting for Firebase credentials (FCM_SERVICE_ACCOUNT); inbox and web push were delivered.'
+    : totals.devices === 0
+      ? 'No recipient had a registered device, so this was in-app only.'
+      : gate.blocked.length
+        ? `${gate.blocked.length} recipient(s) had this category switched off and were skipped.`
+        : null;
 
   db.prepare(
-    `UPDATE announcements SET status = ?, sent_at = ?, recipients = ?, delivered = ?, failed = ?, push_sent = ?, push_failed = ?, note = ?
+    `UPDATE announcements SET status = ?, sent_at = ?, recipients = ?, delivered = ?, failed = ?, push_sent = ?, push_failed = ?, skipped = ?, note = ?
       WHERE id = ?`
   ).run(
     'sent',
     nowIso(),
-    delivery.recipients,
-    delivery.delivered,
-    delivery.failed,
-    push.sent,
-    push.failed,
-    push.devices === 0 ? 'No recipient had a registered device, so this was in-app only.' : null,
+    totals.recipients,
+    totals.delivered,
+    totals.failed,
+    totals.pushSent,
+    totals.pushFailed,
+    gate.blocked.length,
+    note,
     id
   );
 
   auditLog(
     actor || { id: null, email: 'system' },
     'admin.announcement.send',
-    `${row.title} -> ${delivery.delivered}/${delivery.recipients} inbox, ${push.sent} push`
+    `${category}/${row.lang}: ${row.title} -> ${totals.delivered}/${totals.recipients} inbox, ${totals.pushSent} push, ${totals.deferred} deferred`
   );
-  return { item: getAnnouncement(id), delivery, push };
+  return {
+    item: getAnnouncement(id),
+    delivery: { recipients: totals.recipients, delivered: totals.delivered, failed: totals.failed },
+    push: lastPush,
+    blocked: gate.blocked.length,
+  };
 }
 
 export function announcementRecipients(id) {

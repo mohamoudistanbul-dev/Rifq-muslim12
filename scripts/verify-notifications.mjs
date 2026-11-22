@@ -267,6 +267,107 @@ async function main() {
   const markAll = await userA.post('/notifications/read', { all: true });
   check('mark-all-read clears the badge', markAll.status === 200 && Number(markAll.json?.unread) === 0, `unread ${markAll.json?.unread}`);
 
+  /* -------------------- categories, preferences, languages ---------------- */
+
+  const catalog = await new Session().get('/notifications/catalog');
+  const catIds = (catalog.json?.categories || []).map((c) => c.id);
+  check('the category catalogue is readable without an account', catalog.status === 200, `status ${catalog.status}`);
+  check(
+    'catalogue covers prayer, Quran, radio, Kid Academy, Adhkar and announcements',
+    ['prayer', 'quran', 'quran_radio', 'kids', 'adhkar', 'announcements'].every((id) => catIds.includes(id)),
+    catIds.join(', ')
+  );
+  const langs = catalog.json?.languages || [];
+  check(
+    'catalogue offers Arabic, Somali and English',
+    langs.length === 3 && langs.every((l) => ['ar', 'so', 'en'].includes(l.id)),
+    langs.map((l) => l.id).join(',')
+  );
+  check('Arabic is flagged right-to-left', langs.find((l) => l.id === 'ar')?.dir === 'rtl');
+
+  const anonPrefs = await anon.get('/notifications/prefs');
+  check('notification preferences require sign-in', anonPrefs.status === 401, `status ${anonPrefs.status}`);
+
+  const startPrefs = await userA.get('/notifications/prefs');
+  check('a new account has notifications switched on', startPrefs.json?.prefs?.enabled === true);
+  check('every category starts enabled', Object.values(startPrefs.json?.prefs?.categories || {}).every(Boolean));
+  check('a new account starts in English', startPrefs.json?.prefs?.language === 'en', startPrefs.json?.prefs?.language);
+
+  const offQuran = await userA.put('/notifications/prefs', { categories: { quran: false } });
+  check('a category can be switched off', offQuran.status === 200 && offQuran.json?.prefs?.categories?.quran === false);
+
+  const mutedTitle = 'Daily Quran reminder';
+  const muted = await admin.post('/admin/notifications', {
+    title: mutedTitle,
+    body: 'Read one page of the Quran today.',
+    category: 'quran',
+    audience: 'selected',
+    userIds: [idA],
+  });
+  check('an admin can target a notification category', muted.status === 201, `status ${muted.status}`);
+  const afterMute = await userA.get('/notifications?limit=50');
+  check(
+    'a switched-off category is not delivered',
+    !(afterMute.json?.notifications || []).some((n) => n.title === mutedTitle)
+  );
+
+  /* ------------------------ language and deep links ----------------------- */
+
+  const arTitle = 'تذكير بقراءة القرآن';
+  const arBody = 'اقرأ صفحة من القرآن اليوم.';
+  await userA.put('/notifications/prefs', { language: 'ar', categories: { quran: true } });
+  const radioSend = await admin.post('/admin/notifications', {
+    title: 'New Quran Radio program',
+    body: 'A new recitation is available.',
+    category: 'quran_radio',
+    audience: 'selected',
+    userIds: [idA],
+    translations: { ar: { title: arTitle, body: arBody } },
+  });
+  check('an announcement can carry Arabic wording', radioSend.status === 201, `status ${radioSend.status}`);
+
+  const inboxAr = await userA.get('/notifications?limit=50');
+  const arRow = (inboxAr.json?.notifications || []).find((n) => n.title === arTitle);
+  check('an Arabic reader receives the Arabic wording', !!arRow, arTitle);
+  check('the Arabic row carries the Arabic message', arRow?.body === arBody, arRow?.body);
+  check('the row opens the screen for its category', (arRow?.link || arRow?.url) === '/quran/audio', arRow?.link || arRow?.url);
+
+  /* --------------------- native push (Firebase) honesty ------------------- */
+
+  const fcmAnon = await anon.get('/push/fcm/status');
+  check('native push status requires sign-in', fcmAnon.status === 401, `status ${fcmAnon.status}`);
+
+  const fcmBefore = await userA.get('/push/fcm/status');
+  check('the server reports Firebase as not configured, not as working', fcmBefore.json?.configured === false);
+  check(
+    'the status names the missing credential',
+    /FCM_SERVICE_ACCOUNT/.test(String(fcmBefore.json?.reason || '')),
+    String(fcmBefore.json?.reason || '').slice(0, 70)
+  );
+
+  const rawToken = `fcm-verify-${'a'.repeat(48)}`;
+  const reg = await userA.post('/push/fcm/register', { token: rawToken, platform: 'android', label: 'Verify phone' });
+  check('a native device token is stored', reg.status === 201 || reg.status === 200, `status ${reg.status}`);
+  check('the raw token is never echoed back', !JSON.stringify(reg.json || {}).includes(rawToken));
+
+  const fcmAfter = await userA.get('/push/fcm/status');
+  check('the account sees its own native device', Number(fcmAfter.json?.mine) === 1, `mine ${fcmAfter.json?.mine}`);
+  check('the device is listed masked', String(fcmAfter.json?.devices?.[0]?.tokenTail || '').length === 6);
+
+  const testSend = await userA.post('/push/fcm/test', {});
+  check('a test send without credentials claims no delivery', Number(testSend.json?.sent) === 0, `sent ${testSend.json?.sent}`);
+  check('the test send explains what is missing', !!String(testSend.json?.message || '').trim());
+
+  const unreg = await userA.post('/push/fcm/unregister', { token: rawToken });
+  check('a native token can be removed', Number(unreg.json?.removed) === 1, `removed ${unreg.json?.removed}`);
+
+  const overview = await admin.get('/admin/push/overview');
+  check('the owner sees a delivery overview', overview.status === 200 && !!overview.json?.web, `status ${overview.status}`);
+  check('the overview states the Firebase state honestly', overview.json?.fcm?.configured === false);
+  check('the overview lists category opt-outs', typeof overview.json?.optOuts === 'object');
+  const overviewUser = await userA.get('/admin/push/overview');
+  check('an ordinary account cannot read the delivery overview', overviewUser.status === 403, `status ${overviewUser.status}`);
+
   /* -------------------------- restart persistence ------------------------- */
 
   await stopServer(srv);

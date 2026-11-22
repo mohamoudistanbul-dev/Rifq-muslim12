@@ -301,66 +301,88 @@ export default function MushafScroll({
   }, [range.from]);
 
   /* --------------------------------------------------- remember the place */
-  const remember = useCallback(() => {
-    const blocks = Array.from(
-      document.querySelectorAll<HTMLElement>('[data-mushaf-page][data-mushaf-surah]')
-    ).filter((node) => node.dataset.mushafSurah);
-    if (!blocks.length) return;
+  // Where the reader is. Seeded with the page they asked for, so a record
+  // exists as soon as the Mushaf opens — before any page paints and without
+  // depending on scroll events or DOM attributes.
+  const positionRef = useRef<Position>({
+    page: opening,
+    offset: saved && saved.page === opening ? Math.max(0, saved.offset || 0) : 0,
+  });
 
+  const writePosition = useCallback(
+    (record: Position) => {
+      positionRef.current = record;
+      local.set(POSITION_KEY, record);
+      // Surah and ayah come from the loaded page itself, not the DOM, so the
+      // Quran index's "Continue reading" card fills in immediately.
+      const first = entries[record.page]?.data?.ayahs?.[0] as
+        | (MushafAyah & { surahName?: string })
+        | undefined;
+      const surah = Number(first?.surah || 0);
+      if (surah) {
+        local.set('lastRead', {
+          surah,
+          ayah: Number(first?.number || 1),
+          page: record.page,
+          name: first?.surahName || '',
+        });
+      }
+    },
+    [entries]
+  );
+
+  const remember = useCallback(() => {
     const anchorLine = window.innerHeight * 0.3;
     let chosen: HTMLElement | null = null;
     let best = Number.POSITIVE_INFINITY;
+    const blocks = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-mushaf-page][data-mushaf-surah]')
+    );
     for (const block of blocks) {
+      if (!block.dataset.mushafSurah) continue;
       const rect = block.getBoundingClientRect();
-      const onScreen = rect.bottom >= 0 && rect.top <= window.innerHeight;
-      // Pages still loading carry no verse data. Prefer what is on screen, but
-      // never lose the place because the reader stopped on a loading gap.
-      const score = (onScreen ? 0 : 1e6) + Math.abs(rect.top - anchorLine);
-      if (score < best) {
-        best = score;
+      // Only a page the reader can actually see may replace the saved place;
+      // a page still loading must not drag the record somewhere else.
+      if (rect.bottom < 0 || rect.top > window.innerHeight) continue;
+      const distance = Math.abs(rect.top - anchorLine);
+      if (distance < best) {
+        best = distance;
         chosen = block;
       }
     }
-    if (!chosen) return;
-
-    const page = Number(chosen.dataset.mushafPage);
-    if (!Number.isFinite(page)) return;
-    const container = scrollContainerFor(chosen);
-    const offset = Math.max(0, -topWithinContainer(chosen, container));
-    local.set(POSITION_KEY, { page, offset } satisfies Position);
-
-    const surah = Number(chosen.dataset.mushafSurah || 0);
-    const ayah = Number(chosen.dataset.mushafAyah || 1);
-    if (surah) {
-      // The Quran index's "Continue reading" card reads this record.
-      local.set('lastRead', {
-        surah,
-        ayah: ayah || 1,
-        page,
-        name: chosen.dataset.mushafSurahName || '',
-      });
+    if (chosen) {
+      const page = Number(chosen.dataset.mushafPage);
+      if (Number.isFinite(page) && page > 0) {
+        const container = scrollContainerFor(chosen);
+        writePosition({ page, offset: Math.max(0, -topWithinContainer(chosen, container)) });
+        return;
+      }
     }
-  }, []);
+    // Nothing readable on screen: keep the last known place instead of losing it.
+    writePosition(positionRef.current);
+  }, [writePosition]);
 
   /* ------------------------------------------------------ open where asked */
   useEffect(() => {
     if (anchored.current) return;
     if (entries[opening]?.status !== 'ready') return;
     anchored.current = true;
+    const offset = saved && saved.page === opening ? Math.max(0, saved.offset || 0) : 0;
+    // Record the opening page before touching the DOM: a reader who never
+    // scrolls still gets a "Continue reading" entry on the Quran index, and
+    // the record cannot be lost to a page that has not painted yet.
+    writePosition({ page: opening, offset });
     const el = document.querySelector<HTMLElement>(`[data-mushaf-page="${opening}"]`);
     if (!el) return;
-    const offset = saved && saved.page === opening ? Math.max(0, saved.offset || 0) : 0;
     scrollPageIntoPlace(el, offset);
-    // Record the opening page straight away: a reader who never scrolls still
-    // gets a "Continue reading" entry on the Quran index.
-    remember();
     // Type and chrome can settle a frame later, so align once more.
     const frame = requestAnimationFrame(() => {
-      scrollPageIntoPlace(el, offset);
-      remember();
+      const target = document.querySelector<HTMLElement>(`[data-mushaf-page="${opening}"]`);
+      if (target) scrollPageIntoPlace(target, offset);
+      writePosition(positionRef.current);
     });
     return () => cancelAnimationFrame(frame);
-  }, [entries, opening, saved, remember]);
+  }, [entries, opening, saved, writePosition]);
 
   useEffect(() => {
     // Write synchronously. A deferred write is lost when the reader leaves the

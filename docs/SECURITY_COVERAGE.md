@@ -6,6 +6,44 @@ This document records exactly what the automated dependency scan covers, what it
 reports, what it **cannot** cover in this environment, and how to close the rest.
 It is **not** a statement that the application is secure.
 
+**Revision 18 (Mushaf reading screen) — no dependency change, and no scan was re-run.** This
+revision changed source only (`src/components/MushafScroll.tsx`, `src/pages/Quran.tsx`,
+`src/pages/Athan.tsx`, `src/pages/QuranAudio.tsx`, `src/styles.css`, `public/art/*.svg`,
+`scripts/verify-mushaf-offline.ts`). No package was added, removed or upgraded, and the
+manifests are the same files the recorded scan read, so re-running the scanner over them could
+only reproduce the same result; it was deliberately not re-run. The recorded result therefore
+still stands, and it is still **not** a clean scan: **457 packages, 0 advisories, 0 blocking,
+status `incomplete`** (recorded at revision 12).
+
+The `incomplete` status is easy to misread as "the Android dependencies were never scanned".
+They were. What does not exist is a *project-level* `android/gradle.lockfile`, because
+`android/build.gradle.kts` declares no dependencies of its own — it only applies the plugins
+in `:app` (the file states this at line 52) — so Gradle has nothing to write there. The
+resolved Android graphs are committed and were scanned through their own files:
+
+| File | Resolved entries | Graph |
+| --- | --- | --- |
+| `android/app/gradle.lockfile` | 196 | APK library graph (AndroidX, Material, kotlin-stdlib + transitives) |
+| `android/buildscript-gradle.lockfile` | 149 | AGP / Kotlin plugin classpath |
+| `deps-audit/gradle.lockfile` | 200 | audit-only AAR resolution without the SDK (§4) |
+| `package-lock.json` | 160 | web + server bundle |
+
+Re-checked at this revision by reading the committed lockfiles directly: the advisory-named
+fixed versions are still pinned in both Android files — `io.netty:netty-*:4.1.137.Final` and
+`com.google.guava:guava:33.7.2-jre` in both, and `com.google.protobuf:protobuf-java:3.25.5`
+in the `:app` graph. The zero-findings result therefore describes the packages that are
+actually built and shipped.
+
+**The capability that would close the gap is not available in AppJet, and it has two halves.**
+Switching on Dependabot alerts (GitHub → Settings → Code security) lets GitHub's dependency
+graph read both Gradle lockfiles continuously; and executing the committed
+`.github/workflows/dependency-scan.yml` hands each lockfile to OSV-Scanner as an explicit `-L`
+target, which removes the attribution warning entirely. AppJet cannot execute GitHub Actions,
+and this workspace has no `gradle`, no `sdkmanager` and no `ANDROID_HOME`, so the workflow's
+`buildEnvironment --write-locks` job cannot be reproduced here to prove that no project-level
+lockfile would ever appear. Both routes are outside the application and its build; neither
+changes a line of it.
+
 Latest revision (Quran Mushaf reading, Adhan audio control and offline mode, rev 31 of this
 task): the scan was re-run at this revision and reported **457 packages, 0 advisories,
 0 blocking, status `incomplete`** — the same figures as the revision before it. This feature

@@ -14,6 +14,7 @@ import {
   allUserIds,
   broadcastRecipients,
 } from './db.js';
+import { allowedUserIds, isCategory, normalizeLang, routeFor } from './notify-center.js';
 import {
   requireAdmin,
   requireSuperAdmin,
@@ -720,8 +721,19 @@ adminRouter.get('/notifications', requireAdmin, (_req, res) => {
 adminRouter.post('/notifications', requireAdmin, async (req, res) => {
   const title = String(req.body?.title || '').trim().slice(0, 120);
   const body = String(req.body?.body || '').trim().slice(0, 1000);
-  const link = String(req.body?.link || '').trim().slice(0, 300);
   const audience = String(req.body?.audience || 'all') === 'selected' ? 'selected' : 'all';
+  const category = isCategory(req.body?.category) ? String(req.body.category) : 'announcements';
+  const lang = normalizeLang(req.body?.lang);
+  /* A message opens the screen that belongs to its category unless the admin
+   * typed an explicit in-app destination. */
+  const link = String(req.body?.link || '').trim().slice(0, 300) || routeFor(category);
+  const translations = {};
+  for (const code of ['so', 'ar']) {
+    const raw = req.body?.translations?.[code] || {};
+    const t = String(raw.title || '').trim().slice(0, 120);
+    const b = String(raw.body || '').trim().slice(0, 1000);
+    if (t.length >= 3 && b.length >= 3) translations[code] = { title: t, body: b };
+  }
   if (title.length < 3 || body.length < 3) return res.status(400).json({ error: 'Title and message are required.' });
 
   const known = new Set(allUserIds());
@@ -743,11 +755,54 @@ adminRouter.post('/notifications', requireAdmin, async (req, res) => {
     'INSERT INTO broadcasts (id, title, body, audience, audience_ids, admin_id, recipients, delivered, failed, delivery_note, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
   ).run(id, title, body, audience, JSON.stringify(valid), req.user.id, 0, 0, 0, null, nowIso());
 
-  const result = deliverBroadcast({ broadcastId: id, userIds: valid, kind: 'admin', title, body, link });
-  /* Real device delivery: one push per registered device, per recipient. */
-  const push = await sendPushToUsers(valid, { title, body, link, broadcastId: id });
+  const result = { recipients: 0, delivered: 0, failed: 0 };
+  const push = { users: 0, devices: 0, sent: 0, failed: 0, removed: 0, deferred: 0 };
+
+  /* The recipient's own switches decide first: a category an account turned off
+   * is skipped here, so it never reaches that account's inbox or devices. */
+  const gate = allowedUserIds(valid, category);
+  const byLang = new Map();
+  for (const userId of gate.allowed) {
+    const want = gate.languages.get(userId) || lang;
+    if (!byLang.has(want)) byLang.set(want, []);
+    byLang.get(want).push(userId);
+  }
+
+  for (const [want, ids] of byLang) {
+    /* Use the admin's wording for that language when supplied, otherwise the main
+     * text. Nobody is sent a half-translated message. */
+    const wording = translations[want] || { title, body };
+    const part = deliverBroadcast({
+      broadcastId: id,
+      userIds: ids,
+      kind: 'admin',
+      title: wording.title,
+      body: wording.body,
+      link,
+    });
+    result.recipients += part.recipients;
+    result.delivered += part.delivered;
+    result.failed += part.failed;
+
+    /* Real device delivery: one push per registered device, per recipient. */
+    const pushed = await sendPushToUsers(ids, {
+      title: wording.title,
+      body: wording.body,
+      link,
+      broadcastId: id,
+      category,
+    });
+    push.users += pushed.users;
+    push.devices += pushed.devices;
+    push.sent += pushed.sent;
+    push.failed += pushed.failed;
+    push.removed += pushed.removed;
+    push.deferred += Number(pushed.deferred || 0);
+  }
+
   const notes = [];
   if (unknown.length) notes.push(`${unknown.length} selected account(s) no longer exist and were skipped.`);
+  if (gate.blocked.length) notes.push(`${gate.blocked.length} account(s) have this category switched off.`);
   notes.push(pushNote(push));
   db.prepare(
     'UPDATE broadcasts SET recipients = ?, delivered = ?, failed = ?, push_sent = ?, push_failed = ?, delivery_note = ? WHERE id = ?'
@@ -755,13 +810,15 @@ adminRouter.post('/notifications', requireAdmin, async (req, res) => {
   auditLog(
     req.user,
     'admin.notification.create',
-    `${title} -> ${audience} (${result.delivered}/${result.recipients} inbox, ${push.sent}/${push.devices} push)`
+    `${title} [${category}] -> ${audience} (${result.delivered}/${result.recipients} inbox, ${push.sent}/${push.devices} push, ${gate.blocked.length} opted out)`
   );
   res.status(201).json({
     item: db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(id),
     delivery: result,
     push,
     skipped: unknown.length,
+    optedOut: gate.blocked.length,
+    category,
   });
 });
 

@@ -18,6 +18,8 @@
  */
 import * as webpush from 'web-push';
 import { db, getSetting, setSetting, newId, nowIso } from './db.js';
+import { sendFcmToUsers } from './push-fcm.js';
+import { allowedUserIds, DEFAULT_LANG, dirFor, languageOf, renderTemplate, routeFor } from './notify-center.js';
 
 const VAPID_SUBJECT = String(process.env.VAPID_SUBJECT || 'mailto:rifqmuslim@gmail.com');
 
@@ -167,35 +169,64 @@ function recordResult(broadcastId, userId, state) {
  */
 export async function sendPushToUsers(userIds, payload) {
   vapidKeys();
-  const targets = [...new Set((userIds || []).filter(Boolean))];
-  const summary = { users: targets.length, devices: 0, sent: 0, failed: 0, removed: 0, perUser: {}, errors: [] };
+  const requested = [...new Set((userIds || []).filter(Boolean))];
+
+  /* The recipient's own switches decide first. A category the account turned
+   * off must not create an inbox row, a web push or an FCM message. */
+  const category = payload.category || null;
+  const gated = category ? allowedUserIds(requested, category) : { allowed: requested, blocked: [] };
+  const targets = gated.allowed;
+
+  const summary = {
+    users: targets.length,
+    blocked: gated.blocked.length,
+    devices: 0,
+    sent: 0,
+    failed: 0,
+    removed: 0,
+    deferred: 0,
+    category,
+    perUser: {},
+    errors: [],
+  };
 
   const devicesStmt = db.prepare('SELECT * FROM push_devices WHERE user_id = ?');
   const okStmt = db.prepare('UPDATE push_devices SET last_ok_at = ?, last_error = NULL, fail_count = 0 WHERE id = ?');
   const failStmt = db.prepare('UPDATE push_devices SET last_error = ?, fail_count = fail_count + 1 WHERE id = ?');
   const dropStmt = db.prepare('DELETE FROM push_devices WHERE id = ?');
 
-  const body = JSON.stringify({
-    title: payload.title || 'RIFQ Muslim',
-    body: payload.body || '',
-    url: payload.link || payload.url || '/notifications',
-    tag: payload.tag || (payload.broadcastId ? `rifq-${payload.broadcastId}` : 'rifq'),
-    broadcastId: payload.broadcastId || null,
-    /* Rich presentation (expanded image, actions, progress). Absent fields are
-     * simply omitted, so existing announcements keep their plain notification. */
-    kind: payload.kind || null,
-    prayer: payload.prayer || null,
-    time: payload.time || null,
-    remainingMinutes: Number.isFinite(Number(payload.remainingMinutes)) ? Number(payload.remainingMinutes) : null,
-    image: payload.image || null,
-    progress: payload.progress || null,
-    actions: Array.isArray(payload.actions) ? payload.actions.slice(0, 3) : null,
-    requireInteraction: payload.requireInteraction === true,
-  });
+  /* A template is rendered in the recipient's own language; a plain payload is
+   * sent as written (admin messages carry their own translations). */
+  const localizedFor = (userId) =>
+    payload.template
+      ? renderTemplate(payload.template.category || category || 'announcements', languageOf(userId), payload.template.vars || {})
+      : null;
 
   for (const userId of targets) {
     const devices = devicesStmt.all(userId);
-    const state = { devices: devices.length, sent: 0, failed: 0, lastError: null };
+    const state = { devices: devices.length, sent: 0, failed: 0, deferred: 0, lastError: null };
+    const localized = localizedFor(userId);
+
+    const body = JSON.stringify({
+      title: localized?.title || payload.title || 'RIFQ Muslim',
+      body: localized?.body || payload.body || '',
+      url: payload.link || payload.url || routeFor(category),
+      tag: payload.tag || (payload.broadcastId ? `rifq-${payload.broadcastId}` : 'rifq'),
+      broadcastId: payload.broadcastId || null,
+      lang: localized?.lang || payload.lang || null,
+      dir: localized?.dir || payload.dir || null,
+      category,
+      /* Rich presentation (expanded image, actions, progress). Absent fields are
+       * simply omitted, so existing announcements keep their plain notification. */
+      kind: payload.kind || null,
+      prayer: payload.prayer || null,
+      time: payload.time || null,
+      remainingMinutes: Number.isFinite(Number(payload.remainingMinutes)) ? Number(payload.remainingMinutes) : null,
+      image: payload.image || null,
+      progress: payload.progress || null,
+      actions: Array.isArray(payload.actions) ? payload.actions.slice(0, 3) : null,
+      requireInteraction: payload.requireInteraction === true,
+    });
 
     for (const device of devices) {
       summary.devices += 1;
@@ -227,7 +258,76 @@ export async function sendPushToUsers(userIds, payload) {
     }
 
     summary.perUser[userId] = state;
-    recordResult(payload.broadcastId, userId, state);
+  }
+
+  /* Native delivery (FCM) for the same recipients, grouped by language so each
+   * group receives the wording it should. When Firebase credentials are absent
+   * this reports the messages as deferred instead of pretending they were sent. */
+  if (targets.length) {
+    const byLanguage = new Map();
+    for (const userId of targets) {
+      const lang = languageOf(userId) || DEFAULT_LANG;
+      if (!byLanguage.has(lang)) byLanguage.set(lang, []);
+      byLanguage.get(lang).push(userId);
+    }
+
+    for (const [lang, group] of byLanguage) {
+      let result;
+      try {
+        const localized = payload.template
+          ? renderTemplate(payload.template.category || category || 'announcements', lang, payload.template.vars || {})
+          : null;
+        result = await sendFcmToUsers(group, {
+          ...payload,
+          title: localized?.title || payload.title,
+          body: localized?.body || payload.body,
+          category: category || payload.category || 'announcements',
+          url: payload.link || payload.url || routeFor(category),
+          lang,
+          dir: dirFor(lang),
+        });
+      } catch (error) {
+        result = {
+          configured: false,
+          tokens: 0,
+          sent: 0,
+          failed: 0,
+          removed: 0,
+          deferred: 0,
+          perUser: {},
+          errors: [{ error: String(error?.message || error).slice(0, 200), code: 'fcm_error' }],
+        };
+      }
+
+      summary.devices += result.tokens;
+      summary.sent += result.sent;
+      summary.failed += result.failed;
+      summary.removed += result.removed;
+      summary.deferred += result.deferred;
+      summary.fcm = result.configured;
+      for (const error of result.errors || []) summary.errors.push(error);
+
+      for (const userId of group) {
+        const state = summary.perUser[userId];
+        const native = result.perUser?.[userId];
+        if (!state || !native) continue;
+        state.devices += native.tokens;
+        state.sent += native.sent;
+        state.failed += native.failed;
+        state.deferred += native.failed === native.tokens ? 0 : 0;
+        if (native.lastError) state.lastError = native.lastError;
+      }
+      if (result.deferred) {
+        for (const userId of group) {
+          const state = summary.perUser[userId];
+          if (state) state.deferred += result.perUser?.[userId]?.tokens || 0;
+        }
+      }
+    }
+  }
+
+  for (const userId of targets) {
+    recordResult(payload.broadcastId, userId, summary.perUser[userId]);
   }
 
   return summary;

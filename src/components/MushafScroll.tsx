@@ -312,10 +312,12 @@ export default function MushafScroll({
     let best = Number.POSITIVE_INFINITY;
     for (const block of blocks) {
       const rect = block.getBoundingClientRect();
-      if (rect.bottom < 0 || rect.top > window.innerHeight) continue;
-      const distance = Math.abs(rect.top - anchorLine);
-      if (distance < best) {
-        best = distance;
+      const onScreen = rect.bottom >= 0 && rect.top <= window.innerHeight;
+      // Pages still loading carry no verse data. Prefer what is on screen, but
+      // never lose the place because the reader stopped on a loading gap.
+      const score = (onScreen ? 0 : 1e6) + Math.abs(rect.top - anchorLine);
+      if (score < best) {
+        best = score;
         chosen = block;
       }
     }

@@ -233,23 +233,31 @@ export default function MushafScroll({
   const prependPending = useRef(false);
 
   /* ---------------------------------------------------------------- loading */
+  // A page is fetched once. Results must survive a range change: appending or
+  // prepending the next pages re-runs the effect below, and cancelling the
+  // earlier fetches left the pages the reader opened on stuck as skeletons
+  // forever, because they were already marked as requested.
+  const mounted = useRef(true);
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    []
+  );
+
   useEffect(() => {
-    let alive = true;
     for (let page = range.from; page <= range.to; page += 1) {
       if (requested.current.has(page)) continue;
       requested.current.add(page);
       setEntries((current) => ({ ...current, [page]: { status: 'loading' } }));
       void loadPage(page).then((data) => {
-        if (!alive) return;
+        if (!mounted.current) return;
         setEntries((current) => ({
           ...current,
           [page]: data ? { status: 'ready', data } : { status: 'missing' },
         }));
       });
     }
-    return () => {
-      alive = false;
-    };
   }, [range.from, range.to]);
 
   /* ------------------------------------------------------- next page below */

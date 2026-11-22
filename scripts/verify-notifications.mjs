@@ -293,7 +293,7 @@ async function main() {
   check('every category starts enabled', Object.values(startPrefs.json?.prefs?.categories || {}).every(Boolean));
   check('a new account starts in English', startPrefs.json?.prefs?.language === 'en', startPrefs.json?.prefs?.language);
 
-  const offQuran = await userA.put('/notifications/prefs', { categories: { quran: false } });
+  const offQuran = await userA.call('PUT', '/notifications/prefs', { categories: { quran: false } });
   check('a category can be switched off', offQuran.status === 200 && offQuran.json?.prefs?.categories?.quran === false);
 
   const mutedTitle = 'Daily Quran reminder';
@@ -315,7 +315,7 @@ async function main() {
 
   const arTitle = 'تذكير بقراءة القرآن';
   const arBody = 'اقرأ صفحة من القرآن اليوم.';
-  await userA.put('/notifications/prefs', { language: 'ar', categories: { quran: true } });
+  await userA.call('PUT', '/notifications/prefs', { language: 'ar', categories: { quran: true } });
   const radioSend = await admin.post('/admin/notifications', {
     title: 'New Quran Radio program',
     body: 'A new recitation is available.',
